@@ -283,6 +283,7 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
     let (out, mut incoming) = mpsc::channel::<Message>(128);
     let connection_id = uuid::Uuid::new_v4().to_string();
     let mut attachments: HashMap<String, JoinHandle<()>> = HashMap::new();
+    let mut commands = tokio::task::JoinSet::new();
     let mut changed = node.changed.subscribe();
     let writer = tokio::spawn(async move {
         while let Some(message) = incoming.recv().await {
@@ -297,6 +298,7 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
     loop {
         tokio::select! {
             _ = out.closed() => break,
+            _ = commands.join_next(), if !commands.is_empty() => {},
             _ = changed.recv() => {
                 if out.send(Message::text(json!({"event":"sessions_changed"}).to_string())).await.is_err() { break; }
             }
@@ -313,6 +315,18 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                     Err(_) => continue,
                 };
                 let op = request["op"].as_str().unwrap_or("");
+                if op == "exec" {
+                    let out = out.clone();
+                    commands.spawn(async move {
+                        let id = request["id"].clone();
+                        let reply = match crate::subprocess::exec(request).await {
+                            Ok(value) => json!({"id":id,"result":value}),
+                            Err(error) => json!({"id":id,"error":error.to_string()}),
+                        };
+                        let _ = out.send(Message::text(reply.to_string())).await;
+                    });
+                    continue;
+                }
                 if op == "read_file" || op == "read_directory" || op == "stat" {
                     let stat = op == "stat";
                     let directory = op == "read_directory";
@@ -448,6 +462,7 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
             }
         }
     }
+    commands.shutdown().await;
     writer.abort();
     Ok(())
 }

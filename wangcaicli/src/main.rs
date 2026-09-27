@@ -1,4 +1,5 @@
 mod server;
+mod subprocess;
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};

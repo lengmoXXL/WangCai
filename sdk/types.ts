@@ -12,3 +12,5 @@ export interface Snapshot extends Output, Size {}
 export type TerminalEvent = ({ event: 'snapshot' } & Snapshot | { event: 'output' } & Output) & { session_id: string };
 
 export interface DirectoryEntry { name: string; isDirectory: boolean }
+export interface ExecOptions { cwd: string; env?: Record<string, string> }
+export interface ExecResult { stdout: Uint8Array; stderr: Uint8Array; code: number }

@@ -2,7 +2,7 @@ import { ChildProcess, execFile, spawn } from 'node:child_process';
 import { createServer, createConnection } from 'node:net';
 import { promisify } from 'node:util';
 import WebSocket from 'ws';
-import type { ConnectionOptions, MachineState, Session, Size, DirectoryEntry } from './types';
+import type { ConnectionOptions, MachineState, Session, Size, DirectoryEntry, ExecOptions, ExecResult } from './types';
 import { Pty } from './pty';
 
 const exec = promisify(execFile);
@@ -80,6 +80,13 @@ export class MachineConnection {
     readFile: async (path: string): Promise<Uint8Array> => {
       const result = await this.request('read_file', { path }) as { data: string };
       return Buffer.from(result.data, 'base64');
+    },
+  };
+
+  subprocess = {
+    exec: async (program: string, args: string[], options: ExecOptions): Promise<ExecResult> => {
+      const result = await this.request('exec', { program, args, ...options }, 20_000) as { stdout: string; stderr: string; code: number };
+      return { stdout: Buffer.from(result.stdout, 'base64'), stderr: Buffer.from(result.stderr, 'base64'), code: result.code };
     },
   };
 
@@ -259,7 +266,7 @@ export class MachineConnection {
     throw lastError;
   }
 
-  private async request(op: string, params: Record<string, unknown> = {}): Promise<unknown> {
+  private async request(op: string, params: Record<string, unknown> = {}, timeout = 10_000): Promise<unknown> {
     const socket = this.ws;
     if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error('Machine is not connected.');
     const id = String(++this.serial);
@@ -267,7 +274,7 @@ export class MachineConnection {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`${op} timed out; it was not retried.`));
-      }, 10_000);
+      }, timeout);
       this.pending.set(id, { resolve, reject, timer });
       socket.send(JSON.stringify({ ...params, op, id }), (error) => {
         if (!error) return;
