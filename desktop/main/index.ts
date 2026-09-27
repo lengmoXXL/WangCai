@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, Menu, net, protocol } from 'electron';
 import { join, resolve, relative, isAbsolute, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { loadPlugins } from './plugins';
 
@@ -48,14 +48,22 @@ else {
       { label: 'Edit', submenu: [{ role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
       { label: 'View', submenu: [{ role: 'toggleDevTools' }, { role: 'togglefullscreen' }] },
     ]));
-    window = new BrowserWindow({
-      width: 1180, height: 780, minWidth: 740, minHeight: 460,
+    const statePath = join(app.getPath('userData'), 'window-state.json');
+    const { maximized, ...bounds } = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : { width: 1180, height: 780 };
+    const win = new BrowserWindow({
+      ...bounds, minWidth: 740, minHeight: 460,
       backgroundColor: '#11151b', title: '旺财', titleBarStyle: 'hiddenInset',
       webPreferences: { preload: join(__dirname, '../preload/preload.js') },
     });
-    window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    window.webContents.on('will-navigate', (event) => event.preventDefault());
-    window.on('closed', () => { window = undefined; });
+    window = win;
+    if (maximized) win.maximize();
+    win.on('close', () => {
+      writeFileSync(`${statePath}.tmp`, JSON.stringify({ ...win.getNormalBounds(), maximized: win.isMaximized() }));
+      renameSync(`${statePath}.tmp`, statePath);
+    });
+    win.on('closed', () => { window = undefined; });
+    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    win.webContents.on('will-navigate', (event) => event.preventDefault());
     let cleaned = false;
     let cleanup: Promise<void> | undefined;
     app.on('before-quit', (event) => {
@@ -63,8 +71,8 @@ else {
       event.preventDefault();
       cleanup ??= plugins.dispose().finally(() => { cleaned = true; app.quit(); });
     });
-    if (process.env.ELECTRON_RENDERER_URL) await window.loadURL(process.env.ELECTRON_RENDERER_URL);
-    else await window.loadFile(join(__dirname, '../ui/index.html'));
+    if (process.env.ELECTRON_RENDERER_URL) await win.loadURL(process.env.ELECTRON_RENDERER_URL);
+    else await win.loadFile(join(__dirname, '../ui/index.html'));
   }).catch((error) => { console.error(error); app.quit(); });
   app.on('window-all-closed', () => app.quit());
 }

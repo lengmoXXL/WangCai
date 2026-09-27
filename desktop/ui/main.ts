@@ -30,7 +30,11 @@ async function start() {
   content.className = 'sidebar-content';
   right.append(header, content);
   root.append(left, main, right);
-  const widths = { left: 180, right: Math.min(600, root.clientWidth * .4) };
+  const stored = JSON.parse(localStorage.getItem('sidebar-ratios') ?? '{}') as { left?: number; right?: number };
+  const ratios = {
+    left: stored.left ?? 180 / root.clientWidth,
+    right: stored.right ?? Math.min(600, root.clientWidth * .4) / root.clientWidth,
+  };
   for (const [side, pane, opposite, minimum] of [
     ['left', left, right, 140], ['right', right, left, 260],
   ] as const) {
@@ -41,27 +45,33 @@ async function start() {
     divider.setAttribute('aria-orientation', 'vertical');
     divider.tabIndex = 0;
     if (side === 'left') left.after(divider); else right.before(divider);
-    const resize = (width: number) => {
+    let painted: number;
+    const paint = (requested = root.clientWidth * ratios[side]) => {
       const maximum = Math.max(minimum, root.clientWidth - (opposite.hidden ? 0 : opposite.getBoundingClientRect().width) - 248);
-      widths[side] = Math.max(minimum, Math.min(maximum, width));
-      pane.style.width = `${widths[side]}px`;
+      painted = Math.round(Math.max(minimum, Math.min(maximum, requested)));
+      pane.style.width = `${painted}px`;
       divider.hidden = pane.hidden;
       divider.setAttribute('aria-valuemin', String(minimum));
       divider.setAttribute('aria-valuemax', String(Math.round(maximum)));
-      divider.setAttribute('aria-valuenow', String(Math.round(widths[side])));
+      divider.setAttribute('aria-valuenow', String(painted));
+      return painted;
     };
-    const observer = new ResizeObserver(() => resize(widths[side]));
+    const resize = (requested: number) => {
+      ratios[side] = paint(requested) / root.clientWidth;
+      localStorage.setItem('sidebar-ratios', JSON.stringify(ratios));
+    };
+    const observer = new ResizeObserver(() => paint());
     observer.observe(root);
     observer.observe(pane);
     observer.observe(opposite);
     disposers.push(() => observer.disconnect());
-    let origin = 0;
-    let width = 0;
+    let origin: number;
+    let width: number;
     divider.onpointerdown = (event) => {
       if (event.button !== 0) return;
       event.preventDefault();
       origin = event.clientX;
-      width = pane.getBoundingClientRect().width;
+      width = painted;
       divider.setPointerCapture(event.pointerId);
     };
     divider.onpointermove = (event) => {
@@ -71,9 +81,9 @@ async function start() {
     divider.onkeydown = (event) => {
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
       event.preventDefault();
-      resize(widths[side] + (event.key === 'ArrowRight' ? 20 : -20) * (side === 'left' ? 1 : -1));
+      resize(painted + (event.key === 'ArrowRight' ? 20 : -20) * (side === 'left' ? 1 : -1));
     };
-    resize(widths[side]);
+    paint();
   }
   const tabs = new Map<string, { button: HTMLButtonElement; panel: HTMLElement; content: TabContent }>();
   let selected = '';

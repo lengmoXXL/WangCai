@@ -6,7 +6,7 @@ const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
 
-test('view menu switches plugins and handles empty, disconnected and closed terminals', { timeout: 60000 }, async () => {
+test('view menu switches plugins and handles empty, disconnected and closed terminals', { timeout: 90000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-views-')));
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -29,7 +29,7 @@ test('view menu switches plugins and handles empty, disconnected and closed term
     writeFileSync(join(home, '子目录 with spaces', '空 格.md'), '# Nested preview');
     writeFileSync(join(home, '.hidden.md'), '# Hidden preview');
     desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
-    const page = await desktop.firstWindow();
+    let page = await desktop.firstWindow();
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
@@ -86,6 +86,18 @@ test('view menu switches plugins and handles empty, disconnected and closed term
       assert.equal(Math.round((await pane.boundingBox()).width), minimum);
       assert.ok((await page.locator('.desktop-main').boundingBox()).width >= 240);
     }
+    const measure = () => page.evaluate(() => ({ inner: innerWidth, left: document.querySelector('.sidebar-left').getBoundingClientRect().width, right: document.querySelector('.sidebar-right').getBoundingClientRect().width }));
+    const beforeResize = await measure();
+    await desktop.evaluate(({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows()[0];
+      const [width, height] = win.getSize();
+      win.setSize(width + 300, height);
+    });
+    await page.waitForFunction((left) => document.querySelector('.sidebar-left').getBoundingClientRect().width > left, beforeResize.left);
+    const afterResize = await measure();
+    assert.ok(afterResize.inner > beforeResize.inner);
+    assert.ok(Math.abs(afterResize.left / afterResize.inner - beforeResize.left / beforeResize.inner) < 0.01);
+    assert.ok(Math.abs(afterResize.right / afterResize.inner - beforeResize.right / beforeResize.inner) < 0.01);
     await page.getByRole('button', { name: '关闭 文件', exact: true }).click();
     assert.equal(await page.getByRole('tab', { name: '文件', exact: true }).count(), 0);
     await picker.click();
@@ -131,6 +143,22 @@ test('view menu switches plugins and handles empty, disconnected and closed term
     await toggle.click();
     assert.equal(await picker.isVisible(), true);
     assert.deepEqual(errors, []);
+    const ratios = await page.evaluate(() => JSON.parse(localStorage.getItem('sidebar-ratios')));
+    const windowWidth = await page.evaluate(() => innerWidth);
+    await desktop.close(); desktop = undefined;
+    desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
+    page = await desktop.firstWindow();
+    await page.getByRole('button', { name: '切换右侧栏' }).click();
+    await page.getByRole('button', { name: '新建侧栏标签页' }).click();
+    await page.locator('#view-menu').getByRole('button', { name: '文件', exact: true }).click();
+    const left = page.locator('.sidebar-left');
+    const right = page.locator('.sidebar-right');
+    await left.waitFor();
+    await right.waitFor();
+    const inner = await page.evaluate(() => innerWidth);
+    assert.ok(Math.abs(inner - windowWidth) < 2);
+    assert.ok(Math.abs((await left.boundingBox()).width - ratios.left * inner) < 1);
+    assert.ok(Math.abs((await right.boundingBox()).width - ratios.right * inner) < 1);
   } finally {
     await desktop?.close();
     try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
