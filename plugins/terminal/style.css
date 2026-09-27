@@ -20,10 +20,11 @@
 .shu-terminal .sidebar-actions { margin-top: auto; padding: 8px 6px 0; }
 .shu-terminal .settings-button { border: 0; color: #8b98a6; font-size: 11px; padding: 9px 10px; }
 .shu-terminal main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.shu-terminal .tab { display: flex; align-items: center; justify-content: space-between; color: #83909e; padding: 4px 11px 4px 35px; font-size: 12px; cursor: pointer; }
+.shu-terminal .tab { display: flex; align-items: center; justify-content: space-between; color: #83909e; padding: 4px 6px 4px 35px; font-size: 12px; cursor: pointer; }
 .shu-terminal .tab.selected { color: #dce3eb; background: #262e36; }
-.shu-terminal .tab button { border: 0; color: #7b8794; padding: 2px 5px; font-size: 15px; }
-.shu-terminal .new-tab { flex-shrink: 0; border: 0; padding: 3px 0; width: 24px; font-size: 18px; color: #8b98a6; }
+.shu-terminal .tab button, .shu-terminal .new-tab { display: grid; place-items: center; flex-shrink: 0; border: 0; padding: 0; width: 24px; height: 24px; }
+.shu-terminal .tab button { color: #7b8794; font-size: 15px; }
+.shu-terminal .new-tab { font-size: 18px; color: #8b98a6; }
 .shu-terminal .menu-backdrop { position: fixed; inset: 0; z-index: 5; -webkit-app-region: no-drag; }
 .shu-terminal .machine-menu { position: fixed; width: 132px; padding: 4px; background: #202730; border: 1px solid #343e49; border-radius: 5px; }
 .shu-terminal .machine-menu button { width: 100%; text-align: left; border: 0; font-size: 12px; }
