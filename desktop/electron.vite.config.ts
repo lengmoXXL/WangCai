@@ -8,7 +8,7 @@ export default defineConfig({
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
-    build: { outDir: fileURLToPath(new URL('./dist/preload', import.meta.url)), rollupOptions: { input: fileURLToPath(new URL('./preload/index.ts', import.meta.url)) } },
+    build: { outDir: fileURLToPath(new URL('./dist/preload', import.meta.url)), rollupOptions: { input: fileURLToPath(new URL('./main/preload.ts', import.meta.url)) } },
   },
   renderer: {
     root: fileURLToPath(new URL('./ui', import.meta.url)),
