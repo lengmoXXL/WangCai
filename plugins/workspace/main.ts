@@ -3,11 +3,11 @@ import { join, posix } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { connect, type MachineConnection, type Pty } from '@wangcai/sdk';
 import type { FileClick, MainContext } from '@wangcai/sdk/plugin';
-import type { Config, Machine, MachineState } from './shared';
+import type { Config, Machine, MachineState, Workspace } from './shared';
 
 export function activate(context: MainContext) {
-  const path = join(context.dataDirectory, 'machines.json');
-  let config: Config = { machines: [{ id: 'local', name: '本机' }], selected: 'local' };
+  const path = join(context.dataDirectory, 'config.json');
+  let config: Config = { machines: [{ id: 'local', name: '本机' }], workspaces: [], selected: 'local' };
   const connections = new Map<string, MachineConnection>();
   const pending = new Map<string, { controller: AbortController; result: Promise<MachineState> }>();
   const terminals = new Map<string, Pty>();
@@ -20,7 +20,12 @@ export function activate(context: MainContext) {
     for (const machine of stored.machines) {
       if (machine.id !== 'local' && machine.name && typeof machine.host === 'string' && /^[\w.@:+-]+$/.test(machine.host) && !machine.host.startsWith('-')) machines.push(machine);
     }
-    config = { machines, selected: machines.some((m) => m.id === stored.selected) ? stored.selected : 'local' };
+    const workspaces: Workspace[] = [];
+    for (const workspace of stored.workspaces) {
+      if (typeof workspace?.id !== 'string' || !machines.some((machine) => machine.id === workspace.machineId) || workspaces.some((item) => item.id === workspace.id)) continue;
+      workspaces.push(workspace);
+    }
+    config = { machines, workspaces, selected: machines.some((m) => m.id === stored.selected) ? stored.selected : 'local' };
   }
 
   function save() {
@@ -34,7 +39,8 @@ export function activate(context: MainContext) {
     connections.get(id)?.disconnect();
     connections.delete(id);
     for (const key of terminals.keys()) if (key.startsWith(`${id}:`)) terminals.delete(key);
-    const state: MachineState = { machineId: id, status: 'disconnected', sessions: states.get(id)?.sessions ?? [], generation: states.get(id)?.generation ?? 0 };
+    const previous = states.get(id);
+    const state: MachineState = { machineId: id, status: 'disconnected', sessions: previous?.sessions ?? [], generation: previous?.generation ?? 0 };
     states.set(id, state);
     context.emit('state', state);
   }
@@ -104,6 +110,7 @@ export function activate(context: MainContext) {
     if (id === 'local') throw new Error('The local machine cannot be removed.');
     disconnect(id);
     config.machines = config.machines.filter((machine) => machine.id !== id);
+    config.workspaces = config.workspaces.filter((workspace) => workspace.machineId !== id);
     if (config.selected === id) config.selected = 'local';
     save();
     return config;
@@ -115,7 +122,35 @@ export function activate(context: MainContext) {
   }));
   handlers.push(context.handle('connect', open));
   handlers.push(context.handle('disconnect', disconnect));
-  handlers.push(context.handle('terminal', async ({ id, op, params }: { id: string; op: string; params: { session_id: string; data: string; rows: number; cols: number } }) => {
+  handlers.push(context.handle('open-workspace', async ({ machineId, workspaceId }: { machineId: string; workspaceId?: string }) => {
+    let workspace = workspaceId ? config.workspaces.find((item) => item.id === workspaceId) : undefined;
+    if (!workspace) {
+      workspace = { id: randomUUID(), machineId };
+      config.workspaces.push(workspace);
+    }
+    const node = connections.get(machineId);
+    if (node) {
+      const session = (await node.pty.list()).find((item) => item.id === workspace.sessionId);
+      if (!session || session.exit_code !== null) {
+        if (workspace.sessionId) await node.pty.close(workspace.sessionId).catch(() => {});
+        workspace.sessionId = (await node.pty.create({ rows: 24, cols: 80 })).id;
+      }
+    }
+    save();
+    return { config, workspaceId: workspace.id };
+  }));
+  handlers.push(context.handle('close-workspace', async (id: string) => {
+    const workspace = config.workspaces.find((item) => item.id === id);
+    if (!workspace) return config;
+    if (workspace.sessionId) {
+      terminals.delete(`${workspace.machineId}:${workspace.sessionId}`);
+      await connections.get(workspace.machineId)?.pty.close(workspace.sessionId).catch(() => {});
+    }
+    config.workspaces = config.workspaces.filter((item) => item.id !== id);
+    save();
+    return config;
+  }));
+  handlers.push(context.handle('pty', async ({ id, op, params }: { id: string; op: string; params: { session_id: string; data: string; rows: number; cols: number } }) => {
     const key = `${id}:${params.session_id}`;
     if (op === 'detach') {
       const terminal = terminals.get(key);
@@ -126,9 +161,6 @@ export function activate(context: MainContext) {
     const node = connections.get(id);
     if (!node) throw new Error('Machine is not connected');
     switch (op) {
-      case 'list': return node.pty.list();
-      case 'create': return node.pty.create({ rows: params.rows, cols: params.cols });
-      case 'close': terminals.delete(key); return node.pty.close(params.session_id);
       case 'attach': {
         const terminal = await node.pty.attach(params.session_id);
         terminals.set(key, terminal);

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
-for (const id of ['terminal', 'files', 'git']) {
+for (const id of ['workspace', 'files', 'git']) {
   const source = fileURLToPath(new URL(`../../plugins/${id}/`, import.meta.url));
   const target = fileURLToPath(new URL(`../dist/plugins/${id}/`, import.meta.url));
   rmSync(target, { recursive: true, force: true });

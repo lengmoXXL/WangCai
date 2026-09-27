@@ -4,7 +4,7 @@ const { Terminal } = require('@xterm/headless');
 const { buildSync } = require('esbuild');
 const { Module } = require('node:module');
 const compiled = new Module('terminal-links');
-compiled._compile(buildSync({ entryPoints: ['plugins/terminal/links.ts'], bundle: true, platform: 'node', write: false }).outputFiles[0].text, 'terminal-links.cjs');
+compiled._compile(buildSync({ entryPoints: ['plugins/workspace/links.ts'], bundle: true, platform: 'node', write: false }).outputFiles[0].text, 'terminal-links.cjs');
 const { fileLocation, registerFileLinks } = compiled.exports;
 
 test('file links: absolute paths, file URLs, line/column and wrapped Unicode cells', async () => {

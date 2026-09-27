@@ -16,7 +16,7 @@ else {
     if (app.isPackaged) process.env.ESBUILD_BINARY_PATH = join(process.resourcesPath, `app.asar.unpacked/node_modules/@esbuild/darwin-${process.arch}/bin/esbuild`);
     const directory = join(homedir(), '.local/shared/wangcai/plugins');
     const bundled = app.isPackaged ? join(process.resourcesPath, 'plugins') : join(app.getAppPath(), 'dist/plugins');
-    for (const id of ['terminal', 'files', 'git']) {
+    for (const id of ['workspace', 'files', 'git']) {
       const target = join(directory, id);
       if (existsSync(target)) continue;
       mkdirSync(directory, { recursive: true });

@@ -1,6 +1,7 @@
 import type { FileClick } from '@wangcai/sdk/plugin';
 import type { MachineState as ConnectionState } from '@wangcai/sdk';
 export interface Machine { id: string; name: string; host?: string }
+export interface Workspace { id: string; machineId: string; sessionId?: string }
 export type { Session } from '@wangcai/sdk';
 export interface MachineState extends ConnectionState { machineId: string }
 export interface TerminalEvent {
@@ -12,7 +13,7 @@ export interface TerminalEvent {
   rows?: number;
   cols?: number;
 }
-export interface Config { machines: Machine[]; selected: string }
+export interface Config { machines: Machine[]; workspaces: Workspace[]; selected: string }
 export interface WangcaiAPI {
   click(machineId: string, sessionId: string, location: Pick<FileClick, 'path' | 'line' | 'column'>): Promise<void>;
   config(): Promise<Config>;
@@ -21,7 +22,9 @@ export interface WangcaiAPI {
   selectMachine(id: string): Promise<void>;
   connect(id: string): Promise<MachineState>;
   disconnect(id: string): Promise<void>;
-  request(machineId: string, op: string, params?: Record<string, unknown>): Promise<unknown>;
+  openWorkspace(machineId: string, workspaceId?: string): Promise<{ config: Config; workspaceId: string }>;
+  closeWorkspace(id: string): Promise<Config>;
+  pty(machineId: string, op: string, params?: Record<string, unknown>): Promise<unknown>;
   onState(callback: (state: MachineState) => void): () => void;
   onTerminal(callback: (event: TerminalEvent) => void): () => void;
 }

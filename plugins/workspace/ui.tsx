@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { fileLocation, registerFileLinks } from './links';
-import type { Config, MachineState, Session, WangcaiAPI } from './shared';
+import type { Config, MachineState, Session, WangcaiAPI, Workspace } from './shared';
 import '@xterm/xterm/css/xterm.css';
 import './style.css';
 import type { UIContext } from '@wangcai/sdk/plugin';
@@ -41,7 +41,7 @@ function TerminalPane({ machineId, session, active, connected, generation }: {
     setError('');
     const sendSize = () => {
       if (!alive || !ready || replaying) return;
-      void api.request(machineId, 'resize', { session_id: session.id, rows: term.rows, cols: term.cols }).catch((error: Error) => { if (alive) setError(error.message); });
+      void api.pty(machineId, 'resize', { session_id: session.id, rows: term.rows, cols: term.cols }).catch((error: Error) => { if (alive) setError(error.message); });
     };
     const unsubscribe = api.onTerminal((event) => {
       if (!alive || event.machineId !== machineId || event.session_id !== session.id) return;
@@ -62,7 +62,7 @@ function TerminalPane({ machineId, session, active, connected, generation }: {
     });
     const input = term.onData((data) => {
       if (!ready || replaying) return;
-      void api.request(machineId, 'input', { session_id: session.id, data }).catch((error: Error) => { if (alive) setError(error.message); });
+      void api.pty(machineId, 'input', { session_id: session.id, data }).catch((error: Error) => { if (alive) setError(error.message); });
     });
     const resize = term.onResize(sendSize);
     const observer = new ResizeObserver(() => {
@@ -70,7 +70,7 @@ function TerminalPane({ machineId, session, active, connected, generation }: {
     });
     observer.observe(element.current!);
     if (connected) {
-      void api.request(machineId, 'attach', { session_id: session.id }).then(() => {
+      void api.pty(machineId, 'attach', { session_id: session.id }).then(() => {
         if (!alive) return;
         ready = true;
         sendSize();
@@ -81,7 +81,7 @@ function TerminalPane({ machineId, session, active, connected, generation }: {
       ready = false;
       unsubscribe(); input.dispose(); resize.dispose(); observer.disconnect();
       links.dispose(); term.dispose(); terminal.current = null;
-      if (connected) void api.request(machineId, 'detach', { session_id: session.id }).catch(() => {});
+      if (connected) void api.pty(machineId, 'detach', { session_id: session.id }).catch(() => {});
     };
   }, [machineId, session.id, connected, generation]);
 
@@ -131,11 +131,11 @@ function Settings({ config, onUpdate, onClose }: { config: Config; onUpdate: (co
 function App({ context }: { context: UIContext }) {
   const [config, setConfig] = useState<Config>();
   const [states, setStates] = useState<Record<string, MachineState>>({});
-  const [selectedTabs, setSelectedTabs] = useState<Record<string, string>>({});
+  const [selectedWorkspaces, setSelectedWorkspaces] = useState<Record<string, string>>({});
   const [settings, setSettings] = useState(false);
   const [menu, setMenu] = useState<{ machineId: string; left: number; top: number; trigger: HTMLElement }>();
   const [error, setError] = useState('');
-  const [creating, setCreating] = useState(false);
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     const off = api.onState((state) => setStates((states) => ({ ...states, [state.machineId]: state })));
     void api.config().then(setConfig).catch((error: Error) => setError(error.message));
@@ -147,26 +147,46 @@ function App({ context }: { context: UIContext }) {
     if (selected) void api.connect(selected).then((state) => setStates((states) => ({ ...states, [selected]: state }))).catch((error: Error) => setError(error.message));
   }, [selected, machine?.host]);
   const state = selected ? states[selected] : undefined;
-  const sessions = state?.sessions ?? [];
-  const active = selected && sessions.some((s) => s.id === selectedTabs[selected]) ? selectedTabs[selected] : sessions[0]?.id;
+  const workspaces = (config?.workspaces ?? []).filter((workspace) => workspace.machineId === selected);
+  const sessionFor = (workspace: Workspace) => (states[workspace.machineId]?.sessions ?? []).find((session) => session.id === workspace.sessionId);
+  const liveSession = (workspace: Workspace) => {
+    const session = sessionFor(workspace);
+    return session?.exit_code === null ? session : undefined;
+  };
+  const activeWorkspaceId = selected ? selectedWorkspaces[selected] : undefined;
+  const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? workspaces[0];
+  const activeSession = activeWorkspace ? liveSession(activeWorkspace) : undefined;
   const connected = state?.status === 'connected';
+  const menuStatus = menu ? states[menu.machineId]?.status : undefined;
+  const menuConnected = menuStatus === 'connected' || menuStatus === 'connecting';
+  const generation = state?.generation ?? 0;
+  const errorMessage = error || state?.error;
   useEffect(() => {
-    const publish = () => context.publish('terminal:active', connected && machine && active ? { machine, sessionId: active } : null);
+    const publish = () => context.publish('terminal:active', connected && machine && activeSession ? { machine, sessionId: activeSession.id } : null);
     void publish();
     return context.subscribe('terminal:query', publish);
-  }, [context, machine, active, connected]);
+  }, [context, machine, activeSession?.id, connected]);
 
-  const create = (machineId = selected) => {
-    if (!machineId || states[machineId]?.status !== 'connected' || creating) return;
-    setCreating(true); setError('');
-    void api.request(machineId, 'create', { rows: 24, cols: 80 }).then((result) => {
-      const session = result as Session;
-      setSelectedTabs((tabs) => ({ ...tabs, [machineId]: session.id }));
-    }).catch((error: Error) => setError(error.message)).finally(() => setCreating(false));
+  const selectWorkspace = (machineId: string, workspaceId: string) => {
+    setSelectedWorkspaces((workspaces) => ({ ...workspaces, [machineId]: workspaceId }));
+    if (states[machineId]?.status !== 'connected' || busy) return;
+    setBusy(true);
+    void api.openWorkspace(machineId, workspaceId)
+      .then((result) => setConfig(result.config))
+      .catch((error: Error) => setError(error.message))
+      .finally(() => setBusy(false));
+  };
+  const createWorkspace = (machineId = selected) => {
+    if (!machineId || states[machineId]?.status !== 'connected' || busy) return;
+    setBusy(true); setError('');
+    void api.openWorkspace(machineId).then((result) => {
+      setConfig(result.config);
+      setSelectedWorkspaces((workspaces) => ({ ...workspaces, [machineId]: result.workspaceId }));
+    }).catch((error: Error) => setError(error.message)).finally(() => setBusy(false));
   };
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
-      if (event.metaKey && event.key === 't' && !settings) { event.preventDefault(); create(); }
+      if (event.metaKey && event.key === 't' && !settings) { event.preventDefault(); createWorkspace(); }
       if (event.key === 'Escape') { setSettings(false); setMenu(undefined); menu?.trigger.focus(); }
     };
     window.addEventListener('keydown', listener);
@@ -174,41 +194,46 @@ function App({ context }: { context: UIContext }) {
   });
 
   if (!config) return <div className="loading">{error || '正在打开 旺财…'}</div>;
+  const selectMachine = (machineId: string) => {
+    setError('');
+    setConfig({ ...config, selected: machineId });
+    void api.selectMachine(machineId);
+  };
   return <div className="app">
     {createPortal(<div className="sidebar">
       <nav aria-label="机器">{config.machines.map((item) => {
-        const itemState = states[item.id];
-        const itemConnected = itemState?.status === 'connected';
+        const itemStatus = states[item.id]?.status ?? 'disconnected';
+        const itemSelected = selected === item.id;
+        const itemConnected = itemStatus === 'connected';
         return <section className="machine-group" aria-label={item.name} key={item.id}>
           <div className="machine-row" tabIndex={-1} onContextMenu={(event) => {
             event.preventDefault();
             setMenu({ machineId: item.id, left: Math.max(0, Math.min(event.clientX, window.innerWidth - 132)), top: Math.max(0, Math.min(event.clientY, window.innerHeight - 48)), trigger: event.currentTarget });
           }}>
-            <button title={item.host ?? '本机'} aria-current={selected === item.id ? 'page' : undefined} className={`machine ${selected === item.id ? 'selected' : ''}`} onClick={() => {
-              setConfig({ ...config, selected: item.id }); setError('');
-              void api.selectMachine(item.id);
-            }}><span className={`status-dot ${itemState?.status ?? 'disconnected'}`} /><span className="machine-name">{item.name}</span></button>
-            <button className="new-tab" title={`在 ${item.name} 新建终端`} aria-label="新建终端" disabled={!itemConnected || creating} onClick={() => {
-              setConfig({ ...config, selected: item.id });
-              void api.selectMachine(item.id);
-              create(item.id);
+            <button title={item.host ?? '本机'} aria-current={itemSelected ? 'page' : undefined} className={`machine ${itemSelected ? 'selected' : ''}`} onClick={() => selectMachine(item.id)}><span className={`status-dot ${itemStatus}`} /><span className="machine-name">{item.name}</span></button>
+            <button className="new-tab" title={`在 ${item.name} 新建工作区`} aria-label="新建工作区" disabled={!itemConnected || busy} onClick={() => {
+              selectMachine(item.id);
+              createWorkspace(item.id);
             }}>+</button>
           </div>
-          <div className="tablist" role="tablist" aria-label={`${item.name} 终端`} aria-orientation="vertical">
-            {(itemState?.sessions ?? []).map((session, index) => <div role="tab" aria-selected={selected === item.id && active === session.id} tabIndex={0} key={session.id} className={`tab ${selected === item.id && active === session.id ? 'selected' : ''}`} onClick={() => {
-              setConfig({ ...config, selected: item.id }); setError('');
-              setSelectedTabs((tabs) => ({ ...tabs, [item.id]: session.id }));
-              void api.selectMachine(item.id);
-            }} onKeyDown={(event) => {
-              if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
-              event.preventDefault();
-              event.currentTarget.click();
-            }}>
-              <span title={session.title}>终端 {index + 1}</span><button aria-label={`结束终端 ${index + 1}`} title="结束终端并关闭 tab" disabled={!itemConnected} onClick={(event) => {
-                event.stopPropagation();
-                void api.request(item.id, 'close', { session_id: session.id }).catch((error: Error) => setError(error.message));
-              }}>×</button>
-            </div>)}
+          <div role="tablist" aria-label={`${item.name} 工作区`} aria-orientation="vertical">
+            {config.workspaces.filter((workspace) => workspace.machineId === item.id).map((workspace, index) => {
+              const current = itemSelected && activeWorkspace?.id === workspace.id;
+              const number = index + 1;
+              return <div role="tab" aria-selected={current} tabIndex={0} key={workspace.id} className={`tab ${current ? 'selected' : ''}`} onClick={() => {
+                selectMachine(item.id);
+                selectWorkspace(item.id, workspace.id);
+              }} onKeyDown={(event) => {
+                if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+                event.preventDefault();
+                event.currentTarget.click();
+              }}>
+                <span className="tab-label"><span className={`status-dot ${liveSession(workspace) ? 'connected' : 'disconnected'}`} />工作区 {number}</span><button aria-label={`结束工作区 ${number}`} disabled={!itemConnected} onClick={(event) => {
+                  event.stopPropagation();
+                  void api.closeWorkspace(workspace.id).then(setConfig).catch((error: Error) => setError(error.message));
+                }}>×</button>
+              </div>;
+            })}
           </div>
         </section>;
       })}</nav>
@@ -217,19 +242,21 @@ function App({ context }: { context: UIContext }) {
       </div>
     </div>, context.sidebar)}
     <main>
-      {(state?.error || error) && <div className="error-banner"><span>{error || state?.error}</span>{error && <button onClick={() => setError('')}>×</button>}</div>}
+      {errorMessage && <div className="error-banner"><span>{errorMessage}</span>{error && <button onClick={() => setError('')}>×</button>}</div>}
       <div className="terminal-area">
-        {sessions.map((session) => <TerminalPane key={`${selected}:${session.id}`} machineId={selected!} session={session} active={session.id === active} connected={connected} generation={state?.generation ?? 0} />)}
+        {workspaces.map((workspace) => {
+          const session = sessionFor(workspace);
+          return session ? <TerminalPane key={`${workspace.id}:${session.id}`} machineId={selected!} session={session} active={workspace.id === activeWorkspace?.id} connected={connected} generation={generation} /> : null;
+        })}
+        {activeWorkspace && !sessionFor(activeWorkspace) && <div className="terminal-message">终端未运行，点击左侧工作区重建</div>}
       </div>
     </main>
     {menu && <div className="menu-backdrop" onClick={() => { setMenu(undefined); menu.trigger.focus(); }}>
       <div className="machine-menu" role="menu" aria-label="机器操作" style={{ left: menu.left, top: menu.top }} onClick={(event) => event.stopPropagation()}>
         <button role="menuitem" autoFocus onClick={() => {
-          const status = states[menu.machineId]?.status;
-          const action = status === 'connected' || status === 'connecting' ? api.disconnect(menu.machineId) : api.connect(menu.machineId);
-          void action.catch((error: Error) => setError(error.message));
+          void (menuConnected ? api.disconnect(menu.machineId) : api.connect(menu.machineId)).catch((error: Error) => setError(error.message));
           setMenu(undefined); menu.trigger.focus();
-        }}>{states[menu.machineId]?.status === 'connected' ? '断开' : states[menu.machineId]?.status === 'connecting' ? '取消连接' : '连接'}</button>
+        }}>{menuStatus === 'connected' ? '断开' : menuStatus === 'connecting' ? '取消连接' : '连接'}</button>
       </div>
     </div>}
     {settings && <Settings config={config} onUpdate={(config) => { setConfig(config); void api.connect(config.selected); }} onClose={() => setSettings(false)} />}
@@ -237,8 +264,8 @@ function App({ context }: { context: UIContext }) {
 }
 
 export function mount(container: HTMLElement, context: UIContext) {
-  container.classList.add('wangcai-terminal');
-  context.sidebar.classList.add('wangcai-terminal');
+  container.classList.add('wangcai-workspace');
+  context.sidebar.classList.add('wangcai-workspace');
   api = {
     click: (id, sessionId, location) => context.request('click', { id, sessionId, location }),
     config: () => context.request('config'),
@@ -247,7 +274,9 @@ export function mount(container: HTMLElement, context: UIContext) {
     selectMachine: (id) => context.request('select-machine', id),
     connect: (id) => context.request('connect', id),
     disconnect: (id) => context.request('disconnect', id),
-    request: (id, op, params = {}) => context.request('terminal', { id, op, params }),
+    openWorkspace: (machineId, workspaceId) => context.request('open-workspace', { machineId, workspaceId }),
+    closeWorkspace: (id) => context.request('close-workspace', id),
+    pty: (id, op, params = {}) => context.request('pty', { id, op, params }),
     onState: (callback) => context.on('state', callback),
     onTerminal: (callback) => context.on('terminal', callback),
   };

@@ -31,11 +31,10 @@ test('Git tab follows terminal cwd and displays two read-only diffs', { timeout:
     await page.locator('#view-menu').getByRole('button', { name: 'Git', exact: true }).click();
     await page.getByText('请选择一个已连接的终端', { exact: true }).waitFor();
     await page.locator('.status-dot.connected').waitFor();
-    await page.getByRole('button', { name: '新建终端', exact: true }).click();
+    await page.getByRole('button', { name: '新建工作区', exact: true }).click();
     await page.locator('.git-note[role=alert]').filter({ hasText: 'not a git repository' }).waitFor();
-    const sessions = await page.evaluate(() => window.wangcai.request('terminal', 'terminal', { id: 'local', op: 'list', params: {} }));
-    const sessionId = sessions[0].id;
-    await page.evaluate(({ repo, sessionId }) => window.wangcai.request('terminal', 'terminal', { id: 'local', op: 'input', params: { session_id: sessionId, data: `cd '${repo.replaceAll("'", "'\\''")}'\r` } }), { repo, sessionId });
+    const sessionId = (await page.evaluate(() => window.wangcai.request('workspace', 'config'))).workspaces[0].sessionId;
+    await page.evaluate(({ repo, sessionId }) => window.wangcai.request('workspace', 'pty', { id: 'local', op: 'input', params: { session_id: sessionId, data: `cd '${repo.replaceAll("'", "'\\''")}'\r` } }), { repo, sessionId });
     await page.locator('.xterm-screen').filter({ hasText: 'repo with' }).waitFor();
     await page.getByRole('button', { name: '刷新 Git' }).click();
     await page.locator('.git-root').filter({ hasText: repo }).waitFor();
@@ -65,7 +64,7 @@ test('Git tab follows terminal cwd and displays two read-only diffs', { timeout:
     await page.getByRole('button', { name: '新建侧栏标签页' }).click();
     await page.locator('#view-menu').getByRole('button', { name: 'Git', exact: true }).click();
     assert.equal(await page.locator('.sidebar-tab').count(), 1);
-    await page.evaluate(({ home, sessionId }) => window.wangcai.request('terminal', 'terminal', { id: 'local', op: 'input', params: { session_id: sessionId, data: `cd '${home}'\r` } }), { home, sessionId });
+    await page.evaluate(({ home, sessionId }) => window.wangcai.request('workspace', 'pty', { id: 'local', op: 'input', params: { session_id: sessionId, data: `cd '${home}'\r` } }), { home, sessionId });
     await page.getByRole('button', { name: '刷新 Git' }).click();
     await page.locator('.git-note[role=alert]').filter({ hasText: 'not a git repository' }).waitFor();
     await page.locator('.machine-row').click({ button: 'right' });

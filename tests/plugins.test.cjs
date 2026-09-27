@@ -15,13 +15,13 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
     return desktop.firstWindow();
   };
   try {
-    const terminal = join(home, '.local/shared/wangcai/plugins/terminal');
-    mkdirSync(terminal, { recursive: true });
-    writeFileSync(join(terminal, 'main.ts'), 'export function activate() {}');
+    const workspace = join(home, '.local/shared/wangcai/plugins/workspace');
+    mkdirSync(workspace, { recursive: true });
+    writeFileSync(join(workspace, 'main.ts'), 'export function activate() {}');
     for (const name of ['alpha', 'beta']) {
       const path = join(home, '.local/shared/wangcai/plugins', name);
       mkdirSync(path);
-      symlinkSync(resolve('plugins/terminal/node_modules'), join(path, 'node_modules'), 'dir');
+      symlinkSync(resolve('plugins/workspace/node_modules'), join(path, 'node_modules'), 'dir');
       writeFileSync(join(path, 'main.ts'), `
         import { writeFileSync } from 'node:fs';
         import { join } from 'node:path';

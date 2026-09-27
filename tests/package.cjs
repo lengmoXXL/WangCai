@@ -33,22 +33,22 @@ test('packaged app installs plugins, previews files and preserves user changes',
     ]), 'function');
     await page.getByRole('button', { name: '关闭 packaged.ts' }).click();
     await desktop.close(); desktop = undefined;
-    const pluginSource = join(home, '.local/shared/wangcai/plugins/terminal/ui.tsx');
+    const pluginSource = join(home, '.local/shared/wangcai/plugins/workspace/ui.tsx');
     const source = readFileSync(pluginSource, 'utf8');
     writeFileSync(pluginSource, source.replace('机器设置</button>', '本地修改生效</button>'));
     desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/wangcai'), args: [`--user-data-dir=${join(home, 'electron')}`], env });
     page = await desktop.firstWindow();
     try { await page.getByRole('button', { name: '本地修改生效' }).waitFor({ timeout: 15000 }); }
     catch (error) { console.error(await page.locator('body').innerText()); throw error; }
-    await page.getByRole('button', { name: '新建终端', exact: true }).click();
-    await page.getByRole('tab', { name: /终端 1/ }).waitFor();
+    await page.getByRole('button', { name: '新建工作区', exact: true }).click();
+    await page.getByRole('tab', { name: /工作区 1/ }).waitFor();
     await page.locator('.terminal-pane.active .xterm-helper-textarea').focus();
     await page.keyboard.type("printf 'PACKAGED_%s\\n' success");
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => document.querySelector('.terminal-pane.active .xterm-rows')?.textContent.includes('PACKAGED_success'));
     assert.ok(JSON.parse(readFileSync(join(home, '.config/wangcai/server.json'))).port > 0);
     await desktop.close(); desktop = undefined;
-    rmSync(join(home, '.local/shared/wangcai/plugins/terminal'), { recursive: true });
+    rmSync(join(home, '.local/shared/wangcai/plugins/workspace'), { recursive: true });
     desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/wangcai'), args: [`--user-data-dir=${join(home, 'electron')}`], env });
     page = await desktop.firstWindow();
     await page.getByRole('button', { name: '机器设置' }).waitFor();
