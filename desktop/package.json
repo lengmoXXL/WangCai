@@ -19,7 +19,7 @@
     ],
     "extraResources": [
       {
-        "from": "../node/dist/release/shu",
+        "from": "../shucli/dist/release/shu",
         "to": "shu"
       },
       {

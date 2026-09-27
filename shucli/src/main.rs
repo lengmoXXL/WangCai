@@ -36,6 +36,8 @@ enum ServerCommand {
     Start {
         #[arg(long, hide = true)]
         foreground: bool,
+        #[arg(long)]
+        json: bool,
     },
     Status {
         #[arg(long)]
@@ -113,13 +115,27 @@ fn main() -> Result<()> {
             }
             bail!("Node did not stop within 5 seconds");
         }
-        ServerCommand::Start { foreground: false } => {
-            if let Ok(info) = running_info() {
-                println!("Shu already running on 127.0.0.1:{}", info.port);
-                return Ok(());
-            }
+        ServerCommand::Start {
+            foreground: false,
+            json: as_json,
+        } => {
             let dir = config_dir()?;
             fs::create_dir_all(&dir)?;
+            let startup = fs::OpenOptions::new()
+                .create(true)
+                .truncate(false)
+                .read(true)
+                .write(true)
+                .open(dir.join("startup.lock"))?;
+            startup.lock_exclusive()?;
+            if let Ok(info) = running_info() {
+                if as_json {
+                    println!("{}", serde_json::to_string(&info)?);
+                } else {
+                    println!("Shu already running on 127.0.0.1:{}", info.port);
+                }
+                return Ok(());
+            }
             let log = fs::OpenOptions::new()
                 .create(true)
                 .append(true)
@@ -140,7 +156,11 @@ fn main() -> Result<()> {
             let mut child = cmd.spawn()?;
             for _ in 0..100 {
                 if let Ok(info) = running_info() {
-                    println!("Shu started on 127.0.0.1:{}", info.port);
+                    if as_json {
+                        println!("{}", serde_json::to_string(&info)?);
+                    } else {
+                        println!("Shu started on 127.0.0.1:{}", info.port);
+                    }
                     return Ok(());
                 }
                 if let Some(status) = child.try_wait()? {
@@ -156,7 +176,9 @@ fn main() -> Result<()> {
                 dir.join("server.log").display()
             );
         }
-        ServerCommand::Start { foreground: true } => {
+        ServerCommand::Start {
+            foreground: true, ..
+        } => {
             let dir = config_dir()?;
             fs::create_dir_all(&dir)?;
             let lock = fs::OpenOptions::new()

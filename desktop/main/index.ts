@@ -25,7 +25,7 @@ else {
       } finally { rmSync(staging, { recursive: true, force: true }); }
     }
     const plugins = await loadPlugins(require.resolve('@shu/sdk'),
-      app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../node/dist/debug'),
+      app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../shucli/dist/debug'),
       (id, event, data) => { if (window && !window.isDestroyed()) window.webContents.send('shu:event', id, event, data); });
     protocol.handle('shu-plugin', async (request) => {
       const url = new URL(request.url);

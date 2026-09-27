@@ -121,15 +121,13 @@ export class MachineConnection {
       let info: Info;
       let port: number;
       if (this.options.type === 'local') {
-        await exec(this.options.binary ?? 'shu', ['server', 'start'], { timeout: 15_000 });
-        if (!current()) return;
-        const { stdout } = await exec(this.options.binary ?? 'shu', ['server', 'status', '--json'], { timeout: 5000 });
+        const { stdout } = await exec(this.options.binary ?? 'shu', ['server', 'start', '--json'], { timeout: 15_000 });
         info = JSON.parse(stdout);
         port = info.port;
       } else {
         const { stdout } = await exec('ssh', [
           '-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', this.options.host,
-          'export PATH="$HOME/.local/bin:$PATH"; shu server status --json',
+          'export PATH="$HOME/.local/bin:$PATH"; shu server start --json',
         ], { timeout: 15_000, maxBuffer: 64 * 1024 });
         info = JSON.parse(stdout.trim());
         if (!Number.isInteger(info.port) || info.port < 1 || info.port > 65535) throw new Error('Node returned an invalid port.');

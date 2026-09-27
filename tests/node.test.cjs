@@ -1,15 +1,16 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync } = require('node:fs');
+const { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } = require('node:fs');
 const { setTimeout: delay } = require('node:timers/promises');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
-const { execFileSync } = require('node:child_process');
+const { execFile, execFileSync } = require('node:child_process');
 const { once } = require('node:events');
+const { promisify } = require('node:util');
 const WebSocket = require('ws');
 const { Terminal } = require('@xterm/headless');
 
-const binary = resolve('node/dist/debug/shu');
+const binary = resolve('shucli/dist/debug/shu');
 async function until(check, message) {
   const deadline = Date.now() + 6000;
   while (Date.now() < deadline) { if (await check()) return; await delay(30); }
@@ -75,10 +76,14 @@ test('persistent terminal node lifecycle', { timeout: 60000 }, async (t) => {
   const cli = (...args) => execFileSync(binary, ['server', ...args], { env, encoding: 'utf8', timeout: 15000, stdio: ['ignore', 'pipe', 'pipe'] });
   const clients = [];
   try {
+    assert.throws(() => cli('status', '--json'), /not running/);
+    assert.equal(existsSync(join(home, '.config/shu/server.json')), false);
     mkdirSync(join(home, '.config/shu'), { recursive: true });
     writeFileSync(join(home, '.config/shu/server.json'), JSON.stringify({ pid: 1, port: 1, instance_id: 'stale', protocol: 1 }));
-    cli('start');
-    const info = JSON.parse(cli('status', '--json'));
+    const started = await Promise.all(Array.from({ length: 3 }, () => promisify(execFile)(binary, ['server', 'start', '--json'], { env, timeout: 15000 })));
+    const info = JSON.parse(started[0].stdout);
+    for (const result of started) assert.deepEqual(JSON.parse(result.stdout), info);
+    assert.deepEqual(JSON.parse(cli('start', '--json')), info);
     assert.ok(info.port > 0);
     assert.equal(info.protocol, 1);
     assert.match(cli('start'), /already running/);

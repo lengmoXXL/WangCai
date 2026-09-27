@@ -1,2 +1,2 @@
 [build]
-target-dir = "node/dist"
+target-dir = "shucli/dist"

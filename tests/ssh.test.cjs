@@ -17,7 +17,7 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
   const sshd = ['/usr/sbin/sshd', '/usr/local/sbin/sshd'].find(existsSync);
   if (!sshd) { t.skip('OpenSSH server is not installed'); return; }
   const home = mkdtempSync(join(tmpdir(), 'shu-ssh-test-'));
-  const binary = resolve('node/dist/debug/shu');
+  const binary = resolve('shucli/dist/debug/shu');
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   const cli = (...args) => execFileSync(binary, ['server', ...args], { env, encoding: 'utf8', timeout: 15000 });
   let server;
@@ -25,8 +25,7 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
   let logs = '';
   const originalPath = process.env.PATH;
   try {
-    cli('start');
-    const info = JSON.parse(cli('status', '--json'));
+    assert.throws(() => cli('status', '--json'), /not running/);
     execFileSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', join(home, 'host-key')]);
     execFileSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', join(home, 'client-key')]);
     const reservation = createServer();
@@ -34,12 +33,12 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     const sshPort = reservation.address().port;
     await new Promise((resolve) => reservation.close(resolve));
     const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
-    writeFileSync(join(home, 'status-command'), `#!/bin/sh\nexec env HOME=${quote(home)} ${quote(binary)} server status --json\n`, { mode: 0o700 });
+    writeFileSync(join(home, 'start-command'), `#!/bin/sh\n[ "$SSH_ORIGINAL_COMMAND" = ${quote('export PATH="$HOME/.local/bin:$PATH"; shu server start --json')} ] || exit 64\nexec env HOME=${quote(home)} ${quote(binary)} server start --json\n`, { mode: 0o700 });
     writeFileSync(join(home, 'sshd_config'), [
       `Port ${sshPort}`, 'ListenAddress 127.0.0.1', `HostKey ${join(home, 'host-key')}`,
       `PidFile ${join(home, 'sshd.pid')}`, `AuthorizedKeysFile ${join(home, 'client-key.pub')}`,
       'StrictModes no', 'PasswordAuthentication no', 'KbdInteractiveAuthentication no', 'UsePAM no',
-      'AllowTcpForwarding yes', 'PermitRootLogin yes', `ForceCommand ${join(home, 'status-command')}`,
+      'AllowTcpForwarding yes', 'PermitRootLogin yes', `ForceCommand ${join(home, 'start-command')}`,
     ].join('\n'));
     server = spawn(sshd, ['-D', '-e', '-f', join(home, 'sshd_config')], { stdio: ['ignore', 'ignore', 'pipe'] });
     server.stderr.on('data', (data) => { logs += data; });
@@ -56,6 +55,7 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     writeFileSync(join(home, 'bin/ssh'), `#!/bin/sh\nexec /usr/bin/ssh -F ${quote(join(home, 'ssh_config'))} "$@"\n`, { mode: 0o700 });
     process.env.PATH = `${join(home, 'bin')}:${originalPath}`;
     connection = await connect({ type: 'ssh', host: 'shu-test' });
+    const info = JSON.parse(cli('status', '--json'));
     let state;
     connection.onState((value) => { state = value; });
     const localPort = Number(new URL(connection.ws.url).port);
@@ -87,10 +87,9 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     await until(() => output.join('').includes('REATTACH_ok'), () => 'automatic reattach');
     const generation = state.generation;
     cli('stop');
-    cli('start');
+    await until(() => state?.status === 'connected' && state.generation > generation, () => state?.error);
     const restarted = JSON.parse(cli('status', '--json'));
     assert.notEqual(restarted.instance_id, info.instance_id);
-    await until(() => state?.status === 'connected' && state.generation > generation, () => state?.error);
     assert.deepEqual(state.sessions, []);
     assert.match(errors[0], /restarted/);
     await assert.rejects(terminal.write('oops'), /restarted/);
