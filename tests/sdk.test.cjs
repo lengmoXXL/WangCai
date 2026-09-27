@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { mkdtempSync, writeFileSync, rmSync } = require('node:fs');
+const { mkdtempSync, writeFileSync, rmSync, realpathSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
@@ -39,6 +39,10 @@ test('Node SDK: local PTYs, binary files, detach and reconnect', { timeout: 3000
     terminal.onData((event) => output.push(Buffer.from(event.data).toString()));
     await terminal.write("printf 'SDK_%s\\n' success\r");
     await until(() => output.join('').includes('SDK_success'));
+    assert.equal(await machine.pty.cwd(session.id), realpathSync(home));
+    await terminal.write("cd /tmp; printf 'CWD_%s\\n' changed\r");
+    await until(() => output.join('').includes('CWD_changed'));
+    assert.equal(await machine.pty.cwd(session.id), realpathSync('/tmp'));
     await terminal.resize({ rows: 30, cols: 100 });
     assert.equal((await machine.pty.list())[0].cols, 100);
     await terminal.write("sleep 0.3; printf 'SDK_%s\\n' offline\r");

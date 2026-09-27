@@ -42,6 +42,39 @@ impl Terminal {
         json!({"id":self.id,"title":self.title,"pid":self.pid,"rows":rows,"cols":cols,"exit_code":self.exit_code})
     }
 
+    fn cwd(&self) -> Result<std::path::PathBuf> {
+        if self.exit_code.is_some() {
+            bail!("Shell has exited");
+        }
+        #[cfg(target_os = "linux")]
+        {
+            Ok(std::fs::read_link(format!("/proc/{}/cwd", self.pid))?)
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let mut info = std::mem::MaybeUninit::<libc::proc_vnodepathinfo>::zeroed();
+            let size = std::mem::size_of::<libc::proc_vnodepathinfo>() as i32;
+            let result = unsafe {
+                libc::proc_pidinfo(
+                    self.pid as i32,
+                    libc::PROC_PIDVNODEPATHINFO,
+                    0,
+                    info.as_mut_ptr().cast(),
+                    size,
+                )
+            };
+            if result != size {
+                return Err(std::io::Error::last_os_error().into());
+            }
+            let info = unsafe { info.assume_init() };
+            let path = unsafe { std::ffi::CStr::from_ptr(info.pvi_cdir.vip_path.as_ptr().cast()) };
+            use std::os::unix::ffi::OsStrExt;
+            Ok(std::path::PathBuf::from(std::ffi::OsStr::from_bytes(
+                path.to_bytes(),
+            )))
+        }
+    }
+
     fn snapshot(&self) -> Message {
         let screen = self.parser.screen();
         let (rows, cols) = screen.size();
@@ -310,6 +343,7 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                             sessions.sort_by_key(|s| s["pid"].as_u64());
                             Ok(json!(sessions))
                         }
+                        "cwd" => Ok(json!(node.session(id)?.lock().unwrap().cwd()?)),
                         "create" => { let (rows, cols) = dimensions(&request)?; node.create(rows, cols) }
                         "attach" => {
                             let session = node.session(id)?;

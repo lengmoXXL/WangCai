@@ -1,0 +1,20 @@
+.file-preview { height: 100%; display: flex; flex-direction: column; color: #dce3eb; background: #11151b; }
+.file-preview, .file-preview * { box-sizing: border-box; }
+.file-preview header { display: flex; flex-shrink: 0; min-height: 36px; overflow-x: auto; border-bottom: 1px solid #252c35; font-size: 12px; }
+.file-tab { display: flex; align-items: center; flex-shrink: 0; max-width: 220px; border-right: 1px solid #252c35; }
+.file-tab.selected { background: #262e36; }
+.file-tab button { border: 0; background: transparent; color: #8b98a6; cursor: pointer; }
+.file-tab.selected button { color: #dce3eb; }
+.file-tab [role=tab] { padding: 9px 6px 9px 12px; font: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-tab .close-file { flex-shrink: 0; width: 24px; height: 24px; padding: 0; margin-right: 4px; font-size: 16px; }
+.file-tab button:hover { background: #303943; }
+.file-tab button:focus-visible { outline: 2px solid #9bc7bc; outline-offset: -2px; }
+.file-content { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.code-preview { flex: 1; min-height: 0; }
+.markdown-preview { flex: 1; overflow: auto; padding: 8px 20px 24px; font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
+.markdown-preview pre { overflow-x: auto; padding: 12px; background: #191f27; }
+.markdown-preview code { font-family: Menlo, monospace; font-size: 12px; }
+.markdown-preview table { border-collapse: collapse; }
+.markdown-preview th, .markdown-preview td { border: 1px solid #303843; padding: 4px 8px; }
+.markdown-preview blockquote { margin-left: 0; padding-left: 12px; border-left: 2px solid #65707c; color: #8b98a6; }
+.file-message { padding: 16px; font-size: 12px; color: #aab6c2; white-space: pre-wrap; overflow-wrap: anywhere; }

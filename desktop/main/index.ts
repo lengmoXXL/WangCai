@@ -15,18 +15,21 @@ else {
   void app.whenReady().then(async () => {
     if (app.isPackaged) process.env.ESBUILD_BINARY_PATH = join(process.resourcesPath, `app.asar.unpacked/node_modules/@esbuild/darwin-${process.arch}/bin/esbuild`);
     const directory = join(homedir(), '.local/shared/shu/plugins');
-    const terminal = join(directory, 'terminal');
-    if (!existsSync(terminal)) {
+    const bundled = app.isPackaged ? join(process.resourcesPath, 'plugins') : join(app.getAppPath(), 'dist/plugins');
+    for (const id of ['terminal', 'files']) {
+      const target = join(directory, id);
+      if (existsSync(target)) continue;
       mkdirSync(directory, { recursive: true });
-      const staging = mkdtempSync(join(directory, '../.terminal-'));
+      const staging = mkdtempSync(join(directory, `../.${id}-`));
       try {
-        cpSync(app.isPackaged ? join(process.resourcesPath, 'plugins/terminal') : join(app.getAppPath(), 'dist/plugins/terminal'), staging, { recursive: true });
-        renameSync(staging, terminal);
+        cpSync(join(bundled, id), staging, { recursive: true });
+        renameSync(staging, target);
       } finally { rmSync(staging, { recursive: true, force: true }); }
     }
     const plugins = await loadPlugins(require.resolve('@shu/sdk'),
       app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../shucli/dist/debug'),
-      (id, event, data) => { if (window && !window.isDestroyed()) window.webContents.send('shu:event', id, event, data); });
+      (id, event, data) => { if (window && !window.isDestroyed()) window.webContents.send('shu:event', id, event, data); },
+      (event, data) => { if (window && !window.isDestroyed()) window.webContents.send('shu:channel', event, data); });
     protocol.handle('shu-plugin', async (request) => {
       const url = new URL(request.url);
       const path = resolve(plugins.cache, `.${decodeURIComponent(url.pathname)}`);
@@ -37,6 +40,7 @@ else {
       headers.set('Access-Control-Allow-Origin', '*');
       return new Response(response.body, { status: response.status, headers });
     });
+    ipcMain.handle('shu:publish', (_, event: string, data: unknown) => plugins.publish(event, data));
     ipcMain.handle('shu:plugins', () => plugins.plugins);
     ipcMain.handle('shu:request', (_, id: string, method: string, params: unknown) => plugins.request(id, method, params));
     Menu.setApplicationMenu(Menu.buildFromTemplate([

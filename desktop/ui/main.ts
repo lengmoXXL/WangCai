@@ -35,6 +35,12 @@ async function start() {
         await loaded;
       }
       const context: UIContext = {
+        publish: (event, data) => window.shu.publish(event, data),
+        subscribe(event, callback) {
+          const off = window.shu.subscribe(event, callback);
+          subscriptions.add(off);
+          return () => { off(); subscriptions.delete(off); };
+        },
         request: (method, params) => window.shu.request(plugin.id, method, params),
         on(event, callback) {
           const off = window.shu.on((id, name, data) => { if (id === plugin.id && name === event) callback(data as never); });
@@ -43,6 +49,7 @@ async function start() {
         },
       };
       const module = await import(/* @vite-ignore */ plugin.ui!);
+      if (module.placement === 'right') container.classList.add('plugin-right');
       dispose = await module.mount(container, context);
       const cleanup = async () => {
         for (const off of subscriptions) off();
@@ -55,6 +62,7 @@ async function start() {
       for (const off of subscriptions) off();
       await dispose?.();
       stylesheet?.remove();
+      container.hidden = false;
       container.className = 'plugin-error';
       container.textContent = `${plugin.id}: ${error instanceof Error ? error.message : String(error)}`;
     }

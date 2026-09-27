@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { connect, type MachineConnection, type Pty } from '@shu/sdk';
-import type { MainContext } from '@shu/sdk/plugin';
+import type { FileClick, MainContext } from '@shu/sdk/plugin';
 import type { Config, Machine, MachineState } from './shared';
 
 export function activate(context: MainContext) {
@@ -78,6 +78,13 @@ export function activate(context: MainContext) {
     return result;
   }
 
+  handlers.push(context.handle('click', async ({ id, sessionId, location }: { id: string; sessionId: string; location: Pick<FileClick, 'path' | 'line' | 'column'> }) => {
+    const machine = config.machines.find((machine) => machine.id === id);
+    const node = connections.get(id);
+    if (!machine || !node) throw new Error('Machine is not connected');
+    const path = posix.isAbsolute(location.path) ? location.path : posix.resolve(await node.pty.cwd(sessionId), location.path);
+    await context.publish('onclick', { type: 'file', machine, ...location, path });
+  }));
   handlers.push(context.handle('config', () => config));
   handlers.push(context.handle('save-machine', (machine: { id?: string; name: string; host: string }) => {
     if (machine.id === 'local') throw new Error('The local machine cannot be edited.');

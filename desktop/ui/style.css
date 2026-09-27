@@ -3,3 +3,5 @@ body { background: #11151b; color: #dce3eb; font-family: -apple-system, sans-ser
 #root { display: flex; }
 .plugin { flex: 1; min-width: 0; height: 100%; }
 .plugin-error { padding: 48px 16px 16px; white-space: pre-wrap; overflow: auto; color: #e9a894; }
+.plugin-right { order: 1; flex: 0 0 clamp(300px, 40vw, 600px); border-left: 1px solid #252c35; }
+.plugin[hidden] { display: none; }

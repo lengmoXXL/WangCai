@@ -5,13 +5,20 @@ import { createRequire } from 'node:module';
 import type { Dispose, MainContext } from '@shu/sdk/plugin';
 import type { PluginInfo } from '../shared';
 
-export async function loadPlugins(sdkPath: string, resourcesDirectory: string, emit: (id: string, event: string, data: unknown) => void) {
+export async function loadPlugins(sdkPath: string, resourcesDirectory: string, emit: (id: string, event: string, data: unknown) => void, broadcast: (event: string, data: unknown) => void) {
   const { build } = await import('esbuild');
   const directory = join(homedir(), '.local/shared/shu/plugins');
   const cache = join(homedir(), '.cache/shu/plugins');
   const plugins: PluginInfo[] = [];
   const handlers = new Map<string, Map<string, (params: any) => unknown>>();
   const disposers: Dispose[] = [];
+  const channels = new Set<Map<string, Set<(data: any) => void | Promise<void>>>>();
+  async function publish(event: string, data: unknown) {
+    broadcast(event, data);
+    await Promise.all([...channels].flatMap((subscriptions) => [...subscriptions.get(event) ?? []].map(async (callback) => {
+      try { await callback(data); } catch (error) { console.error(`Plugin event ${event}:`, error); }
+    })));
+  }
   const requirePlugin = createRequire(__filename);
   mkdirSync(directory, { recursive: true });
   for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
@@ -23,6 +30,8 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, e
     plugins.push(info);
     const methods = new Map<string, (params: any) => unknown>();
     handlers.set(id, methods);
+    const subscriptions = new Map<string, Set<(data: any) => void | Promise<void>>>();
+    channels.add(subscriptions);
     try {
       rmSync(output, { recursive: true, force: true });
       mkdirSync(output, { recursive: true });
@@ -35,7 +44,8 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, e
       });
       if (existsSync(join(source, 'ui.tsx'))) {
         await build({
-          entryPoints: [join(source, 'ui.tsx')], outfile: join(output, 'ui.js'),
+          entryPoints: [join(source, 'ui.tsx'), ...(existsSync(join(source, 'ui.worker.ts')) ? [join(source, 'ui.worker.ts')] : [])], outdir: output,
+          loader: { '.ttf': 'file' },
           bundle: true, platform: 'browser', format: 'esm', target: 'chrome140', jsx: 'automatic',
           define: { 'process.env.NODE_ENV': '"production"' }, sourcemap: 'inline',
           plugins: [{ name: 'node-sdk-boundary', setup(builder) {
@@ -51,6 +61,13 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, e
       mkdirSync(logDirectory, { recursive: true });
       const context: MainContext = {
         dataDirectory, logDirectory, resourcesDirectory,
+        publish,
+        subscribe(event, callback) {
+          let callbacks = subscriptions.get(event);
+          if (!callbacks) subscriptions.set(event, callbacks = new Set());
+          callbacks.add(callback);
+          return () => { callbacks.delete(callback); };
+        },
         handle(method, handler) {
           if (methods.has(method)) throw new Error(`Duplicate plugin method: ${method}`);
           methods.set(method, handler);
@@ -66,11 +83,12 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, e
       info.ui = undefined;
       info.css = undefined;
       methods.clear();
+      subscriptions.clear();
       console.error(`Plugin ${id}:`, error);
     }
   }
   return {
-    plugins, cache,
+    plugins, cache, publish,
     request(id: string, method: string, params: unknown) {
       const handler = handlers.get(id)?.get(method);
       if (!handler) throw new Error(`Unknown plugin method: ${id}/${method}`);
@@ -81,6 +99,7 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, e
         try { await dispose(); } catch (error) { console.error('Plugin cleanup:', error); }
       }
       handlers.clear();
+      channels.clear();
     },
   };
 }

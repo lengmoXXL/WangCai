@@ -28,6 +28,12 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
         import { join } from 'node:path';
         export function activate(context) {
           writeFileSync(join(context.logDirectory, 'plugin.log'), '${name}');
+          const received = [];
+          const off = context.subscribe('onclick', data => received.push(data));
+          context.handle('received', () => received);
+          context.handle('unsubscribe', off);
+          context.handle('stop', () => context.emit('stop'));
+          context.handle('publish', data => context.publish('onclick', data));
           context.handle('echo', (data: string) => { context.emit('echo', data); return '${name}:' + data; });
           return () => writeFileSync(join(context.dataDirectory, 'cleaned'), 'yes');
         }
@@ -37,8 +43,10 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
         import './style.css';
         export function mount(container, context) {
           const root = createRoot(container);
+          const stop = context.subscribe('onclick', data => container.dataset.channel = data);
+          context.on('stop', stop);
           const off = context.on('echo', (text) => container.dataset.event = text);
-          root.render(<button onClick={async () => container.dataset.reply = await context.request('echo', 'hello')}>${name} v1</button>);
+          root.render(<button onClick={async () => { container.dataset.reply = await context.request('echo', 'hello'); await context.publish('onclick', '${name}'); }}>${name} v1</button>);
           return () => { off(); root.unmount(); };
         }
       `);
@@ -46,7 +54,11 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
     }
     const broken = join(home, '.local/shared/shu/plugins/broken');
     mkdirSync(broken);
-    writeFileSync(join(broken, 'main.ts'), 'export function activate() { throw new Error("intentional failure"); }');
+    writeFileSync(join(broken, 'main.ts'), `import { writeFileSync } from 'node:fs'; import { join } from 'node:path'; export function activate(context) { context.subscribe('onclick', () => writeFileSync(join(context.dataDirectory, 'leaked'), 'yes')); throw new Error('intentional failure'); }`);
+    const failedUI = join(home, '.local/shared/shu/plugins/failed-ui');
+    mkdirSync(failedUI);
+    writeFileSync(join(failedUI, 'main.ts'), 'export function activate() {}');
+    writeFileSync(join(failedUI, 'ui.tsx'), `export function mount(container, context) { container.hidden = true; context.subscribe('onclick', () => document.body.dataset.leaked = 'yes'); throw new Error('UI failure'); }`);
     page = await launch();
     await page.getByText('alpha v1', { exact: true }).click();
     await page.waitForFunction(() => document.querySelector('[data-plugin=alpha]')?.getAttribute('data-reply') === 'alpha:hello');
@@ -54,7 +66,21 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
     await page.getByText('beta v1', { exact: true }).click();
     await page.waitForFunction(() => document.querySelector('[data-plugin=beta]')?.getAttribute('data-reply') === 'beta:hello');
     assert.equal(await page.getByText('alpha v1', { exact: true }).evaluate((el) => getComputedStyle(el).color), 'rgb(1, 2, 3)');
+    await page.waitForFunction(() => document.querySelector('[data-plugin=alpha]')?.getAttribute('data-channel') === 'beta');
+    assert.deepEqual(await page.evaluate(() => window.shu.request('beta', 'received')), ['alpha', 'beta']);
+    await page.evaluate(() => window.shu.request('alpha', 'unsubscribe'));
+    await page.evaluate(() => window.shu.request('beta', 'publish', 'main-event'));
+    await page.waitForFunction(() => document.querySelector('[data-plugin=beta]')?.getAttribute('data-channel') === 'main-event');
+    assert.deepEqual(await page.evaluate(() => window.shu.request('alpha', 'received')), ['alpha', 'beta']);
+    assert.deepEqual(await page.evaluate(() => window.shu.request('beta', 'received')), ['alpha', 'beta', 'main-event']);
+    await page.evaluate(() => window.shu.request('alpha', 'stop'));
+    await page.evaluate(() => window.shu.publish('onclick', 'after-unsubscribe'));
+    await page.waitForFunction(() => document.querySelector('[data-plugin=beta]')?.getAttribute('data-channel') === 'after-unsubscribe');
+    assert.equal(await page.locator('[data-plugin=alpha]').getAttribute('data-channel'), 'main-event');
+    assert.equal(existsSync(join(home, '.local/shared/shu/data/broken/leaked')), false);
+    assert.equal(await page.evaluate(() => document.body.dataset.leaked), undefined);
     await page.getByText('broken: intentional failure', { exact: true }).waitFor();
+    await page.getByText('failed-ui: UI failure', { exact: true }).waitFor();
     await desktop.close(); desktop = undefined;
     for (const name of ['alpha', 'beta']) {
       assert.equal(readFileSync(join(home, '.local/shared/shu/data', name, 'cleaned'), 'utf8'), 'yes');

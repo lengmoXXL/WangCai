@@ -6,9 +6,9 @@
 .shu-terminal button:disabled { opacity: .4; cursor: default; }
 .shu-terminal button:focus-visible, .shu-terminal input:focus-visible, .shu-terminal [role=tab]:focus-visible { outline: 2px solid #9bc7bc; outline-offset: -2px; }
 .shu-terminal .app { display: flex; height: 100%; }
-.shu-terminal .sidebar { width: 180px; flex-shrink: 0; background: #161b22; border-right: 1px solid #252c35; padding: 44px 0 8px; display: flex; flex-direction: column; -webkit-app-region: drag; }
+.shu-terminal .sidebar { width: 180px; flex-shrink: 0; background: #161b22; border-right: 1px solid #252c35; padding: 36px 0 0; display: flex; flex-direction: column; -webkit-app-region: drag; }
 .shu-terminal .sidebar button, .shu-terminal .sidebar nav { -webkit-app-region: no-drag; }
-.shu-terminal .sidebar nav { overflow-y: auto; }
+.shu-terminal .sidebar nav { flex: 1; overflow-y: auto; }
 .shu-terminal .machine-group { margin-bottom: 8px; }
 .shu-terminal .machine-row { display: flex; align-items: center; padding: 0 6px; }
 .shu-terminal .machine { display: flex; gap: 9px; align-items: center; text-align: left; flex: 1; min-width: 0; border: 0; padding: 9px 10px; font-size: 12px; color: #8b98a6; }
@@ -17,7 +17,7 @@
 .shu-terminal .status-dot { width: 5px; height: 5px; border-radius: 50%; background: #65707c; flex-shrink: 0; }
 .shu-terminal .status-dot.connected { background: #9bc7bc; }
 .shu-terminal .status-dot.connecting { background: #d9b77b; }
-.shu-terminal .sidebar-actions { margin-top: auto; padding: 8px 6px 0; }
+.shu-terminal .sidebar-actions { padding: 0 6px; }
 .shu-terminal .settings-button { border: 0; color: #8b98a6; font-size: 11px; padding: 9px 10px; }
 .shu-terminal main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .shu-terminal .tab { display: flex; align-items: center; justify-content: space-between; color: #83909e; padding: 4px 6px 4px 35px; font-size: 12px; cursor: pointer; }

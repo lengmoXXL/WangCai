@@ -1,3 +1,4 @@
+import type { FileClick } from '@shu/sdk/plugin';
 import type { MachineState as ConnectionState } from '@shu/sdk';
 export interface Machine { id: string; name: string; host?: string }
 export type { Session } from '@shu/sdk';
@@ -13,6 +14,7 @@ export interface TerminalEvent {
 }
 export interface Config { machines: Machine[]; selected: string }
 export interface ShuAPI {
+  click(machineId: string, sessionId: string, location: Pick<FileClick, 'path' | 'line' | 'column'>): Promise<void>;
   config(): Promise<Config>;
   saveMachine(machine: { id?: string; name: string; host: string }): Promise<Config>;
   removeMachine(id: string): Promise<Config>;

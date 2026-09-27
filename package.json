@@ -13,7 +13,7 @@
     "test": "npm run build && node --test tests/*.test.cjs",
     "package": "cargo build --release && npm run build:sdk && npm run typecheck && npm run package --workspace shu-desktop",
     "build:sdk": "npm run build --workspace @shu/sdk",
-    "typecheck": "npm run typecheck --workspaces && npm run typecheck --prefix plugins/terminal",
+    "typecheck": "npm run typecheck --workspaces && npm run typecheck --prefix plugins/terminal && npm run typecheck --prefix plugins/files",
     "test:package": "npm run package && node --test tests/package.cjs"
   },
   "devDependencies": {

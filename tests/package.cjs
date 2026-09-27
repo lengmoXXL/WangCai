@@ -6,7 +6,7 @@ const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
 
-test('packaged app installs, preserves and restores the terminal plugin', { timeout: 60000 }, async () => {
+test('packaged app installs plugins, previews files and preserves user changes', { timeout: 60000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'shu-package-'));
   const env = { ...process.env, HOME: home, PATH: '/usr/bin:/bin' };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -16,6 +16,18 @@ test('packaged app installs, preserves and restores the terminal plugin', { time
     desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/shu'), args: [`--user-data-dir=${join(home, 'electron')}`], env });
     let page = await desktop.firstWindow();
     await page.getByRole('button', { name: '机器设置' }).waitFor();
+    const code = join(home, 'packaged.ts');
+    writeFileSync(code, 'const packaged = "PACKAGED_PREVIEW";\n');
+    await page.evaluate(path => window.shu.publish('onclick', { type: 'file', machine: { id: 'local', name: '本机' }, path }), code);
+    await page.locator('.monaco-editor .view-lines').filter({ hasText: 'PACKAGED_PREVIEW' }).waitFor();
+    const workerReady = page.waitForEvent('worker');
+    await page.evaluate(() => { window.MonacoEnvironment.getWorker('', 'editorWorkerService'); });
+    const worker = await workerReady;
+    assert.equal(await Promise.race([
+      worker.evaluate(() => typeof self.onmessage),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Packaged worker failed to initialize')), 10000)),
+    ]), 'function');
+    await page.getByRole('button', { name: '关闭 packaged.ts' }).click();
     await desktop.close(); desktop = undefined;
     const pluginSource = join(home, '.local/shared/shu/plugins/terminal/ui.tsx');
     const source = readFileSync(pluginSource, 'utf8');

@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { Config, MachineState, Session } from './shared';
+import { fileLocation, registerFileLinks } from './links';
+import type { Config, MachineState, Session, ShuAPI } from './shared';
 import '@xterm/xterm/css/xterm.css';
 import './style.css';
 import type { UIContext } from '@shu/sdk/plugin';
-import type { ShuAPI } from './shared';
 
 let api: ShuAPI;
 
@@ -28,6 +28,10 @@ function TerminalPane({ machineId, session, active, connected, generation }: {
     const addon = new FitAddon();
     term.loadAddon(addon);
     term.open(element.current!);
+    const links = registerFileLinks(term, (text) => {
+      const location = fileLocation(text);
+      if (location) void api.click(machineId, session.id, location).catch((error: Error) => setError(error.message));
+    });
     terminal.current = term;
     fit.current = addon;
     let alive = true;
@@ -72,7 +76,7 @@ function TerminalPane({ machineId, session, active, connected, generation }: {
       alive = false;
       ready = false;
       unsubscribe(); input.dispose(); resize.dispose(); observer.disconnect();
-      term.dispose(); terminal.current = null;
+      links.dispose(); term.dispose(); terminal.current = null;
       if (connected) void api.request(machineId, 'detach', { session_id: session.id }).catch(() => {});
     };
   }, [machineId, session.id, connected, generation]);
@@ -222,6 +226,7 @@ function App() {
 export function mount(container: HTMLElement, context: UIContext) {
   container.classList.add('shu-terminal');
   api = {
+    click: (id, sessionId, location) => context.request('click', { id, sessionId, location }),
     config: () => context.request('config'),
     saveMachine: (machine) => context.request('save-machine', machine),
     removeMachine: (id) => context.request('remove-machine', id),

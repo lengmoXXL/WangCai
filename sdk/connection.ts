@@ -56,6 +56,7 @@ export class MachineConnection {
 
   pty = {
     list: async () => await this.request('list') as Session[],
+    cwd: async (id: string) => await this.request('cwd', { session_id: id }) as string,
     create: async (size: Size = { rows: 24, cols: 80 }) => await this.request('create', { ...size }) as Session,
     attach: async (id: string) => {
       const existing = this.terminals.get(id);

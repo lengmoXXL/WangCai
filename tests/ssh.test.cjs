@@ -64,6 +64,19 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     const bytes = Buffer.from([0, 255, 1, 128, 10]);
     writeFileSync(join(home, 'remote.bin'), bytes);
     assert.deepEqual(Buffer.from(await connection.fs.readFile(join(home, 'remote.bin'))), bytes);
+    const { buildSync } = require('esbuild');
+    const { Module } = require('node:module');
+    const filePlugin = new Module(resolve('tests/files-main.cjs'));
+    filePlugin.paths = module.paths;
+    filePlugin._compile(buildSync({ entryPoints: ['plugins/files/main.ts'], bundle: true, platform: 'node', format: 'cjs', packages: 'external', write: false }).outputFiles[0].text, resolve('tests/files-main.cjs'));
+    let read;
+    const disposeFiles = filePlugin.exports.activate({ handle: (_, handler) => { read = handler; return () => {}; } });
+    const remoteText = join(home, 'remote.md');
+    writeFileSync(remoteText, '# Remote Markdown\n');
+    try {
+      assert.equal(await read({ machine: { id: 'remote', name: 'Remote', host: 'shu-test' }, path: remoteText }), '# Remote Markdown\n');
+      await assert.rejects(read({ machine: { host: 'shu-test' }, path: join(home, 'remote.bin') }), /二进制/);
+    } finally { disposeFiles(); }
     const session = await connection.pty.create();
     let terminal = await connection.pty.attach(session.id);
     await terminal.write("sleep 0.3; printf 'SSH_%s\\n' survived\r");
