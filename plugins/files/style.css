@@ -10,12 +10,6 @@
 .file-message { padding: 16px; font-size: 12px; color: #aab6c2; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .file-directory { height: 100%; overflow: auto; font-size: 12px; }
-.file-directory::-webkit-scrollbar { width: 14px; height: 10px; }
-.file-directory::-webkit-scrollbar-track, .file-directory::-webkit-scrollbar-corner { background: transparent; }
-.file-directory::-webkit-scrollbar-thumb { background: #79797966; }
-.file-directory::-webkit-scrollbar-thumb:hover { background: #646464b3; }
-.file-directory::-webkit-scrollbar-thumb:active { background: #bfbfbf66; }
-.file-directory::-webkit-scrollbar-button { display: none; }
 .directory-path { padding: 10px 12px; color: #8b98a6; overflow-wrap: anywhere; }
 .file-directory nav button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 12px; border: 0; background: transparent; color: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; font: inherit; }
 .file-directory nav button:hover { background: #252d37; }

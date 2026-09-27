@@ -20,7 +20,7 @@ test('view picker browses current terminal directory; file links preview code an
     const json = join(home, 'settings.json');
     writeFileSync(json, '{"ready":true}');
     writeFileSync(code, 'const first = 1;\nconst second = "CODE_PREVIEW";\n');
-    writeFileSync(markdown, '# Markdown preview\n\n**Rendered content**\n\n| Key | Value |\n| --- | --- |\n| a | b |\n\n<script>window.previewScriptRan = true</script>');
+    writeFileSync(markdown, '# Markdown preview\n\n**Rendered content**\n\n| Key | Value |\n| --- | --- |\n| a | b |\n\n```\n' + 'wide code block '.repeat(80) + '\n```\n\n<script>window.previewScriptRan = true</script>');
     writeFileSync(binary, Buffer.from([0, 1, 255, 2]));
     desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
     let page = await desktop.firstWindow();
@@ -90,6 +90,16 @@ test('view picker browses current terminal directory; file links preview code an
     assert.equal(await page.locator('.markdown-preview strong').innerText(), 'Rendered content');
     assert.equal(await page.locator('.markdown-preview table').count(), 1);
     assert.equal(await page.evaluate(() => window.previewScriptRan), undefined);
+    for (const selector of ['.file-directory', '.markdown-preview', '.markdown-preview pre', '.sidebar-tabs']) {
+      assert.deepEqual(await page.locator(selector).evaluate(element => {
+        const bar = getComputedStyle(element, '::-webkit-scrollbar');
+        const thumb = getComputedStyle(element, '::-webkit-scrollbar-thumb');
+        return [bar.width, bar.height, thumb.backgroundColor, thumb.borderRadius,
+          getComputedStyle(element, '::-webkit-scrollbar-track').backgroundColor,
+          getComputedStyle(element, '::-webkit-scrollbar-button').display];
+      }), ['14px', '12px', 'rgba(121, 121, 121, 0.4)', '0px', 'rgba(0, 0, 0, 0)', 'none'], selector);
+    }
+    assert.equal(await page.locator('.markdown-preview pre').evaluate(element => element.scrollWidth > element.clientWidth), true);
     const fileTabs = page.getByRole('tablist', { name: '侧栏标签页' });
     await fileTabs.getByRole('tab', { name: 'sample.ts', exact: true }).click();
     await page.locator('.monaco-editor .view-lines').filter({ hasText: 'CODE_PREVIEW' }).waitFor();
