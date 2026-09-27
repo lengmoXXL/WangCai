@@ -13,7 +13,7 @@ else {
   void app.whenReady().then(async () => {
     if (app.isPackaged) process.env.ESBUILD_BINARY_PATH = join(process.resourcesPath, `app.asar.unpacked/node_modules/@esbuild/darwin-${process.arch}/bin/esbuild`);
     const plugins = await loadPlugins(require.resolve('@shu/sdk'),
-      app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../target/debug'),
+      app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../node/dist/debug'),
       (id, event, data) => { if (window && !window.isDestroyed()) window.webContents.send('shu:event', id, event, data); });
     protocol.handle('shu-plugin', async (request) => {
       const url = new URL(request.url);

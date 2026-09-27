@@ -9,7 +9,7 @@ const { once } = require('node:events');
 const WebSocket = require('ws');
 const { Terminal } = require('@xterm/headless');
 
-const binary = resolve('target/debug/shu');
+const binary = resolve('node/dist/debug/shu');
 async function until(check, message) {
   const deadline = Date.now() + 6000;
   while (Date.now() < deadline) { if (await check()) return; await delay(30); }

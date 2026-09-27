@@ -16,7 +16,7 @@ test('Node SDK: local PTYs, binary files, detach and reconnect', { timeout: 3000
   const home = mkdtempSync(join(tmpdir(), 'shu-sdk-'));
   const previousHome = process.env.HOME;
   process.env.HOME = home;
-  const binary = resolve('target/debug/shu');
+  const binary = resolve('node/dist/debug/shu');
   let machine;
   try {
     await assert.rejects(connect({ type: 'local', binary: join(home, 'absent') }), /ENOENT/);

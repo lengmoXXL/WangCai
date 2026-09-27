@@ -19,7 +19,7 @@
     ],
     "extraResources": [
       {
-        "from": "../target/release/shu",
+        "from": "../node/dist/release/shu",
         "to": "shu"
       }
     ],

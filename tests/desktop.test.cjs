@@ -79,7 +79,7 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
   } finally {
     if (desktop) await desktop.close().catch(() => {});
     await devServer?.close();
-    try { execFileSync(resolve('target/debug/shu'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
+    try { execFileSync(resolve('node/dist/debug/shu'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
     rmSync(home, { recursive: true, force: true });
   }
 });

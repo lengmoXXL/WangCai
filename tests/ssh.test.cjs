@@ -17,7 +17,7 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
   const sshd = ['/usr/sbin/sshd', '/usr/local/sbin/sshd'].find(existsSync);
   if (!sshd) { t.skip('OpenSSH server is not installed'); return; }
   const home = mkdtempSync(join(tmpdir(), 'shu-ssh-test-'));
-  const binary = resolve('target/debug/shu');
+  const binary = resolve('node/dist/debug/shu');
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   const cli = (...args) => execFileSync(binary, ['server', ...args], { env, encoding: 'utf8', timeout: 15000 });
   let server;
