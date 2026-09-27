@@ -1,4 +1,4 @@
-export interface PluginInfo { id: string; renderer?: string; css?: string; error?: string }
+export interface PluginInfo { id: string; ui?: string; css?: string; error?: string }
 export interface PluginBridge {
   plugins(): Promise<PluginInfo[]>;
   request<T = any>(id: string, method: string, params?: unknown): Promise<T>;

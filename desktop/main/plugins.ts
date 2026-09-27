@@ -33,17 +33,17 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, e
           builder.onResolve({ filter: /^@shu\/sdk$/ }, () => ({ path: sdkPath, external: true }));
         } }],
       });
-      if (existsSync(join(source, 'renderer.tsx'))) {
+      if (existsSync(join(source, 'ui.tsx'))) {
         await build({
-          entryPoints: [join(source, 'renderer.tsx')], outfile: join(output, 'renderer.js'),
+          entryPoints: [join(source, 'ui.tsx')], outfile: join(output, 'ui.js'),
           bundle: true, platform: 'browser', format: 'esm', target: 'chrome140', jsx: 'automatic',
           define: { 'process.env.NODE_ENV': '"production"' }, sourcemap: 'inline',
           plugins: [{ name: 'node-sdk-boundary', setup(builder) {
             builder.onResolve({ filter: /^@shu\/sdk$/ }, () => ({ errors: [{ text: '@shu/sdk is only available in main.ts' }] }));
           } }],
         });
-        info.renderer = `shu-plugin://plugins/${encodeURIComponent(id)}/renderer.js`;
-        if (existsSync(join(output, 'renderer.css'))) info.css = `shu-plugin://plugins/${encodeURIComponent(id)}/renderer.css`;
+        info.ui = `shu-plugin://plugins/${encodeURIComponent(id)}/ui.js`;
+        if (existsSync(join(output, 'ui.css'))) info.css = `shu-plugin://plugins/${encodeURIComponent(id)}/ui.css`;
       }
       const dataDirectory = join(homedir(), '.local/shared/shu/data', id);
       const logDirectory = join(homedir(), '.local/shared/shu/logs', id);
@@ -63,7 +63,7 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, e
       if (dispose) disposers.push(dispose);
     } catch (error) {
       info.error = error instanceof Error ? error.message : String(error);
-      info.renderer = undefined;
+      info.ui = undefined;
       info.css = undefined;
       methods.clear();
       console.error(`Plugin ${id}:`, error);

@@ -5,7 +5,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import type { Config, MachineState, Session } from './shared';
 import '@xterm/xterm/css/xterm.css';
 import './style.css';
-import type { RendererContext } from '@shu/sdk/plugin';
+import type { UIContext } from '@shu/sdk/plugin';
 import type { ShuAPI } from './shared';
 
 let api: ShuAPI;
@@ -219,7 +219,7 @@ function App() {
   </div>;
 }
 
-export function mount(container: HTMLElement, context: RendererContext) {
+export function mount(container: HTMLElement, context: UIContext) {
   container.classList.add('shu-terminal');
   api = {
     config: () => context.request('config'),

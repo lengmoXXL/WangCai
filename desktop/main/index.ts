@@ -60,7 +60,7 @@ else {
       cleanup ??= plugins.dispose().finally(() => { cleaned = true; app.quit(); });
     });
     if (process.env.ELECTRON_RENDERER_URL) await window.loadURL(process.env.ELECTRON_RENDERER_URL);
-    else await window.loadFile(join(__dirname, '../renderer/index.html'));
+    else await window.loadFile(join(__dirname, '../ui/index.html'));
   }).catch((error) => { console.error(error); app.quit(); });
   app.on('window-all-closed', () => app.quit());
 }

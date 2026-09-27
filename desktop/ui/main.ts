@@ -1,4 +1,4 @@
-import type { Dispose, RendererContext } from '@shu/sdk/plugin';
+import type { Dispose, UIContext } from '@shu/sdk/plugin';
 import './style.css';
 
 const root = document.getElementById('root')!;
@@ -13,7 +13,7 @@ async function start() {
   const plugins = await window.shu.plugins();
   if (!plugins.length) root.textContent = '未安装插件';
   for (const plugin of plugins) {
-    if (!plugin.error && !plugin.renderer) continue;
+    if (!plugin.error && !plugin.ui) continue;
     const container = document.createElement('section');
     container.className = 'plugin';
     container.dataset.plugin = plugin.id;
@@ -34,7 +34,7 @@ async function start() {
         document.head.append(stylesheet);
         await loaded;
       }
-      const context: RendererContext = {
+      const context: UIContext = {
         request: (method, params) => window.shu.request(plugin.id, method, params),
         on(event, callback) {
           const off = window.shu.on((id, name, data) => { if (id === plugin.id && name === event) callback(data as never); });
@@ -42,7 +42,7 @@ async function start() {
           return () => { off(); subscriptions.delete(off); };
         },
       };
-      const module = await import(/* @vite-ignore */ plugin.renderer!);
+      const module = await import(/* @vite-ignore */ plugin.ui!);
       dispose = await module.mount(container, context);
       const cleanup = async () => {
         for (const off of subscriptions) off();

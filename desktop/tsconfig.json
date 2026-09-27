@@ -13,7 +13,7 @@
   "include": [
     "main/**/*.ts",
     "preload/**/*.ts",
-    "renderer/**/*.ts",
+    "ui/**/*.ts",
     "shared.ts",
     "electron.vite.config.ts"
   ]

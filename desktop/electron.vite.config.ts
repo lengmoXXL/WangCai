@@ -11,12 +11,12 @@ export default defineConfig({
     build: { outDir: fileURLToPath(new URL('./dist/preload', import.meta.url)), rollupOptions: { input: fileURLToPath(new URL('./preload/index.ts', import.meta.url)) } },
   },
   renderer: {
-    root: fileURLToPath(new URL('./renderer', import.meta.url)),
+    root: fileURLToPath(new URL('./ui', import.meta.url)),
     plugins: [{
       name: 'development-csp',
       apply: 'serve',
       transformIndexHtml: (html) => html.replace('ws://localhost:*', 'ws://localhost:* ws://127.0.0.1:*'),
     }],
-    build: { outDir: fileURLToPath(new URL('./dist/renderer', import.meta.url)), rollupOptions: { input: fileURLToPath(new URL('./renderer/index.html', import.meta.url)) } },
+    build: { outDir: fileURLToPath(new URL('./dist/ui', import.meta.url)), rollupOptions: { input: fileURLToPath(new URL('./ui/index.html', import.meta.url)) } },
   },
 });

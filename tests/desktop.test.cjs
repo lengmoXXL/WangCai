@@ -15,7 +15,7 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
   const launch = async () => {
     desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron-data')}`], env });
     const page = await desktop.firstWindow();
-    page.on('pageerror', (error) => console.error('Renderer error:', error));
+    page.on('pageerror', (error) => console.error('UI error:', error));
     await page.waitForFunction(() => { const button = document.querySelector('[aria-label="新建终端"]'); return button && !button.disabled; });
     return page;
   };

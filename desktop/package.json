@@ -14,7 +14,7 @@
     "files": [
       "dist/main/**/*",
       "dist/preload/**/*",
-      "dist/renderer/**/*",
+      "dist/ui/**/*",
       "package.json"
     ],
     "extraResources": [

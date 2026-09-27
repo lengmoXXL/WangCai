@@ -6,7 +6,7 @@ export interface MainContext {
   handle<T>(method: string, handler: (params: T) => unknown | Promise<unknown>): () => void;
   emit(event: string, data: unknown): void;
 }
-export interface RendererContext {
+export interface UIContext {
   request<T = any>(method: string, params?: unknown): Promise<T>;
   on<T>(event: string, callback: (data: T) => void): () => void;
 }

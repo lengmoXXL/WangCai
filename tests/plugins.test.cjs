@@ -32,7 +32,7 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
           return () => writeFileSync(join(context.dataDirectory, 'cleaned'), 'yes');
         }
       `);
-      writeFileSync(join(path, 'renderer.tsx'), `
+      writeFileSync(join(path, 'ui.tsx'), `
         import { createRoot } from 'react-dom/client';
         import './style.css';
         export function mount(container, context) {
@@ -60,7 +60,7 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
       assert.equal(readFileSync(join(home, '.local/shared/shu/data', name, 'cleaned'), 'utf8'), 'yes');
       assert.equal(readFileSync(join(home, '.local/shared/shu/logs', name, 'plugin.log'), 'utf8'), name);
     }
-    const source = join(home, '.local/shared/shu/plugins/alpha/renderer.tsx');
+    const source = join(home, '.local/shared/shu/plugins/alpha/ui.tsx');
     writeFileSync(source, readFileSync(source, 'utf8').replace('alpha v1', 'alpha v2'));
     writeFileSync(join(broken, 'main.ts'), 'export function activate( {');
     page = await launch();

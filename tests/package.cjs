@@ -17,7 +17,7 @@ test('packaged app installs, preserves and restores the terminal plugin', { time
     let page = await desktop.firstWindow();
     await page.getByRole('button', { name: '机器设置' }).waitFor();
     await desktop.close(); desktop = undefined;
-    const pluginSource = join(home, '.local/shared/shu/plugins/terminal/renderer.tsx');
+    const pluginSource = join(home, '.local/shared/shu/plugins/terminal/ui.tsx');
     const source = readFileSync(pluginSource, 'utf8');
     writeFileSync(pluginSource, source.replace('机器设置</button>', '本地修改生效</button>'));
     desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/shu'), args: [`--user-data-dir=${join(home, 'electron')}`], env });
