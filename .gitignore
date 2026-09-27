@@ -7,3 +7,7 @@
 
 /sdk/dist/
 /plugins/*/node_modules/
+
+/desktop/out/
+/desktop/node_modules/
+/sdk/node_modules/

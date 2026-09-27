@@ -9,5 +9,25 @@
   },
   "files": [
     "dist"
-  ]
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.cjs"
+    },
+    "./plugin": {
+      "types": "./dist/plugin.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "esbuild index.ts --outfile=dist/index.cjs --bundle --platform=node --format=cjs --target=node22 --packages=external && tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/ws": "^8.5.0",
+    "typescript": "^5.9.0",
+    "esbuild": "^0.25.0"
+  }
 }

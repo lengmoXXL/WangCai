@@ -16,7 +16,7 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
   let desktop;
   let devServer;
   const launch = async () => {
-    desktop = await electron.launch({ args: ['.', `--user-data-dir=${join(home, 'electron-data')}`], env });
+    desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron-data')}`], env });
     const page = await desktop.firstWindow();
     page.on('pageerror', (error) => console.error('Renderer error:', error));
     await page.waitForFunction(() => { const button = document.querySelector('[aria-label="新建终端"]'); return button && !button.disabled; });
@@ -70,7 +70,7 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
     await desktop.close(); desktop = undefined;
     const { resolveConfig } = await import('electron-vite');
     const { createServer } = await import('vite');
-    const { config: viteConfig } = await resolveConfig({}, 'serve');
+    const { config: viteConfig } = await resolveConfig({ root: resolve('desktop'), configFile: resolve('desktop/electron.vite.config.ts') }, 'serve');
     devServer = await createServer({ ...viteConfig.renderer, configFile: false, server: { port: 0, host: '127.0.0.1' } });
     await devServer.listen();
     env.ELECTRON_RENDERER_URL = `http://127.0.0.1:${devServer.httpServer.address().port}`;

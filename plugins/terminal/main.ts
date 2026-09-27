@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { connect, type MachineConnection, type Pty } from '@shu/sdk';
-import type { MainContext } from '@shu/plugin';
+import type { MainContext } from '@shu/sdk/plugin';
 import type { Config, Machine, MachineState } from './shared';
 
 export function activate(context: MainContext) {

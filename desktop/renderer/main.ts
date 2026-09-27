@@ -1,4 +1,4 @@
-import type { Dispose, RendererContext } from '../../shared';
+import type { Dispose, RendererContext } from '@shu/sdk/plugin';
 import './style.css';
 
 const root = document.getElementById('root')!;

@@ -1,33 +1,8 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
-    ],
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "jsx": "react-jsx",
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true,
-    "noEmit": true,
-    "paths": {
-      "@shu/sdk": [
-        "./sdk/index.ts"
-      ],
-      "@shu/plugin": [
-        "./desktop/shared.ts"
-      ]
-    }
-  },
-  "include": [
-    "desktop/**/*.ts",
-    "desktop/**/*.tsx",
-    "electron.vite.config.ts",
-    "sdk/**/*.ts",
-    "plugins/**/*.ts",
-    "plugins/**/*.tsx"
-  ]
+    "skipLibCheck": true
+  }
 }

@@ -11,7 +11,7 @@ test('local plugin loader: empty host, TSX, IPC isolation, cleanup and source re
   delete env.ELECTRON_RUN_AS_NODE;
   let desktop;
   const launch = async () => {
-    desktop = await electron.launch({ args: ['.', `--user-data-dir=${join(home, 'electron')}`], env });
+    desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
     return desktop.firstWindow();
   };
   try {

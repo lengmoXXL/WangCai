@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
-import type { Dispose, MainContext, PluginInfo } from '../shared';
+import type { Dispose, MainContext } from '@shu/sdk/plugin';
+import type { PluginInfo } from '../shared';
 
 export async function loadPlugins(sdkPath: string, resourcesDirectory: string, emit: (id: string, event: string, data: unknown) => void) {
   const { build } = await import('esbuild');
