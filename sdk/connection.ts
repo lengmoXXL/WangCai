@@ -12,7 +12,7 @@ export class MachineConnection {
   private listeners = new Set<(state: MachineState) => void>();
   private terminals = new Map<string, Pty>();
   private instance?: string;
-  private ready: Promise<void>;
+  readonly ready: Promise<void>;
   private resolveReady!: () => void;
   private rejectReady!: (error: Error) => void;
   state: MachineState;
@@ -31,8 +31,6 @@ export class MachineConnection {
     this.ready = new Promise((resolve, reject) => { this.resolveReady = resolve; this.rejectReady = reject; });
     void this.open();
   }
-
-  async connected() { await this.ready; return this; }
 
   onState(callback: (state: MachineState) => void) {
     this.listeners.add(callback);
@@ -129,7 +127,7 @@ export class MachineConnection {
           '-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', this.options.host,
           'export PATH="$HOME/.local/bin:$PATH"; shu server start --json',
         ], { timeout: 15_000, maxBuffer: 64 * 1024 });
-        info = JSON.parse(stdout.trim());
+        info = JSON.parse(stdout);
         if (!Number.isInteger(info.port) || info.port < 1 || info.port > 65535) throw new Error('Node returned an invalid port.');
         if (!current()) return;
         port = await this.forward(info.port, current);
@@ -145,7 +143,7 @@ export class MachineConnection {
             const length = bytes.readUInt32BE(0);
             if (length > bytes.length - 4) throw new Error('Invalid terminal packet');
             const header = JSON.parse(bytes.subarray(4, 4 + length).toString());
-            this.terminals.get(header.session_id)?.receive({ ...header, data: new Uint8Array(bytes.subarray(4 + length)) } as TerminalEvent);
+            this.terminals.get(header.session_id)?.receive({ ...header, data: bytes.subarray(4 + length) } as TerminalEvent);
           } else {
             const message = JSON.parse(data.toString());
             if (message.id) {

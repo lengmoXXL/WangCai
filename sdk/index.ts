@@ -9,6 +9,10 @@ export async function connect(options: ConnectionOptions) {
   const machine = new MachineConnection(options);
   const cancel = () => machine.disconnect();
   options.signal?.addEventListener('abort', cancel, { once: true });
-  try { return await machine.connected(); }
-  finally { options.signal?.removeEventListener('abort', cancel); }
+  try {
+    await machine.ready;
+    return machine;
+  } finally {
+    options.signal?.removeEventListener('abort', cancel);
+  }
 }
