@@ -1,0 +1,83 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { _electron: electron } = require('playwright');
+const { mkdtempSync, rmSync, mkdirSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const { join, resolve } = require('node:path');
+const { execFileSync } = require('node:child_process');
+
+test('Electron: local terminal, reconnect, machine settings and relaunch', { timeout: 60000 }, async () => {
+  const home = mkdtempSync(join(tmpdir(), 'shu-desktop-test-'));
+  const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
+  delete env.ELECTRON_RUN_AS_NODE;
+  let desktop;
+  let devServer;
+  const launch = async () => {
+    desktop = await electron.launch({ args: ['.', `--user-data-dir=${join(home, 'electron-data')}`], env });
+    const page = await desktop.firstWindow();
+    page.on('pageerror', (error) => console.error('Renderer error:', error));
+    await page.waitForFunction(() => { const button = document.querySelector('[aria-label="新建终端"]'); return button && !button.disabled; });
+    return page;
+  };
+  try {
+    let page = await launch();
+    await page.getByRole('button', { name: '新建终端', exact: true }).click();
+    await page.getByRole('tab', { name: /终端 1/ }).waitFor();
+    await page.locator('.terminal-pane.active .xterm-helper-textarea').focus();
+    await page.keyboard.type("printf 'DESKTOP_%s\\n' success");
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.querySelector('.terminal-pane.active .xterm-rows')?.textContent.includes('DESKTOP_success'));
+    const sessions = await page.evaluate(() => window.shu.request('local', 'list'));
+    assert.equal(sessions.length, 1);
+    const localTabs = page.getByRole('tablist', { name: '本机 终端', exact: true });
+    assert.equal(await localTabs.getByRole('tab').count(), 1);
+    await page.getByRole('button', { name: '新建终端', exact: true }).click();
+    await localTabs.getByRole('tab', { name: /终端 2/ }).waitFor();
+    await localTabs.getByRole('tab', { name: /终端 1/ }).click();
+    await page.waitForFunction(() => document.querySelector('.terminal-pane.active .xterm-rows')?.textContent.includes('DESKTOP_success'));
+    await localTabs.getByRole('button', { name: '结束终端 2' }).click();
+    await page.waitForFunction(() => document.querySelectorAll('[role=tab]').length === 1);
+    await page.getByRole('button', { name: '本机', exact: true }).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: '断开', exact: true }).click();
+    await page.getByRole('button', { name: '本机', exact: true }).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: '连接', exact: true }).click();
+    await page.waitForFunction(() => { const button = document.querySelector('[aria-label="新建终端"]'); return button && !button.disabled; });
+    await page.waitForFunction(() => document.querySelector('.terminal-pane.active .xterm-rows')?.textContent.includes('DESKTOP_success'));
+    assert.equal((await page.evaluate(() => window.shu.request('local', 'list')))[0].id, sessions[0].id);
+    await page.getByRole('button', { name: /机器设置/ }).click();
+    await page.getByLabel('名称', { exact: true }).fill('测试服务器');
+    await page.getByLabel('SSH Host', { exact: true }).fill('dev-server');
+    await page.getByRole('button', { name: '添加机器', exact: true }).click();
+    await page.locator('.machine-setting').filter({ hasText: '测试服务器' }).waitFor();
+    await page.getByRole('button', { name: '关闭设置' }).click();
+    mkdirSync('out/screenshots', { recursive: true });
+    await page.screenshot({ path: 'out/screenshots/desktop.png' });
+    await desktop.close(); desktop = undefined;
+    page = await launch();
+    await page.getByRole('tab', { name: /终端 1/ }).waitFor();
+    await page.waitForFunction(() => document.querySelector('.terminal-pane.active .xterm-rows')?.textContent.includes('DESKTOP_success'));
+    assert.equal((await page.evaluate(() => window.shu.request('local', 'list')))[0].id, sessions[0].id);
+    await page.getByRole('button', { name: /机器设置/ }).click();
+    await page.locator('.machine-setting').filter({ hasText: '测试服务器' }).getByRole('button', { name: '移除' }).click();
+    assert.equal((await page.evaluate(() => window.shu.config())).machines.length, 1);
+    await page.getByRole('button', { name: '关闭设置' }).click();
+    await page.getByRole('button', { name: '结束终端 1' }).click();
+    await page.waitForFunction(() => document.querySelectorAll('[role=tab]').length === 0);
+    assert.deepEqual(await page.evaluate(() => window.shu.request('local', 'list')), []);
+    await desktop.close(); desktop = undefined;
+    // Exercise the dev renderer too: React refresh injects an inline preamble.
+    const { resolveConfig } = await import('electron-vite');
+    const { createServer } = await import('vite');
+    const { config: viteConfig } = await resolveConfig({}, 'serve');
+    devServer = await createServer({ ...viteConfig.renderer, configFile: false, server: { port: 0, host: '127.0.0.1' } });
+    await devServer.listen();
+    env.ELECTRON_RENDERER_URL = `http://127.0.0.1:${devServer.httpServer.address().port}`;
+    page = await launch();
+    await page.waitForFunction(() => document.querySelectorAll('[role=tab]').length === 0);
+  } finally {
+    if (desktop) await desktop.close().catch(() => {});
+    await devServer?.close();
+    try { execFileSync(resolve('target/debug/shu'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
+    rmSync(home, { recursive: true, force: true });
+  }
+});

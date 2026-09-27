@@ -1,0 +1,52 @@
+{
+  "name": "shu-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "shū — persistent terminals, local and remote",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "cargo build && electron-vite dev",
+    "build": "cargo build && tsc --noEmit && electron-vite build",
+    "start": "electron .",
+    "test": "cargo build && tsc --noEmit && electron-vite build && node --test tests/*.test.cjs",
+    "package": "cargo build --release && tsc --noEmit && electron-vite build && electron-builder --mac dir"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/ws": "^8.5.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "@xterm/headless": "^6.0.0",
+    "electron": "^41.0.0",
+    "electron-builder": "^26.0.0",
+    "electron-vite": "^5.0.0",
+    "playwright": "^1.63.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0"
+  },
+  "build": {
+    "appId": "dev.shu.desktop",
+    "productName": "shū",
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "target/release/shu",
+        "to": "shu"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools"
+    }
+  }
+}
