@@ -46,9 +46,11 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, e
         if (existsSync(join(output, 'renderer.css'))) info.css = `shu-plugin://plugins/${encodeURIComponent(id)}/renderer.css`;
       }
       const dataDirectory = join(homedir(), '.local/shared/shu/data', id);
+      const logDirectory = join(homedir(), '.local/shared/shu/logs', id);
       mkdirSync(dataDirectory, { recursive: true });
+      mkdirSync(logDirectory, { recursive: true });
       const context: MainContext = {
-        dataDirectory, resourcesDirectory,
+        dataDirectory, logDirectory, resourcesDirectory,
         handle(method, handler) {
           if (methods.has(method)) throw new Error(`Duplicate plugin method: ${method}`);
           methods.set(method, handler);

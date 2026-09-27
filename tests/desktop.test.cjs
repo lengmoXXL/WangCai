@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { _electron: electron } = require('playwright');
-const { mkdtempSync, rmSync, mkdirSync } = require('node:fs');
+const { mkdtempSync, rmSync, mkdirSync, readFileSync, existsSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
@@ -49,6 +49,9 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
     await page.getByLabel('SSH Host', { exact: true }).fill('dev-server');
     await page.getByRole('button', { name: '添加机器', exact: true }).click();
     await page.locator('.machine-setting').filter({ hasText: '测试服务器' }).waitFor();
+    const stored = JSON.parse(readFileSync(join(home, '.local/shared/shu/data/terminal/machines.json'), 'utf8'));
+    assert.equal(stored.machines[1].host, 'dev-server');
+    assert.equal(existsSync(join(home, '.local/shared/shu/logs/terminal')), true);
     await page.getByRole('button', { name: '关闭设置' }).click();
     mkdirSync('tests/dist/screenshots', { recursive: true });
     await page.screenshot({ path: 'tests/dist/screenshots/desktop.png' });

@@ -27,6 +27,7 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
         import { writeFileSync } from 'node:fs';
         import { join } from 'node:path';
         export function activate(context) {
+          writeFileSync(join(context.logDirectory, 'plugin.log'), '${name}');
           context.handle('echo', (data: string) => { context.emit('echo', data); return '${name}:' + data; });
           return () => writeFileSync(join(context.dataDirectory, 'cleaned'), 'yes');
         }
@@ -55,7 +56,10 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
     assert.equal(await page.getByText('alpha v1', { exact: true }).evaluate((el) => getComputedStyle(el).color), 'rgb(1, 2, 3)');
     await page.getByText('broken: intentional failure', { exact: true }).waitFor();
     await desktop.close(); desktop = undefined;
-    assert.equal(readFileSync(join(home, '.local/shared/shu/data/alpha/cleaned'), 'utf8'), 'yes');
+    for (const name of ['alpha', 'beta']) {
+      assert.equal(readFileSync(join(home, '.local/shared/shu/data', name, 'cleaned'), 'utf8'), 'yes');
+      assert.equal(readFileSync(join(home, '.local/shared/shu/logs', name, 'plugin.log'), 'utf8'), name);
+    }
     const source = join(home, '.local/shared/shu/plugins/alpha/renderer.tsx');
     writeFileSync(source, readFileSync(source, 'utf8').replace('alpha v1', 'alpha v2'));
     writeFileSync(join(broken, 'main.ts'), 'export function activate( {');

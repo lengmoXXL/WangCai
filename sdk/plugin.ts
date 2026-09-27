@@ -1,6 +1,7 @@
 export type Dispose = () => void | Promise<void>;
 export interface MainContext {
   dataDirectory: string;
+  logDirectory: string;
   resourcesDirectory: string;
   handle<T>(method: string, handler: (params: T) => unknown | Promise<unknown>): () => void;
   emit(event: string, data: unknown): void;

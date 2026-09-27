@@ -1,5 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { connect, type MachineConnection, type Pty } from '@shu/sdk';
@@ -7,8 +6,7 @@ import type { MainContext } from '@shu/sdk/plugin';
 import type { Config, Machine, MachineState } from './shared';
 
 export function activate(context: MainContext) {
-  const directory = join(homedir(), '.config', 'shu');
-  const path = join(directory, 'desktop.json');
+  const path = join(context.dataDirectory, 'machines.json');
   let config: Config = { machines: [{ id: 'local', name: '本机' }], selected: 'local' };
   const connections = new Map<string, MachineConnection>();
   const pending = new Map<string, { controller: AbortController; result: Promise<MachineState> }>();
@@ -26,7 +24,6 @@ export function activate(context: MainContext) {
   }
 
   function save() {
-    mkdirSync(directory, { recursive: true });
     writeFileSync(`${path}.tmp`, JSON.stringify(config, null, 2));
     renameSync(`${path}.tmp`, path);
   }
