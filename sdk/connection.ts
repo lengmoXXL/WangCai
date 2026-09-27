@@ -2,7 +2,7 @@ import { ChildProcess, execFile, spawn } from 'node:child_process';
 import { createServer, createConnection } from 'node:net';
 import { promisify } from 'node:util';
 import WebSocket from 'ws';
-import type { ConnectionOptions, MachineState, Session, TerminalEvent, Size } from './types';
+import type { ConnectionOptions, MachineState, Session, TerminalEvent, Size, DirectoryEntry } from './types';
 import { Pty } from './pty';
 
 const exec = promisify(execFile);
@@ -75,6 +75,8 @@ export class MachineConnection {
   };
 
   fs = {
+    stat: async (path: string) => await this.request('stat', { path }) as { isDirectory: boolean } | null,
+    readDirectory: async (path: string) => await this.request('read_directory', { path }) as DirectoryEntry[],
     readFile: async (path: string): Promise<Uint8Array> => {
       const result = await this.request('read_file', { path }) as { data: string };
       return Buffer.from(result.data, 'base64');

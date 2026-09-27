@@ -36,7 +36,7 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
     await localTabs.getByRole('tab', { name: /终端 1/ }).click();
     await page.waitForFunction(() => document.querySelector('.terminal-pane.active .xterm-rows')?.textContent.includes('DESKTOP_success'));
     await localTabs.getByRole('button', { name: '结束终端 2' }).click();
-    await page.waitForFunction(() => document.querySelectorAll('[role=tab]').length === 1);
+    await page.waitForFunction(() => document.querySelectorAll('.shu-terminal [role=tab]').length === 1);
     await page.getByRole('button', { name: '本机', exact: true }).click({ button: 'right' });
     await page.getByRole('menuitem', { name: '断开', exact: true }).click();
     await page.getByRole('button', { name: '本机', exact: true }).click({ button: 'right' });
@@ -65,7 +65,7 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
     assert.equal((await page.evaluate(() => window.shu.request('terminal', 'config'))).machines.length, 1);
     await page.getByRole('button', { name: '关闭设置' }).click();
     await page.getByRole('button', { name: '结束终端 1' }).click();
-    await page.waitForFunction(() => document.querySelectorAll('[role=tab]').length === 0);
+    await page.waitForFunction(() => document.querySelectorAll('.shu-terminal [role=tab]').length === 0);
     assert.deepEqual(await page.evaluate(() => window.shu.request('terminal', 'terminal', { id: 'local', op: 'list', params: {} })), []);
     await desktop.close(); desktop = undefined;
     const { resolveConfig } = await import('electron-vite');
@@ -75,7 +75,7 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
     await devServer.listen();
     env.ELECTRON_RENDERER_URL = `http://127.0.0.1:${devServer.httpServer.address().port}`;
     page = await launch();
-    await page.waitForFunction(() => document.querySelectorAll('[role=tab]').length === 0);
+    await page.waitForFunction(() => document.querySelectorAll('.shu-terminal [role=tab]').length === 0);
   } finally {
     if (desktop) await desktop.close().catch(() => {});
     await devServer?.close();

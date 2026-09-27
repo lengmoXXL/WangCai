@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -124,7 +125,7 @@ function Settings({ config, onUpdate, onClose }: { config: Config; onUpdate: (co
   </div>;
 }
 
-function App() {
+function App({ context }: { context: UIContext }) {
   const [config, setConfig] = useState<Config>();
   const [states, setStates] = useState<Record<string, MachineState>>({});
   const [selectedTabs, setSelectedTabs] = useState<Record<string, string>>({});
@@ -146,6 +147,11 @@ function App() {
   const sessions = state?.sessions ?? [];
   const active = selected && sessions.some((s) => s.id === selectedTabs[selected]) ? selectedTabs[selected] : sessions[0]?.id;
   const connected = state?.status === 'connected';
+  useEffect(() => {
+    const publish = () => context.publish('terminal:active', connected && machine && active ? { machine, sessionId: active } : null);
+    void publish();
+    return context.subscribe('terminal:query', publish);
+  }, [context, machine, active, connected]);
 
   const create = (machineId = selected) => {
     if (!machineId || states[machineId]?.status !== 'connected' || creating) return;
@@ -166,7 +172,7 @@ function App() {
 
   if (!config) return <div className="loading">{error || '正在打开 shū…'}</div>;
   return <div className="app">
-    <aside className="sidebar">
+    {createPortal(<div className="sidebar">
       <nav aria-label="机器">{config.machines.map((item) => {
         const itemState = states[item.id];
         const itemConnected = itemState?.status === 'connected';
@@ -202,7 +208,7 @@ function App() {
       <div className="sidebar-actions">
         <button className="settings-button" onClick={() => setSettings(true)}>机器设置</button>
       </div>
-    </aside>
+    </div>, context.sidebar)}
     <main>
       {(state?.error || error) && <div className="error-banner"><span>{error || state?.error}</span>{error && <button onClick={() => setError('')}>×</button>}</div>}
       <div className="terminal-area">
@@ -225,6 +231,7 @@ function App() {
 
 export function mount(container: HTMLElement, context: UIContext) {
   container.classList.add('shu-terminal');
+  context.sidebar.classList.add('shu-terminal');
   api = {
     click: (id, sessionId, location) => context.request('click', { id, sessionId, location }),
     config: () => context.request('config'),
@@ -238,6 +245,6 @@ export function mount(container: HTMLElement, context: UIContext) {
     onTerminal: (callback) => context.on('terminal', callback),
   };
   const root = createRoot(container);
-  root.render(<App />);
+  root.render(<App context={context} />);
   return () => root.unmount();
 }

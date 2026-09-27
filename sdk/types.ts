@@ -10,3 +10,5 @@ export interface MachineState {
 export interface Output { data: Uint8Array; seq: number }
 export interface Snapshot extends Output, Size {}
 export type TerminalEvent = ({ event: 'snapshot' } & Snapshot | { event: 'output' } & Output) & { session_id: string };
+
+export interface DirectoryEntry { name: string; isDirectory: boolean }

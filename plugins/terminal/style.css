@@ -1,13 +1,12 @@
-.shu-terminal { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #dce3eb; background: #11151b; font-synthesis: none; color-scheme: dark; }
+.shu-terminal { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #dce3eb; font-synthesis: none; color-scheme: dark; }
 .shu-terminal * { box-sizing: border-box; }
 .shu-terminal button, .shu-terminal input { font: inherit; }
 .shu-terminal button { color: inherit; cursor: pointer; background: transparent; border: 1px solid #303843; border-radius: 4px; padding: 6px 10px; }
 .shu-terminal button:hover { background: #252d37; }
 .shu-terminal button:disabled { opacity: .4; cursor: default; }
 .shu-terminal button:focus-visible, .shu-terminal input:focus-visible, .shu-terminal [role=tab]:focus-visible { outline: 2px solid #9bc7bc; outline-offset: -2px; }
-.shu-terminal .app { display: flex; height: 100%; }
-.shu-terminal .sidebar { width: 180px; flex-shrink: 0; background: #161b22; border-right: 1px solid #252c35; padding: 36px 0 0; display: flex; flex-direction: column; -webkit-app-region: drag; }
-.shu-terminal .sidebar button, .shu-terminal .sidebar nav { -webkit-app-region: no-drag; }
+.shu-terminal .app { display: flex; height: 100%; background: #11151b; }
+.shu-terminal .sidebar { height: 100%; display: flex; flex-direction: column; }
 .shu-terminal .sidebar nav { flex: 1; overflow-y: auto; }
 .shu-terminal .machine-group { margin-bottom: 8px; }
 .shu-terminal .machine-row { display: flex; align-items: center; padding: 0 6px; }

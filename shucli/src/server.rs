@@ -314,10 +314,27 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                 };
                 let op = request["op"].as_str().unwrap_or("");
                 let id = request["session_id"].as_str().unwrap_or("");
-                if op == "read_file" {
+                if op == "read_file" || op == "read_directory" || op == "stat" {
+                    let stat = op == "stat";
+                    let directory = op == "read_directory";
                     let path = request["path"].as_str().unwrap_or("").to_owned();
                     let result = tokio::task::spawn_blocking(move || -> Result<Value> {
                         if !std::path::Path::new(&path).is_absolute() { bail!("File path must be absolute"); }
+                        if stat {
+                            return match std::fs::metadata(&path) {
+                                Ok(metadata) => Ok(json!({"isDirectory": metadata.is_dir()})),
+                                Err(error) if matches!(error.kind(), std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory) => Ok(Value::Null),
+                                Err(error) => Err(error.into()),
+                            };
+                        }
+                        if directory {
+                            let mut entries = Vec::new();
+                            for entry in std::fs::read_dir(&path)? {
+                                let entry = entry?;
+                                entries.push(json!({"name":entry.file_name().to_string_lossy(),"isDirectory":entry.path().is_dir()}));
+                            }
+                            return Ok(json!(entries));
+                        }
                         let mut bytes = Vec::new();
                         // Keep the base64 response within the WebSocket message limit.
                         std::fs::File::open(&path)?.take(16 * 1024 * 1024 + 1).read_to_end(&mut bytes)?;

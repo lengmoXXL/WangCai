@@ -1,7 +1,30 @@
 html, body, #root { margin: 0; width: 100%; height: 100%; }
 body { background: #11151b; color: #dce3eb; font-family: -apple-system, sans-serif; }
-#root { display: flex; }
+#root { display: flex; overflow: hidden; }
+.desktop-main { display: flex; flex: 1; min-width: 240px; }
 .plugin { flex: 1; min-width: 0; height: 100%; }
 .plugin-error { padding: 48px 16px 16px; white-space: pre-wrap; overflow: auto; color: #e9a894; }
-.plugin-right { order: 1; flex: 0 0 clamp(300px, 40vw, 600px); border-left: 1px solid #252c35; }
-.plugin[hidden] { display: none; }
+.desktop-sidebar { flex-shrink: 0; min-width: 0; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; }
+.sidebar-left { padding-top: 36px; background: #161b22; -webkit-app-region: drag; }
+.sidebar-slot { flex: 1; min-height: 0; -webkit-app-region: no-drag; }
+.sidebar-divider { flex: 0 0 4px; cursor: col-resize; background: #252c35; touch-action: none; }
+.sidebar-divider:hover, .sidebar-divider:focus-visible { background: #9bc7bc; outline: none; }
+.sidebar-tabs { display: flex; flex-shrink: 0; min-height: 36px; margin-right: 40px; overflow-x: auto; border-bottom: 1px solid #252c35; font-size: 12px; }
+.sidebar-tab { display: flex; align-items: center; flex-shrink: 0; max-width: 220px; border-right: 1px solid #252c35; }
+.sidebar-tab:has([aria-selected=true]) { background: #262e36; }
+.sidebar-tab button { border: 0; background: transparent; color: #8b98a6; cursor: pointer; }
+.sidebar-tab:has([aria-selected=true]) button { color: #dce3eb; }
+.sidebar-tab [role=tab] { padding: 9px 6px 9px 12px; font: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-tab .close-tab { flex-shrink: 0; width: 24px; height: 24px; padding: 0; margin-right: 4px; font-size: 16px; }
+.sidebar-tab button:hover { background: #303943; }
+.sidebar-tab button:focus-visible { outline: 2px solid #9bc7bc; outline-offset: -2px; }
+.sidebar-content { flex: 1; min-height: 0; }
+.sidebar-panel { height: 100%; min-width: 0; overflow: hidden; }
+.plugin[hidden], .desktop-sidebar[hidden], .sidebar-divider[hidden], .sidebar-panel[hidden] { display: none; }
+.view-picker, .sidebar-toggle { width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent; color: #aab6c2; cursor: pointer; -webkit-app-region: no-drag; }
+.view-picker { flex-shrink: 0; align-self: center; margin: 0 4px; font-size: 20px; }
+.sidebar-toggle { position: fixed; top: 4px; right: 6px; z-index: 4; background: #161b22; }
+.view-menu { position: fixed; inset: auto; margin: 0; padding: 4px; min-width: 120px; border: 1px solid #343e49; border-radius: 5px; background: #202730; color: #dce3eb; }
+.view-menu button { display: block; width: 100%; border: 0; border-radius: 3px; padding: 7px 10px; background: transparent; color: inherit; text-align: left; font-size: 12px; cursor: pointer; }
+.view-menu button:hover, .view-picker:hover, .sidebar-toggle:hover { background: #303943; }
+.view-menu button:focus-visible, .view-picker:focus-visible, .sidebar-toggle:focus-visible { outline: 2px solid #9bc7bc; }

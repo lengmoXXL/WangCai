@@ -82,8 +82,10 @@ export function activate(context: MainContext) {
     const machine = config.machines.find((machine) => machine.id === id);
     const node = connections.get(id);
     if (!machine || !node) throw new Error('Machine is not connected');
-    const path = posix.isAbsolute(location.path) ? location.path : posix.resolve(await node.pty.cwd(sessionId), location.path);
-    await context.publish('onclick', { type: 'file', machine, ...location, path });
+    const path = posix.isAbsolute(location.path) ? posix.resolve(location.path) : posix.resolve(await node.pty.cwd(sessionId), location.path);
+    const stat = await node.fs.stat(path);
+    if (!stat) return;
+    await context.publish('onclick', { type: stat.isDirectory ? 'directory' : 'file', machine, ...location, path });
   }));
   handlers.push(context.handle('config', () => config));
   handlers.push(context.handle('save-machine', (machine: { id?: string; name: string; host: string }) => {
