@@ -20,6 +20,10 @@ test('packaged app installs plugins, previews files and preserves user changes',
     writeFileSync(code, 'const packaged = "PACKAGED_PREVIEW";\n');
     await page.evaluate(path => window.wangcai.publish('onclick', { type: 'file', machine: { id: 'local', name: '本机' }, path }), code);
     await page.locator('.monaco-editor .view-lines').filter({ hasText: 'PACKAGED_PREVIEW' }).waitFor();
+    await page.getByRole('button', { name: '新建侧栏标签页' }).click();
+    await page.locator('#view-menu').getByRole('button', { name: 'Git', exact: true }).click();
+    await page.getByText('请选择一个已连接的终端', { exact: true }).waitFor();
+    assert.match(readFileSync(join(home, '.local/shared/wangcai/plugins/git/main.ts'), 'utf8'), /readGit/);
     const workerReady = page.waitForEvent('worker');
     await page.evaluate(() => { window.MonacoEnvironment.getWorker('', 'editorWorkerService'); });
     const worker = await workerReady;

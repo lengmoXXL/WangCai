@@ -85,6 +85,32 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     } finally { disposeFiles(); }
     const session = await connection.pty.create();
     let terminal = await connection.pty.attach(session.id);
+    const repository = join(home, "repo with 'quote");
+    mkdirSync(repository);
+    const git = (...args) => execFileSync('git', ['-C', repository, ...args], { env, encoding: 'utf8' });
+    git('init', '-q', '-b', 'main'); git('config', 'user.name', 'SSH Test'); git('config', 'user.email', 'ssh@test.local');
+    writeFileSync(join(repository, 'remote.txt'), 'before SSH\n'); git('add', '.'); git('commit', '-qm', 'remote commit');
+    writeFileSync(join(repository, 'remote.txt'), 'after SSH\n');
+    const gitPlugin = new Module(resolve('tests/git-main.cjs'));
+    gitPlugin.paths = module.paths;
+    gitPlugin._compile(buildSync({ entryPoints: ['plugins/git/main.ts'], bundle: true, platform: 'node', packages: 'external', write: false }).outputFiles[0].text, resolve('tests/git-main.cjs'));
+    const gitHandlers = {};
+    const disposeGit = gitPlugin.exports.activate({ handle: (name, handler) => { gitHandlers[name] = handler; return () => {}; } });
+    const target = { machine: { id: 'remote', name: 'Remote', host: 'wangcai-test' }, sessionId: session.id };
+    const cwdOutput = [];
+    const off = terminal.onData(event => cwdOutput.push(Buffer.from(event.data).toString()));
+    await terminal.write(`cd ${quote(repository)}; printf 'GIT_%s\\n' ready\r`);
+    await until(() => cwdOutput.join('').includes('GIT_ready'), () => 'remote Git cwd');
+    off();
+    try {
+      const overview = await gitHandlers.overview({ terminal: target });
+      assert.equal(overview.commits[0].subject, 'remote commit');
+      assert.equal(overview.changes[0].path, 'remote.txt');
+      const files = await gitHandlers.files({ terminal: target, root: overview.root, rev: overview.head });
+      assert.equal(files[0].status, 'A');
+      const diff = await gitHandlers.diff({ terminal: target, root: overview.root, comparison: { path: 'remote.txt', status: 'M', source: 'unstaged' } });
+      assert.equal(diff.oldText, 'before SSH\n'); assert.equal(diff.newText, 'after SSH\n');
+    } finally { disposeGit(); }
     await terminal.write("sleep 0.3; printf 'SSH_%s\\n' survived\r");
     connection.disconnect();
     await delay(500);
