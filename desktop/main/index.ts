@@ -1,6 +1,8 @@
 import { app, BrowserWindow, ipcMain, Menu, net, protocol } from 'electron';
 import { join, resolve, relative, isAbsolute, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { loadPlugins } from './plugins';
 
 app.setName('shū');
@@ -12,6 +14,16 @@ else {
   app.on('second-instance', () => { window?.show(); window?.focus(); });
   void app.whenReady().then(async () => {
     if (app.isPackaged) process.env.ESBUILD_BINARY_PATH = join(process.resourcesPath, `app.asar.unpacked/node_modules/@esbuild/darwin-${process.arch}/bin/esbuild`);
+    const directory = join(homedir(), '.local/shared/shu/plugins');
+    const terminal = join(directory, 'terminal');
+    if (!existsSync(terminal)) {
+      mkdirSync(directory, { recursive: true });
+      const staging = mkdtempSync(join(directory, '../.terminal-'));
+      try {
+        cpSync(app.isPackaged ? join(process.resourcesPath, 'plugins/terminal') : join(app.getAppPath(), 'dist/plugins/terminal'), staging, { recursive: true });
+        renameSync(staging, terminal);
+      } finally { rmSync(staging, { recursive: true, force: true }); }
+    }
     const plugins = await loadPlugins(require.resolve('@shu/sdk'),
       app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../node/dist/debug'),
       (id, event, data) => { if (window && !window.isDestroyed()) window.webContents.send('shu:event', id, event, data); });

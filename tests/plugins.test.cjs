@@ -5,7 +5,7 @@ const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync,
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 
-test('local plugin loader: empty host, TSX, IPC isolation, cleanup and source reload', { timeout: 45000 }, async () => {
+test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { timeout: 45000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'shu-plugins-'));
   const env = { ...process.env, HOME: home };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -15,10 +15,10 @@ test('local plugin loader: empty host, TSX, IPC isolation, cleanup and source re
     return desktop.firstWindow();
   };
   try {
-    let page = await launch();
-    await page.getByText('未安装插件', { exact: true }).waitFor();
-    assert.equal(existsSync(join(home, '.config/shu/server.json')), false);
-    await desktop.close(); desktop = undefined;
+    const terminal = join(home, '.local/shared/shu/plugins/terminal');
+    mkdirSync(terminal, { recursive: true });
+    writeFileSync(join(terminal, 'main.ts'), 'export function activate() {}');
+    let page;
     for (const name of ['alpha', 'beta']) {
       const path = join(home, '.local/shared/shu/plugins', name);
       mkdirSync(path, { recursive: true });

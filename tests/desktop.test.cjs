@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { _electron: electron } = require('playwright');
-const { mkdtempSync, rmSync, mkdirSync, cpSync, symlinkSync } = require('node:fs');
+const { mkdtempSync, rmSync, mkdirSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
@@ -10,9 +10,6 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
   const home = mkdtempSync(join(tmpdir(), 'shu-desktop-test-'));
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   delete env.ELECTRON_RUN_AS_NODE;
-  const plugin = join(home, '.local/shared/shu/plugins/terminal');
-  cpSync(resolve('plugins/terminal'), plugin, { recursive: true, filter: (path) => path !== resolve('plugins/terminal/node_modules') });
-  symlinkSync(resolve('plugins/terminal/node_modules'), join(plugin, 'node_modules'), 'dir');
   let desktop;
   let devServer;
   const launch = async () => {

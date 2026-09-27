@@ -21,6 +21,10 @@
       {
         "from": "../node/dist/release/shu",
         "to": "shu"
+      },
+      {
+        "from": "dist/plugins",
+        "to": "plugins"
       }
     ],
     "mac": {
@@ -38,8 +42,8 @@
     }
   },
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "tsc --noEmit && electron-vite build",
+    "dev": "node prepare-plugins.mjs && electron-vite dev",
+    "build": "node prepare-plugins.mjs && tsc --noEmit && electron-vite build",
     "start": "electron .",
     "package": "npm run build && electron-builder --mac dir",
     "typecheck": "tsc --noEmit"
