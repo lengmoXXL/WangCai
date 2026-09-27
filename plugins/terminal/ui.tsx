@@ -15,8 +15,8 @@ function TerminalPane({ machineId, session, active, connected, generation }: {
   machineId: string; session: Session; active: boolean; connected: boolean; generation: number;
 }) {
   const element = useRef<HTMLDivElement>(null);
-  const terminal = useRef<Terminal | null>(null);
-  const fit = useRef<FitAddon | null>(null);
+  const terminal = useRef<Terminal>(null);
+  const fit = useRef<FitAddon>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -40,9 +40,8 @@ function TerminalPane({ machineId, session, active, connected, generation }: {
     let ready = false;
     setError('');
     const sendSize = () => {
-      if (alive && ready && !replaying) {
-        void api.request(machineId, 'resize', { session_id: session.id, rows: term.rows, cols: term.cols }).catch((error: Error) => { if (alive) setError(error.message); });
-      }
+      if (!alive || !ready || replaying) return;
+      void api.request(machineId, 'resize', { session_id: session.id, rows: term.rows, cols: term.cols }).catch((error: Error) => { if (alive) setError(error.message); });
     };
     const unsubscribe = api.onTerminal((event) => {
       if (!alive || event.machineId !== machineId || event.session_id !== session.id) return;
@@ -53,9 +52,11 @@ function TerminalPane({ machineId, session, active, connected, generation }: {
         term.write(event.data, () => {
           if (!alive) return;
           replaying = false;
-          if (element.current?.offsetWidth) { addon.fit(); sendSize(); }
+          if (!element.current?.offsetWidth) return;
+          addon.fit();
+          sendSize();
         });
-      } else if (event.event === 'output') {
+      } else {
         term.write(event.data);
       }
     });
@@ -65,12 +66,14 @@ function TerminalPane({ machineId, session, active, connected, generation }: {
     });
     const resize = term.onResize(sendSize);
     const observer = new ResizeObserver(() => {
-      if (!replaying && element.current?.offsetWidth && element.current?.offsetHeight) addon.fit();
+      if (!replaying && element.current?.offsetWidth && element.current.offsetHeight) addon.fit();
     });
     observer.observe(element.current!);
     if (connected) {
       void api.request(machineId, 'attach', { session_id: session.id }).then(() => {
-        if (alive) { ready = true; sendSize(); }
+        if (!alive) return;
+        ready = true;
+        sendSize();
       }).catch((error: Error) => { if (alive) setError(error.message); });
     }
     return () => {
@@ -196,7 +199,11 @@ function App({ context }: { context: UIContext }) {
               setConfig({ ...config, selected: item.id }); setError('');
               setSelectedTabs((tabs) => ({ ...tabs, [item.id]: session.id }));
               void api.selectMachine(item.id);
-            }} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); event.currentTarget.click(); } }}>
+            }} onKeyDown={(event) => {
+              if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+              event.preventDefault();
+              event.currentTarget.click();
+            }}>
               <span title={session.title}>终端 {index + 1}</span><button aria-label={`结束终端 ${index + 1}`} title="结束终端并关闭 tab" disabled={!itemConnected} onClick={(event) => {
                 event.stopPropagation();
                 void api.request(item.id, 'close', { session_id: session.id }).catch((error: Error) => setError(error.message));

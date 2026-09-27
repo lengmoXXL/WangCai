@@ -13,7 +13,6 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "require": "./dist/index.cjs",
       "default": "./dist/index.cjs"
     },
     "./plugin": {
@@ -21,8 +20,8 @@
     }
   },
   "scripts": {
-    "build": "esbuild index.ts --outfile=dist/index.cjs --bundle --platform=node --format=cjs --target=node22 --packages=external && tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit --emitDeclarationOnly false"
+    "build": "esbuild index.ts --outfile=dist/index.cjs --bundle --platform=node --target=node22 --packages=external && tsc",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

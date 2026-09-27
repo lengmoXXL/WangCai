@@ -1,13 +1,11 @@
-import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
+import { defineConfig } from 'electron-vite';
 import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
     build: { outDir: fileURLToPath(new URL('./dist/main', import.meta.url)), rollupOptions: { input: fileURLToPath(new URL('./main/index.ts', import.meta.url)) } },
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
     build: { outDir: fileURLToPath(new URL('./dist/preload', import.meta.url)), rollupOptions: { input: fileURLToPath(new URL('./main/preload.ts', import.meta.url)) } },
   },
   renderer: {

@@ -34,10 +34,9 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, e
     channels.add(subscriptions);
     try {
       rmSync(output, { recursive: true, force: true });
-      mkdirSync(output, { recursive: true });
       await build({
         entryPoints: [join(source, 'main.ts')], outfile: join(output, 'main.cjs'),
-        bundle: true, platform: 'node', format: 'cjs', target: 'node22', sourcemap: 'inline',
+        bundle: true, platform: 'node', target: 'node22', sourcemap: 'inline',
         plugins: [{ name: 'shu-sdk', setup(builder) {
           builder.onResolve({ filter: /^@shu\/sdk$/ }, () => ({ path: sdkPath, external: true }));
         } }],
@@ -46,7 +45,7 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, e
         await build({
           entryPoints: [join(source, 'ui.tsx'), ...(existsSync(join(source, 'ui.worker.ts')) ? [join(source, 'ui.worker.ts')] : [])], outdir: output,
           loader: { '.ttf': 'file' },
-          bundle: true, platform: 'browser', format: 'esm', target: 'chrome140', jsx: 'automatic',
+          bundle: true, format: 'esm', target: 'chrome140', jsx: 'automatic',
           define: { 'process.env.NODE_ENV': '"production"' }, sourcemap: 'inline',
           plugins: [{ name: 'node-sdk-boundary', setup(builder) {
             builder.onResolve({ filter: /^@shu\/sdk$/ }, () => ({ errors: [{ text: '@shu/sdk is only available in main.ts' }] }));
@@ -75,8 +74,7 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, e
         },
         emit: (event, data) => emit(id, event, data),
       };
-      const module = requirePlugin(join(output, 'main.cjs'));
-      const dispose = await module.activate(context);
+      const dispose = await requirePlugin(join(output, 'main.cjs')).activate(context);
       if (dispose) disposers.push(dispose);
     } catch (error) {
       info.error = error instanceof Error ? error.message : String(error);

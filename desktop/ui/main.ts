@@ -99,7 +99,7 @@ async function start() {
   menu.setAttribute('aria-label', '视图');
   picker.popoverTargetElement = menu;
   menu.addEventListener('beforetoggle', (event) => {
-    if ((event as ToggleEvent).newState !== 'open') return;
+    if (event.newState !== 'open') return;
     const bounds = picker.getBoundingClientRect();
     menu.style.top = `${bounds.bottom + 4}px`;
     menu.style.left = `${Math.min(bounds.left, window.innerWidth - 132)}px`;
@@ -142,13 +142,12 @@ async function start() {
       let sidebar: HTMLElement | undefined;
       const context: UIContext = {
         get sidebar() {
-          if (!sidebar) {
-            sidebar = document.createElement('section');
-            sidebar.className = 'sidebar-slot';
-            sidebar.dataset.plugin = plugin.id;
-            left.append(sidebar);
-            left.hidden = false;
-          }
+          if (sidebar) return sidebar;
+          sidebar = document.createElement('section');
+          sidebar.className = 'sidebar-slot';
+          sidebar.dataset.plugin = plugin.id;
+          left.append(sidebar);
+          left.hidden = false;
           return sidebar;
         },
         tabs: { open(options) {
@@ -191,7 +190,7 @@ async function start() {
           tabs.set(key, { button, panel, content: options.mount(panel) });
           select(key);
         } },
-        publish: (event, data) => window.shu.publish(event, data),
+        publish: window.shu.publish,
         subscribe(event, callback) {
           const off = window.shu.subscribe(event, callback);
           subscriptions.add(off);

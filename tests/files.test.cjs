@@ -57,7 +57,6 @@ test('view picker browses current terminal directory; file links preview code an
     await page.getByRole('button', { name: '新建侧栏标签页' }).click();
     await page.locator('#view-menu').getByRole('button', { name: '文件', exact: true }).click();
     const directory = page.getByRole('navigation', { name: '当前目录文件' });
-    await directory.getByRole('button', { name: 'sample.ts', exact: true }).waitFor();
     await directory.getByRole('button', { name: 'sample.ts', exact: true }).click();
     await page.locator('.monaco-editor .view-lines').filter({ hasText: 'CODE_PREVIEW' }).waitFor();
     await page.getByRole('button', { name: '切换右侧栏' }).click();
@@ -101,7 +100,6 @@ test('view picker browses current terminal directory; file links preview code an
     await page.getByRole('heading', { name: 'Markdown preview' }).waitFor();
     assert.equal(await fileTabs.getByRole('tab').count(), tabCount);
 
-    mkdirSync('tests/dist/screenshots', { recursive: true });
     await page.screenshot({ path: 'tests/dist/screenshots/files-preview.png' });
     await clickLink(pathToFileURL(json).href, 'JSON_LINK');
     await page.locator('.monaco-editor .view-lines').filter({ hasText: 'ready' }).waitFor();
@@ -145,7 +143,7 @@ test('view picker browses current terminal directory; file links preview code an
     await page.getByText('空目录', { exact: true }).waitFor();
     await page.screenshot({ path: 'tests/dist/screenshots/files-directory.png' });
     writeFileSync(join(home, 'sub', 'inside.md'), '# Directory link preview');
-    await clickLink('./sub/', './sub/');
+    await clickLink('./sub/');
     await fileTabs.getByRole('tab', { name: 'sub', exact: true }).waitFor();
     await page.getByRole('navigation', { name: '当前目录文件' }).getByRole('button', { name: 'inside.md', exact: true }).click();
     await page.getByRole('heading', { name: 'Directory link preview' }).waitFor();
@@ -160,7 +158,7 @@ test('view picker browses current terminal directory; file links preview code an
     await desktop.close(); desktop = undefined;
     const { resolveConfig } = await import('electron-vite');
     const { createServer } = await import('vite');
-    const { config } = await resolveConfig({ root: resolve('desktop'), configFile: resolve('desktop/electron.vite.config.ts') }, 'serve');
+    const { config } = await resolveConfig({ root: resolve('desktop') }, 'serve');
     devServer = await createServer({ ...config.renderer, configFile: false, server: { port: 0, host: '127.0.0.1' } });
     await devServer.listen();
     env.ELECTRON_RENDERER_URL = `http://127.0.0.1:${devServer.httpServer.address().port}`;

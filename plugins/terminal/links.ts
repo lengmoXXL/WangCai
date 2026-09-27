@@ -16,11 +16,10 @@ export function registerFileLinks(term: Terminal, activate: (text: string) => vo
   return term.registerLinkProvider({
     provideLinks(y, callback) {
       const buffer = term.buffer.active;
-      let first = y - 1;
-      while (first > 0 && buffer.getLine(first)?.isWrapped) first--;
       let text = '';
       const positions: { x: number; y: number }[] = [];
-      let row = first;
+      let row = y - 1;
+      while (row > 0 && buffer.getLine(row)?.isWrapped) row--;
       do {
         const line = buffer.getLine(row);
         if (!line) break;
@@ -38,7 +37,7 @@ export function registerFileLinks(term: Terminal, activate: (text: string) => vo
         const value = match[1].replace(/[),;\]}]+$/, '');
         const location = fileLocation(value);
         if (!location || !(/[/.]/.test(location.path) || /^(?:[A-Z][A-Z\d_-]+|Makefile|Dockerfile|Justfile|Gemfile)$/.test(location.path))) continue;
-        const start = match.index! + match[0].length - match[1].length;
+        const start = match.index + match[0].length - match[1].length;
         const end = start + value.length - 1;
         if (positions[start].y > y || positions[end].y < y) continue;
         links.push({ text: value, range: { start: positions[start], end: positions[end] }, activate: () => activate(value) });

@@ -313,7 +313,6 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                     Err(_) => continue,
                 };
                 let op = request["op"].as_str().unwrap_or("");
-                let id = request["session_id"].as_str().unwrap_or("");
                 if op == "read_file" || op == "read_directory" || op == "stat" {
                     let stat = op == "stat";
                     let directory = op == "read_directory";
@@ -348,6 +347,7 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                     if out.send(Message::text(reply.to_string())).await.is_err() { break; }
                     continue;
                 }
+                let id = request["session_id"].as_str().unwrap_or("");
                 let result: Result<Value> = (|| {
                     match op {
                         "info" => Ok(serde_json::to_value(&node.info)?),

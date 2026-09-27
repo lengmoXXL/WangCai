@@ -189,8 +189,7 @@ fn main() -> Result<()> {
                 .open(dir.join("server.lock"))?;
             lock.try_lock_exclusive()
                 .context("Shu node is already running")?;
-            let runtime = tokio::runtime::Runtime::new()?;
-            runtime.block_on(async {
+            tokio::runtime::Runtime::new()?.block_on(async {
                 let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
                 let info = ServerInfo {
                     pid: std::process::id(),

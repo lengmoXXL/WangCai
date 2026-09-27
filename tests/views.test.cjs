@@ -123,7 +123,6 @@ test('view menu switches plugins and handles empty, disconnected and closed term
     await picker.click();
     await menu.getByRole('button', { name: '文件', exact: true }).click();
     await directory.getByRole('button', { name: '.hidden.md', exact: true }).waitFor();
-    mkdirSync('tests/dist/screenshots', { recursive: true });
     await page.screenshot({ path: 'tests/dist/screenshots/sidebar-layout.png' });
     while (await page.locator('.close-tab').count()) await page.locator('.close-tab').last().click();
     await page.locator('.sidebar-right').waitFor({ state: 'hidden' });

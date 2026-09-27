@@ -41,7 +41,10 @@ class Client {
         const event = JSON.parse(data);
         if (event.id) {
           const pending = this.pending.get(event.id);
-          if (pending) { clearTimeout(pending.timer); this.pending.delete(event.id); event.error ? pending.reject(new Error(event.error)) : pending.resolve(event.result); }
+          if (!pending) return;
+          clearTimeout(pending.timer);
+          this.pending.delete(event.id);
+          event.error ? pending.reject(new Error(event.error)) : pending.resolve(event.result);
         } else this.events.push(event);
       }
     });

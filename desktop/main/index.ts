@@ -51,7 +51,7 @@ else {
     window = new BrowserWindow({
       width: 1180, height: 780, minWidth: 740, minHeight: 460,
       backgroundColor: '#11151b', title: 'shū', titleBarStyle: 'hiddenInset',
-      webPreferences: { preload: join(__dirname, '../preload/preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
+      webPreferences: { preload: join(__dirname, '../preload/preload.js') },
     });
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event) => event.preventDefault());

@@ -18,10 +18,9 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
     const terminal = join(home, '.local/shared/shu/plugins/terminal');
     mkdirSync(terminal, { recursive: true });
     writeFileSync(join(terminal, 'main.ts'), 'export function activate() {}');
-    let page;
     for (const name of ['alpha', 'beta']) {
       const path = join(home, '.local/shared/shu/plugins', name);
-      mkdirSync(path, { recursive: true });
+      mkdirSync(path);
       symlinkSync(resolve('plugins/terminal/node_modules'), join(path, 'node_modules'), 'dir');
       writeFileSync(join(path, 'main.ts'), `
         import { writeFileSync } from 'node:fs';
@@ -59,7 +58,7 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
     mkdirSync(failedUI);
     writeFileSync(join(failedUI, 'main.ts'), 'export function activate() {}');
     writeFileSync(join(failedUI, 'ui.tsx'), `export function mount(container, context) { container.hidden = true; context.subscribe('onclick', () => document.body.dataset.leaked = 'yes'); throw new Error('UI failure'); }`);
-    page = await launch();
+    let page = await launch();
     await page.getByText('alpha v1', { exact: true }).click();
     await page.waitForFunction(() => document.querySelector('[data-plugin=alpha]')?.getAttribute('data-reply') === 'alpha:hello');
     assert.equal(await page.locator('[data-plugin=beta]').getAttribute('data-event'), null);

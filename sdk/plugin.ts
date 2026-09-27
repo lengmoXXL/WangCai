@@ -18,7 +18,7 @@ export interface MainContext extends Channel {
   dataDirectory: string;
   logDirectory: string;
   resourcesDirectory: string;
-  handle<T>(method: string, handler: (params: T) => unknown | Promise<unknown>): () => void;
+  handle<T>(method: string, handler: (params: T) => unknown): () => void;
   emit(event: string, data: unknown): void;
 }
 export interface TabContent { dispose: Dispose; onSelect?(): void }

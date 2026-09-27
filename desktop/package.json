@@ -14,8 +14,7 @@
     "files": [
       "dist/main/**/*",
       "dist/preload/**/*",
-      "dist/ui/**/*",
-      "package.json"
+      "dist/ui/**/*"
     ],
     "extraResources": [
       {
@@ -43,10 +42,10 @@
   },
   "scripts": {
     "dev": "node tools/prepare-plugins.mjs && electron-vite dev",
-    "build": "node tools/prepare-plugins.mjs && tsc --noEmit && electron-vite build",
+    "build": "node tools/prepare-plugins.mjs && electron-vite build",
     "start": "electron .",
     "package": "npm run build && electron-builder --mac dir",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

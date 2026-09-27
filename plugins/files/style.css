@@ -12,7 +12,7 @@
 .file-directory { height: 100%; overflow: auto; font-size: 12px; }
 .file-directory::-webkit-scrollbar { width: 14px; height: 10px; }
 .file-directory::-webkit-scrollbar-track, .file-directory::-webkit-scrollbar-corner { background: transparent; }
-.file-directory::-webkit-scrollbar-thumb { background: #79797966; border-radius: 0; }
+.file-directory::-webkit-scrollbar-thumb { background: #79797966; }
 .file-directory::-webkit-scrollbar-thumb:hover { background: #646464b3; }
 .file-directory::-webkit-scrollbar-thumb:active { background: #bfbfbf66; }
 .file-directory::-webkit-scrollbar-button { display: none; }

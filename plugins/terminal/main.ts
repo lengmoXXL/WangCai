@@ -64,11 +64,10 @@ export function activate(context: MainContext) {
         });
         return { ...node.state, machineId: id };
       } catch (error) {
-        if (!controller.signal.aborted) {
-          const failed: MachineState = { ...state, status: 'disconnected', error: String(error) };
-          states.set(id, failed);
-          context.emit('state', failed);
-        }
+        if (controller.signal.aborted) throw error;
+        const failed: MachineState = { ...state, status: 'disconnected', error: String(error) };
+        states.set(id, failed);
+        context.emit('state', failed);
         throw error;
       } finally {
         if (pending.get(id)?.controller === controller) pending.delete(id);

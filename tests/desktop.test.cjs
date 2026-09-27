@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { _electron: electron } = require('playwright');
-const { mkdtempSync, rmSync, mkdirSync, readFileSync, existsSync } = require('node:fs');
+const { mkdtempSync, rmSync, readFileSync, existsSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
@@ -53,7 +53,6 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
     assert.equal(stored.machines[1].host, 'dev-server');
     assert.equal(existsSync(join(home, '.local/shared/shu/logs/terminal')), true);
     await page.getByRole('button', { name: '关闭设置' }).click();
-    mkdirSync('tests/dist/screenshots', { recursive: true });
     await page.screenshot({ path: 'tests/dist/screenshots/desktop.png' });
     await desktop.close(); desktop = undefined;
     page = await launch();
@@ -70,7 +69,7 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
     await desktop.close(); desktop = undefined;
     const { resolveConfig } = await import('electron-vite');
     const { createServer } = await import('vite');
-    const { config: viteConfig } = await resolveConfig({ root: resolve('desktop'), configFile: resolve('desktop/electron.vite.config.ts') }, 'serve');
+    const { config: viteConfig } = await resolveConfig({ root: resolve('desktop') }, 'serve');
     devServer = await createServer({ ...viteConfig.renderer, configFile: false, server: { port: 0, host: '127.0.0.1' } });
     await devServer.listen();
     env.ELECTRON_RENDERER_URL = `http://127.0.0.1:${devServer.httpServer.address().port}`;

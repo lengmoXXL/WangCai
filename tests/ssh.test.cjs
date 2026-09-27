@@ -71,7 +71,7 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     const { Module } = require('node:module');
     const filePlugin = new Module(resolve('tests/files-main.cjs'));
     filePlugin.paths = module.paths;
-    filePlugin._compile(buildSync({ entryPoints: ['plugins/files/main.ts'], bundle: true, platform: 'node', format: 'cjs', packages: 'external', write: false }).outputFiles[0].text, resolve('tests/files-main.cjs'));
+    filePlugin._compile(buildSync({ entryPoints: ['plugins/files/main.ts'], bundle: true, platform: 'node', packages: 'external', write: false }).outputFiles[0].text, resolve('tests/files-main.cjs'));
     const handlers = {};
     const disposeFiles = filePlugin.exports.activate({ handle: (name, handler) => { handlers[name] = handler; return () => {}; } });
     const remoteText = join(home, 'remote.md');

@@ -2,7 +2,7 @@ import { ChildProcess, execFile, spawn } from 'node:child_process';
 import { createServer, createConnection } from 'node:net';
 import { promisify } from 'node:util';
 import WebSocket from 'ws';
-import type { ConnectionOptions, MachineState, Session, TerminalEvent, Size, DirectoryEntry } from './types';
+import type { ConnectionOptions, MachineState, Session, Size, DirectoryEntry } from './types';
 import { Pty } from './pty';
 
 const exec = promisify(execFile);
@@ -55,9 +55,9 @@ export class MachineConnection {
   }
 
   pty = {
-    list: async () => await this.request('list') as Session[],
-    cwd: async (id: string) => await this.request('cwd', { session_id: id }) as string,
-    create: async (size: Size = { rows: 24, cols: 80 }) => await this.request('create', { ...size }) as Session,
+    list: () => this.request('list') as Promise<Session[]>,
+    cwd: (id: string) => this.request('cwd', { session_id: id }) as Promise<string>,
+    create: (size: Size = { rows: 24, cols: 80 }) => this.request('create', { ...size }) as Promise<Session>,
     attach: async (id: string) => {
       const existing = this.terminals.get(id);
       if (existing) return existing;
@@ -75,8 +75,8 @@ export class MachineConnection {
   };
 
   fs = {
-    stat: async (path: string) => await this.request('stat', { path }) as { isDirectory: boolean } | null,
-    readDirectory: async (path: string) => await this.request('read_directory', { path }) as DirectoryEntry[],
+    stat: (path: string) => this.request('stat', { path }) as Promise<{ isDirectory: boolean } | null>,
+    readDirectory: (path: string) => this.request('read_directory', { path }) as Promise<DirectoryEntry[]>,
     readFile: async (path: string): Promise<Uint8Array> => {
       const result = await this.request('read_file', { path }) as { data: string };
       return Buffer.from(result.data, 'base64');
@@ -146,17 +146,16 @@ export class MachineConnection {
             const length = bytes.readUInt32BE(0);
             if (length > bytes.length - 4) throw new Error('Invalid terminal packet');
             const header = JSON.parse(bytes.subarray(4, 4 + length).toString());
-            this.terminals.get(header.session_id)?.receive({ ...header, data: bytes.subarray(4 + length) } as TerminalEvent);
+            this.terminals.get(header.session_id)?.receive({ ...header, data: bytes.subarray(4 + length) });
           } else {
             const message = JSON.parse(data.toString());
             if (message.id) {
               const pending = this.pending.get(message.id);
-              if (pending) {
-                clearTimeout(pending.timer);
-                this.pending.delete(message.id);
-                if (message.error) pending.reject(new Error(message.error));
-                else pending.resolve(message.result);
-              }
+              if (!pending) return;
+              clearTimeout(pending.timer);
+              this.pending.delete(message.id);
+              if (message.error) pending.reject(new Error(message.error));
+              else pending.resolve(message.result);
             } else if (message.event === 'sessions_changed') {
               void this.refresh().catch(() => {});
             }
@@ -224,7 +223,7 @@ export class MachineConnection {
       ], { stdio: ['ignore', 'ignore', 'pipe'] });
       this.tunnel = tunnel;
       let stderr = '';
-      tunnel.stderr?.on('data', (data: Buffer) => { stderr = (stderr + data.toString()).slice(-4096); });
+      tunnel.stderr.on('data', (data: Buffer) => { stderr = (stderr + data.toString()).slice(-4096); });
       try {
         await new Promise<void>((resolve, reject) => {
           let finished = false;
@@ -246,7 +245,7 @@ export class MachineConnection {
           }, 100);
           const timeout = setTimeout(() => finish(new Error(stderr.trim() || 'SSH tunnel timed out.')), 10_000);
           tunnel.once('exit', exited);
-          tunnel.once('error', (error) => finish(error));
+          tunnel.once('error', finish);
         });
         tunnel.on('exit', () => { if (current()) this.fail(new Error(stderr.trim() || 'SSH tunnel closed.')); });
         return port;
@@ -271,18 +270,16 @@ export class MachineConnection {
       }, 10_000);
       this.pending.set(id, { resolve, reject, timer });
       socket.send(JSON.stringify({ ...params, op, id }), (error) => {
-        if (error) {
-          clearTimeout(timer);
-          this.pending.delete(id);
-          reject(error);
-        }
+        if (!error) return;
+        clearTimeout(timer);
+        this.pending.delete(id);
+        reject(error);
       });
     });
   }
 
   private async refresh() {
-    const sessions = await this.request('list') as Session[];
-    this.state.sessions = sessions;
+    this.state.sessions = await this.request('list') as Session[];
     this.publish();
   }
 }

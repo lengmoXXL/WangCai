@@ -10,7 +10,7 @@
     "remark-gfm": "^4.0.1"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

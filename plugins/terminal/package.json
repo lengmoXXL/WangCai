@@ -9,7 +9,7 @@
     "react-dom": "^19.0.0"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
