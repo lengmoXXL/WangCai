@@ -1,23 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { MachineState, ShuAPI, TerminalEvent } from '../shared';
+import type { PluginBridge } from '../shared';
 
-const api: ShuAPI = {
-  config: () => ipcRenderer.invoke('shu:config'),
-  saveMachine: (machine) => ipcRenderer.invoke('shu:save-machine', machine),
-  removeMachine: (id) => ipcRenderer.invoke('shu:remove-machine', id),
-  selectMachine: (id) => ipcRenderer.invoke('shu:select-machine', id),
-  connect: (id) => ipcRenderer.invoke('shu:connect', id),
-  disconnect: (id) => ipcRenderer.invoke('shu:disconnect', id),
-  request: (id, op, params = {}) => ipcRenderer.invoke('shu:request', id, op, params),
-  onState: (callback) => {
-    const listener = (_: unknown, state: MachineState) => callback(state);
-    ipcRenderer.on('shu:state', listener);
-    return () => { ipcRenderer.removeListener('shu:state', listener); };
-  },
-  onTerminal: (callback) => {
-    const listener = (_: unknown, event: TerminalEvent) => callback(event);
-    ipcRenderer.on('shu:terminal', listener);
-    return () => { ipcRenderer.removeListener('shu:terminal', listener); };
+const api: PluginBridge = {
+  plugins: () => ipcRenderer.invoke('shu:plugins'),
+  request: (id, method, params) => ipcRenderer.invoke('shu:request', id, method, params),
+  on: (callback) => {
+    const listener = (_: unknown, id: string, event: string, data: unknown) => callback(id, event, data);
+    ipcRenderer.on('shu:event', listener);
+    return () => { ipcRenderer.removeListener('shu:event', listener); };
   },
 };
 contextBridge.exposeInMainWorld('shu', api);

@@ -6,7 +6,7 @@ const { tmpdir, userInfo } = require('node:os');
 const { join, resolve } = require('node:path');
 const { spawn, execFileSync } = require('node:child_process');
 const { createServer } = require('node:net');
-const ts = require('typescript');
+const { connect } = require('../sdk/dist/index.cjs');
 
 async function until(check, diagnostic) {
   for (let i = 0; i < 200; i++) { if (check()) return; await delay(50); }
@@ -55,30 +55,36 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     mkdirSync(join(home, 'bin'));
     writeFileSync(join(home, 'bin/ssh'), `#!/bin/sh\nexec /usr/bin/ssh -F ${quote(join(home, 'ssh_config'))} "$@"\n`, { mode: 0o700 });
     process.env.PATH = `${join(home, 'bin')}:${originalPath}`;
-    mkdirSync('out/tests', { recursive: true });
-    writeFileSync('out/tests/connection.cjs', ts.transpileModule(readFileSync('desktop/main/connection.ts', 'utf8'), {
-      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true },
-    }).outputText);
-    const { NodeConnection } = require(resolve('out/tests/connection.cjs'));
+    connection = await connect({ type: 'ssh', host: 'shu-test' });
     let state;
-    const events = [];
-    connection = new NodeConnection({ id: 'ssh-test', name: 'SSH', host: 'shu-test' }, binary,
-      (value) => { state = value; }, (event) => events.push(event));
-    connection.start();
-    await until(() => state?.status === 'connected', () => `${state?.error}\n${logs}`);
+    connection.onState((value) => { state = value; });
     const localPort = Number(new URL(connection.ws.url).port);
     assert.ok(localPort > 0);
     assert.notEqual(localPort, info.port);
-    const session = await connection.request('create');
-    await connection.request('attach', { session_id: session.id });
-    await connection.request('input', { session_id: session.id, data: "sleep 0.3; printf 'SSH_%s\\n' survived\r" });
-    connection.stop();
+    const bytes = Buffer.from([0, 255, 1, 128, 10]);
+    writeFileSync(join(home, 'remote.bin'), bytes);
+    assert.deepEqual(Buffer.from(await connection.fs.readFile(join(home, 'remote.bin'))), bytes);
+    const session = await connection.pty.create();
+    let terminal = await connection.pty.attach(session.id);
+    await terminal.write("sleep 0.3; printf 'SSH_%s\\n' survived\r");
+    connection.disconnect();
     await delay(500);
-    connection.start();
-    await until(() => state?.status === 'connected', () => state?.error);
+    connection = await connect({ type: 'ssh', host: 'shu-test' });
+    connection.onState((value) => { state = value; });
     assert.equal(state.sessions[0].id, session.id);
-    await connection.request('attach', { session_id: session.id });
-    await until(() => events.some((e) => e.event === 'snapshot' && Buffer.from(e.data).toString().includes('SSH_survived')), () => 'remote snapshot');
+    terminal = await connection.pty.attach(session.id);
+    const snapshots = [];
+    terminal.onSnapshot((event) => snapshots.push(Buffer.from(event.data).toString()));
+    await until(() => snapshots.some((text) => text.includes('SSH_survived')), () => 'remote snapshot');
+    const errors = [];
+    terminal.onError((error) => errors.push(error.message));
+    connection.tunnel.kill();
+    const beforeReconnect = state.generation;
+    await until(() => state.status === 'connected' && state.generation > beforeReconnect, () => state.error);
+    await terminal.write("printf 'REATTACH_%s\\n' ok\r");
+    const output = [];
+    terminal.onData((event) => output.push(Buffer.from(event.data).toString()));
+    await until(() => output.join('').includes('REATTACH_ok'), () => 'automatic reattach');
     const generation = state.generation;
     cli('stop');
     cli('start');
@@ -86,9 +92,10 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     assert.notEqual(restarted.instance_id, info.instance_id);
     await until(() => state?.status === 'connected' && state.generation > generation, () => state?.error);
     assert.deepEqual(state.sessions, []);
-    assert.equal((await connection.request('info')).port, restarted.port);
+    assert.match(errors[0], /restarted/);
+    await assert.rejects(terminal.write('oops'), /restarted/);
   } finally {
-    connection?.stop();
+    connection?.disconnect();
     process.env.PATH = originalPath;
     server?.kill();
     try { cli('stop'); } catch {}

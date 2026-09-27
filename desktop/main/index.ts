@@ -1,114 +1,54 @@
-import { app, BrowserWindow, ipcMain, Menu } from 'electron';
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
-import { NodeConnection } from './connection';
-import type { Config, Machine } from '../shared';
+import { app, BrowserWindow, ipcMain, Menu, net, protocol } from 'electron';
+import { join, resolve, relative, isAbsolute, sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { loadPlugins } from './plugins';
 
 app.setName('shū');
-const connections = new Map<string, NodeConnection>();
-const directory = join(homedir(), '.config', 'shu');
-const path = join(directory, 'desktop.json');
-let config: Config = { machines: [{ id: 'local', name: '本机' }], selected: 'local' };
+protocol.registerSchemesAsPrivileged([{ scheme: 'shu-plugin', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
 let window: BrowserWindow | undefined;
-
-function save() {
-  mkdirSync(directory, { recursive: true });
-  writeFileSync(`${path}.tmp`, JSON.stringify(config, null, 2));
-  renameSync(`${path}.tmp`, path);
-}
-
-function connection(id: string) {
-  const machine = config.machines.find((machine) => machine.id === id);
-  if (!machine) throw new Error('Unknown machine');
-  let connection = connections.get(id);
-  if (!connection) {
-    const binary = app.isPackaged ? join(process.resourcesPath, 'shu')
-      : join(app.getAppPath(), 'target', 'debug', 'shu');
-    connection = new NodeConnection(machine, binary,
-      (state) => { if (window && !window.isDestroyed()) window.webContents.send('shu:state', state); },
-      (event) => { if (window && !window.isDestroyed()) window.webContents.send('shu:terminal', event); },
-    );
-    connections.set(id, connection);
-  }
-  return connection;
-}
-
-function createWindow() {
-  window = new BrowserWindow({
-    width: 1180, height: 780, minWidth: 740, minHeight: 460,
-    backgroundColor: '#11151b', title: 'shū', titleBarStyle: 'hiddenInset',
-    webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
-  });
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  window.webContents.on('will-navigate', (event) => event.preventDefault());
-  window.on('closed', () => {
-    for (const connection of connections.values()) connection.stop();
-    connections.clear();
-    window = undefined;
-  });
-  if (process.env.ELECTRON_RENDERER_URL) void window.loadURL(process.env.ELECTRON_RENDERER_URL);
-  else void window.loadFile(join(__dirname, '../renderer/index.html'));
-}
 
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => { window?.show(); window?.focus(); });
-  void app.whenReady().then(() => {
-    if (existsSync(path)) {
-      try {
-        const stored = JSON.parse(readFileSync(path, 'utf8')) as Config;
-        const machines: Machine[] = [{ id: 'local', name: '本机' }];
-        for (const machine of stored.machines) {
-          if (machine.id !== 'local' && machine.name && typeof machine.host === 'string' && /^[\w.@:+-]+$/.test(machine.host) && !machine.host.startsWith('-')) machines.push(machine);
-        }
-        config = { machines, selected: machines.some((m) => m.id === stored.selected) ? stored.selected : 'local' };
-      } catch (error) { console.error('Unable to load machine configuration:', error); }
-    }
+  void app.whenReady().then(async () => {
+    if (app.isPackaged) process.env.ESBUILD_BINARY_PATH = join(process.resourcesPath, `app.asar.unpacked/node_modules/@esbuild/darwin-${process.arch}/bin/esbuild`);
+    const plugins = await loadPlugins(require.resolve('@shu/sdk'),
+      app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'target/debug'),
+      (id, event, data) => { if (window && !window.isDestroyed()) window.webContents.send('shu:event', id, event, data); });
+    protocol.handle('shu-plugin', async (request) => {
+      const url = new URL(request.url);
+      const path = resolve(plugins.cache, `.${decodeURIComponent(url.pathname)}`);
+      const local = relative(plugins.cache, path);
+      if (url.host !== 'plugins' || !local || local === '..' || local.startsWith(`..${sep}`) || isAbsolute(local)) return new Response('Not found', { status: 404 });
+      const response = await net.fetch(pathToFileURL(path).toString());
+      const headers = new Headers(response.headers);
+      headers.set('Access-Control-Allow-Origin', '*');
+      return new Response(response.body, { status: response.status, headers });
+    });
+    ipcMain.handle('shu:plugins', () => plugins.plugins);
+    ipcMain.handle('shu:request', (_, id: string, method: string, params: unknown) => plugins.request(id, method, params));
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { label: 'shū', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'quit' }] },
       { label: 'Edit', submenu: [{ role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
       { label: 'View', submenu: [{ role: 'toggleDevTools' }, { role: 'togglefullscreen' }] },
     ]));
-    ipcMain.handle('shu:config', () => config);
-    ipcMain.handle('shu:save-machine', (_, machine: { id?: string; name: string; host: string }) => {
-      if (machine.id === 'local') throw new Error('The local machine cannot be edited.');
-      const name = machine.name.trim();
-      const host = machine.host.trim();
-      if (!name || !/^[\w.@:+-]+$/.test(host) || host.startsWith('-')) throw new Error('请输入名称和有效的 SSH Host，例如 dev-server 或 user@host。');
-      const id = machine.id ?? randomUUID();
-      connections.get(id)?.stop();
-      connections.delete(id);
-      const entry = { id, name, host };
-      const index = config.machines.findIndex((item) => item.id === id);
-      if (index < 0) config.machines.push(entry); else config.machines[index] = entry;
-      save();
-      return config;
+    window = new BrowserWindow({
+      width: 1180, height: 780, minWidth: 740, minHeight: 460,
+      backgroundColor: '#11151b', title: 'shū', titleBarStyle: 'hiddenInset',
+      webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
     });
-    ipcMain.handle('shu:remove-machine', (_, id: string) => {
-      if (id === 'local') throw new Error('The local machine cannot be removed.');
-      connections.get(id)?.stop();
-      connections.delete(id);
-      config.machines = config.machines.filter((machine) => machine.id !== id);
-      if (config.selected === id) config.selected = 'local';
-      save();
-      return config;
+    window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    window.webContents.on('will-navigate', (event) => event.preventDefault());
+    window.on('closed', () => { window = undefined; });
+    let cleaned = false;
+    let cleanup: Promise<void> | undefined;
+    app.on('before-quit', (event) => {
+      if (cleaned) return;
+      event.preventDefault();
+      cleanup ??= plugins.dispose().finally(() => { cleaned = true; app.quit(); });
     });
-    ipcMain.handle('shu:select-machine', (_, id: string) => {
-      if (!config.machines.some((m) => m.id === id)) throw new Error('Unknown machine');
-      config.selected = id;
-      save();
-    });
-    ipcMain.handle('shu:connect', (_, id: string) => { const node = connection(id); node.start(); return node.state; });
-    ipcMain.handle('shu:disconnect', (_, id: string) => { connections.get(id)?.stop(); });
-    ipcMain.handle('shu:request', (_, id: string, op: string, params: Record<string, unknown>) => {
-      if (!['list', 'create', 'attach', 'detach', 'input', 'resize', 'close'].includes(op)) throw new Error('Unsupported operation');
-      return connection(id).request(op, params);
-    });
-    createWindow();
-    app.on('activate', () => { if (!window) createWindow(); });
-  });
-  app.on('before-quit', () => { for (const connection of connections.values()) connection.stop(); });
+    if (process.env.ELECTRON_RENDERER_URL) await window.loadURL(process.env.ELECTRON_RENDERER_URL);
+    else await window.loadFile(join(__dirname, '../renderer/index.html'));
+  }).catch((error) => { console.error(error); app.quit(); });
   app.on('window-all-closed', () => app.quit());
 }

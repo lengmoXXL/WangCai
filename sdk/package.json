@@ -1,0 +1,13 @@
+{
+  "name": "@shu/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.cjs",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "files": [
+    "dist"
+  ]
+}

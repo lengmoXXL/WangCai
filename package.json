@@ -5,25 +5,25 @@
   "description": "shū — persistent terminals, local and remote",
   "main": "out/main/index.js",
   "scripts": {
-    "dev": "cargo build && electron-vite dev",
-    "build": "cargo build && tsc --noEmit && electron-vite build",
+    "dev": "cargo build && npm run build:sdk && electron-vite dev",
+    "build": "cargo build && npm run build:sdk && tsc --noEmit && electron-vite build",
     "start": "electron .",
-    "test": "cargo build && tsc --noEmit && electron-vite build && node --test tests/*.test.cjs",
-    "package": "cargo build --release && tsc --noEmit && electron-vite build && electron-builder --mac dir"
+    "test": "cargo build && npm run build:sdk && tsc --noEmit && electron-vite build && node --test tests/*.test.cjs",
+    "package": "cargo build --release && npm run build:sdk && tsc --noEmit && electron-vite build && electron-builder --mac dir",
+    "build:sdk": "node scripts/build-sdk.mjs && tsc -p sdk/tsconfig.json",
+    "install:terminal": "node scripts/install-terminal.mjs",
+    "typecheck": "tsc --noEmit",
+    "test:package": "npm run package && node --test tests/package.cjs"
   },
   "dependencies": {
-    "@xterm/addon-fit": "^0.11.0",
-    "@xterm/xterm": "^6.0.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "ws": "^8.18.0"
+    "@shu/sdk": "file:sdk",
+    "esbuild": "^0.25.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/ws": "^8.5.0",
-    "@vitejs/plugin-react": "^5.0.0",
     "@xterm/headless": "^6.0.0",
     "electron": "^41.0.0",
     "electron-builder": "^26.0.0",
@@ -34,9 +34,11 @@
   },
   "build": {
     "appId": "dev.shu.desktop",
-    "productName": "shū",
+    "productName": "shu",
     "files": [
-      "out/**/*",
+      "out/main/**/*",
+      "out/preload/**/*",
+      "out/renderer/**/*",
       "package.json"
     ],
     "extraResources": [
@@ -46,7 +48,17 @@
       }
     ],
     "mac": {
-      "category": "public.app-category.developer-tools"
-    }
-  }
+      "category": "public.app-category.developer-tools",
+      "extendInfo": {
+        "CFBundleDisplayName": "shū"
+      }
+    },
+    "asarUnpack": [
+      "node_modules/esbuild/**/*",
+      "node_modules/@esbuild/**/*"
+    ]
+  },
+  "workspaces": [
+    "sdk"
+  ]
 }

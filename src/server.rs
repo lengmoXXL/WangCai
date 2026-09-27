@@ -1,5 +1,6 @@
 use crate::ServerInfo;
 use anyhow::{Context, Result, bail};
+use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 use serde_json::{Value, json};
@@ -280,6 +281,23 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                 };
                 let op = request["op"].as_str().unwrap_or("");
                 let id = request["session_id"].as_str().unwrap_or("");
+                if op == "read_file" {
+                    let path = request["path"].as_str().unwrap_or("").to_owned();
+                    let result = tokio::task::spawn_blocking(move || -> Result<Value> {
+                        if !std::path::Path::new(&path).is_absolute() { bail!("File path must be absolute"); }
+                        let mut bytes = Vec::new();
+                        // Keep the base64 response within the WebSocket message limit.
+                        std::fs::File::open(&path)?.take(16 * 1024 * 1024 + 1).read_to_end(&mut bytes)?;
+                        if bytes.len() > 16 * 1024 * 1024 { bail!("File exceeds 16 MiB"); }
+                        Ok(json!({"data":base64::engine::general_purpose::STANDARD.encode(bytes)}))
+                    }).await?;
+                    let reply = match result {
+                        Ok(value) => json!({"id":request["id"],"result":value}),
+                        Err(error) => json!({"id":request["id"],"error":error.to_string()}),
+                    };
+                    if out.send(Message::text(reply.to_string())).await.is_err() { break; }
+                    continue;
+                }
                 let result: Result<Value> = (|| {
                     match op {
                         "info" => Ok(serde_json::to_value(&node.info)?),

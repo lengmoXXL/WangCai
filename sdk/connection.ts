@@ -2,45 +2,85 @@ import { ChildProcess, execFile, spawn } from 'node:child_process';
 import { createServer, createConnection } from 'node:net';
 import { promisify } from 'node:util';
 import WebSocket from 'ws';
-import type { Machine, MachineState, Session, TerminalEvent } from '../shared';
+import type { ConnectionOptions, MachineState, Session, TerminalEvent, Size } from './types';
+import { Pty } from './pty';
 
 const exec = promisify(execFile);
 interface Info { pid: number; port: number; instance_id: string; protocol: number }
 
-export class NodeConnection {
+export class MachineConnection {
+  private listeners = new Set<(state: MachineState) => void>();
+  private terminals = new Map<string, Pty>();
+  private instance?: string;
+  private ready: Promise<void>;
+  private resolveReady!: () => void;
+  private rejectReady!: (error: Error) => void;
   state: MachineState;
   private ws?: WebSocket;
   private tunnel?: ChildProcess;
   private retry?: NodeJS.Timeout;
   private heartbeat?: NodeJS.Timeout;
   private pending = new Map<string, { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>();
-  private stopped = true;
+  private stopped = false;
   private attempt = 0;
   private epoch = 0;
   private serial = 0;
 
-  constructor(
-    readonly machine: Machine,
-    private binary: string,
-    private publish: (state: MachineState) => void,
-    private terminal: (event: TerminalEvent) => void,
-  ) {
-    this.state = { machineId: machine.id, status: 'disconnected', sessions: [], generation: 0 };
-  }
-
-  start() {
-    if (!this.stopped) return;
-    this.stopped = false;
+  constructor(private options: ConnectionOptions) {
+    this.state = { status: 'connecting', sessions: [], generation: 0 };
+    this.ready = new Promise((resolve, reject) => { this.resolveReady = resolve; this.rejectReady = reject; });
     void this.open();
   }
 
-  stop() {
+  async connected() { await this.ready; return this; }
+
+  onState(callback: (state: MachineState) => void) {
+    this.listeners.add(callback);
+    callback({ ...this.state });
+    return () => { this.listeners.delete(callback); };
+  }
+
+  private publish() {
+    for (const callback of this.listeners) callback({ ...this.state });
+  }
+
+  disconnect() {
     this.stopped = true;
     this.cleanup();
+    this.rejectReady(new Error('Connection cancelled'));
+    for (const terminal of this.terminals.values()) terminal.release();
+    this.terminals.clear();
     this.state.status = 'disconnected';
     this.state.error = undefined;
-    this.publish({ ...this.state });
+    this.publish();
+    this.listeners.clear();
   }
+
+  pty = {
+    list: async () => await this.request('list') as Session[],
+    create: async (size: Size = { rows: 24, cols: 80 }) => await this.request('create', { ...size }) as Session,
+    attach: async (id: string) => {
+      const existing = this.terminals.get(id);
+      if (existing) return existing;
+      const terminal = new Pty(id, (op, params) => this.request(op, params), () => { this.terminals.delete(id); });
+      this.terminals.set(id, terminal);
+      try { await this.request('attach', { session_id: id }); }
+      catch (error) { this.terminals.delete(id); terminal.release(); throw error; }
+      return terminal;
+    },
+    close: async (id: string) => {
+      await this.request('close', { session_id: id });
+      this.terminals.get(id)?.release();
+      this.terminals.delete(id);
+    },
+  };
+
+  fs = {
+    readFile: async (path: string): Promise<Uint8Array> => {
+      const result = await this.request('read_file', { path }) as { data: string };
+      return Buffer.from(result.data, 'base64');
+    },
+  };
 
   private cleanup() {
     this.epoch++;
@@ -60,10 +100,15 @@ export class NodeConnection {
 
   private fail(error: unknown) {
     if (this.stopped) return;
+    if (this.state.generation === 0) {
+      this.rejectReady(error instanceof Error ? error : new Error(String(error)));
+      this.disconnect();
+      return;
+    }
     this.cleanup();
     this.state.status = 'connecting';
     this.state.error = error instanceof Error ? error.message : String(error);
-    this.publish({ ...this.state });
+    this.publish();
     this.retry = setTimeout(() => void this.open(), Math.min(1000 * 2 ** this.attempt++, 15_000));
   }
 
@@ -71,19 +116,19 @@ export class NodeConnection {
     const epoch = ++this.epoch;
     const current = () => !this.stopped && this.epoch === epoch;
     this.state.status = 'connecting';
-    this.publish({ ...this.state });
+    this.publish();
     try {
       let info: Info;
       let port: number;
-      if (!this.machine.host) {
-        await exec(this.binary, ['server', 'start'], { timeout: 15_000 });
+      if (this.options.type === 'local') {
+        await exec(this.options.binary ?? 'shu', ['server', 'start'], { timeout: 15_000 });
         if (!current()) return;
-        const { stdout } = await exec(this.binary, ['server', 'status', '--json'], { timeout: 5000 });
+        const { stdout } = await exec(this.options.binary ?? 'shu', ['server', 'status', '--json'], { timeout: 5000 });
         info = JSON.parse(stdout);
         port = info.port;
       } else {
         const { stdout } = await exec('ssh', [
-          '-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', this.machine.host,
+          '-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', this.options.host,
           'export PATH="$HOME/.local/bin:$PATH"; shu server status --json',
         ], { timeout: 15_000, maxBuffer: 64 * 1024 });
         info = JSON.parse(stdout.trim());
@@ -102,7 +147,7 @@ export class NodeConnection {
             const length = bytes.readUInt32BE(0);
             if (length > bytes.length - 4) throw new Error('Invalid terminal packet');
             const header = JSON.parse(bytes.subarray(4, 4 + length).toString());
-            this.terminal({ ...header, machineId: this.machine.id, data: new Uint8Array(bytes.subarray(4 + length)) });
+            this.terminals.get(header.session_id)?.receive({ ...header, data: new Uint8Array(bytes.subarray(4 + length)) } as TerminalEvent);
           } else {
             const message = JSON.parse(data.toString());
             if (message.id) {
@@ -115,7 +160,6 @@ export class NodeConnection {
               }
             } else if (message.event === 'sessions_changed') {
               void this.refresh().catch(() => {});
-
             }
           }
         } catch (error) { this.fail(error); }
@@ -132,11 +176,26 @@ export class NodeConnection {
       if (actual.instance_id !== info.instance_id || actual.protocol !== 1) throw new Error('Node instance or protocol mismatch.');
       await this.refresh();
       if (!current()) return;
+      if (this.instance && this.instance !== actual.instance_id) {
+        for (const terminal of this.terminals.values()) terminal.release(new Error('Node restarted; terminal no longer exists'));
+        this.terminals.clear();
+      }
+      this.instance = actual.instance_id;
+      for (const [id, terminal] of this.terminals) {
+        try { await this.request('attach', { session_id: id }); }
+        catch (error) {
+          if (!current()) return;
+          terminal.release(error as Error);
+          this.terminals.delete(id);
+        }
+      }
+      if (!current()) return;
       this.state.status = 'connected';
       this.state.error = undefined;
       this.state.generation++;
       this.attempt = 0;
-      this.publish({ ...this.state });
+      this.resolveReady();
+      this.publish();
       let alive = true;
       socket.on('pong', () => { alive = true; });
       this.heartbeat = setInterval(() => {
@@ -162,7 +221,7 @@ export class NodeConnection {
       const tunnel = spawn('ssh', [
         '-N', '-T', '-o', 'BatchMode=yes', '-o', 'ExitOnForwardFailure=yes',
         '-o', 'ConnectTimeout=8', '-o', 'ServerAliveInterval=10', '-o', 'ServerAliveCountMax=2',
-        '-L', `127.0.0.1:${port}:127.0.0.1:${remotePort}`, this.machine.host!,
+        '-L', `127.0.0.1:${port}:127.0.0.1:${remotePort}`, (this.options as Extract<ConnectionOptions, { type: 'ssh' }>).host,
       ], { stdio: ['ignore', 'ignore', 'pipe'] });
       this.tunnel = tunnel;
       let stderr = '';
@@ -202,7 +261,7 @@ export class NodeConnection {
     throw lastError;
   }
 
-  async request(op: string, params: Record<string, unknown> = {}): Promise<unknown> {
+  private async request(op: string, params: Record<string, unknown> = {}): Promise<unknown> {
     const socket = this.ws;
     if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error('Machine is not connected.');
     const id = String(++this.serial);
@@ -225,6 +284,6 @@ export class NodeConnection {
   private async refresh() {
     const sessions = await this.request('list') as Session[];
     this.state.sessions = sessions;
-    this.publish({ ...this.state });
+    this.publish();
   }
 }
