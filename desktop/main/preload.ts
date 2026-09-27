@@ -2,18 +2,18 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { PluginBridge } from '../shared';
 
 const api: PluginBridge = {
-  publish: (event, data) => ipcRenderer.invoke('shu:publish', event, data),
+  publish: (event, data) => ipcRenderer.invoke('wangcai:publish', event, data),
   subscribe: (event, callback) => {
     const listener = (_: unknown, name: string, data: unknown) => { if (name === event) void Promise.resolve().then(() => callback(data as never)).catch(console.error); };
-    ipcRenderer.on('shu:channel', listener);
-    return () => { ipcRenderer.removeListener('shu:channel', listener); };
+    ipcRenderer.on('wangcai:channel', listener);
+    return () => { ipcRenderer.removeListener('wangcai:channel', listener); };
   },
-  plugins: () => ipcRenderer.invoke('shu:plugins'),
-  request: (id, method, params) => ipcRenderer.invoke('shu:request', id, method, params),
+  plugins: () => ipcRenderer.invoke('wangcai:plugins'),
+  request: (id, method, params) => ipcRenderer.invoke('wangcai:request', id, method, params),
   on: (callback) => {
     const listener = (_: unknown, id: string, event: string, data: unknown) => callback(id, event, data);
-    ipcRenderer.on('shu:event', listener);
-    return () => { ipcRenderer.removeListener('shu:event', listener); };
+    ipcRenderer.on('wangcai:event', listener);
+    return () => { ipcRenderer.removeListener('wangcai:event', listener); };
   },
 };
-contextBridge.exposeInMainWorld('shu', api);
+contextBridge.exposeInMainWorld('wangcai', api);

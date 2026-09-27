@@ -1,4 +1,4 @@
-import type { Dispose, TabContent, UIContext } from '@shu/sdk/plugin';
+import type { Dispose, TabContent, UIContext } from '@wangcai/sdk/plugin';
 import './style.css';
 
 const root = document.getElementById('root')!;
@@ -10,7 +10,7 @@ window.addEventListener('beforeunload', () => {
 });
 
 async function start() {
-  const plugins = await window.shu.plugins();
+  const plugins = await window.wangcai.plugins();
   if (!plugins.length) root.textContent = '未安装插件';
   const left = document.createElement('aside');
   left.className = 'desktop-sidebar sidebar-left';
@@ -190,15 +190,15 @@ async function start() {
           tabs.set(key, { button, panel, content: options.mount(panel) });
           select(key);
         } },
-        publish: window.shu.publish,
+        publish: window.wangcai.publish,
         subscribe(event, callback) {
-          const off = window.shu.subscribe(event, callback);
+          const off = window.wangcai.subscribe(event, callback);
           subscriptions.add(off);
           return () => { off(); subscriptions.delete(off); };
         },
-        request: (method, params) => window.shu.request(plugin.id, method, params),
+        request: (method, params) => window.wangcai.request(plugin.id, method, params),
         on(event, callback) {
-          const off = window.shu.on((id, name, data) => { if (id === plugin.id && name === event) callback(data as never); });
+          const off = window.wangcai.on((id, name, data) => { if (id === plugin.id && name === event) callback(data as never); });
           subscriptions.add(off);
           return () => { off(); subscriptions.delete(off); };
         },

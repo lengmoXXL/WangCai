@@ -596,25 +596,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc6fe69c597f9c37bfeeeeeb33da3530379845f10be461a66d16d03eca2ded77"
 
 [[package]]
-name = "shu"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64",
- "clap",
- "fs2",
- "futures-util",
- "libc",
- "portable-pty",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
- "uuid",
- "vt100",
-]
-
-[[package]]
 name = "signal-hook-registry"
 version = "1.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -830,6 +811,25 @@ checksum = "a5924018406ce0063cd67f8e008104968b74b563ee1b85dde3ed1f7cb87d3dbd"
 dependencies = [
  "arrayvec",
  "memchr",
+]
+
+[[package]]
+name = "wangcai"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "clap",
+ "fs2",
+ "futures-util",
+ "libc",
+ "portable-pty",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "uuid",
+ "vt100",
 ]
 
 [[package]]

@@ -4,12 +4,12 @@ import { createRoot } from 'react-dom/client';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { fileLocation, registerFileLinks } from './links';
-import type { Config, MachineState, Session, ShuAPI } from './shared';
+import type { Config, MachineState, Session, WangcaiAPI } from './shared';
 import '@xterm/xterm/css/xterm.css';
 import './style.css';
-import type { UIContext } from '@shu/sdk/plugin';
+import type { UIContext } from '@wangcai/sdk/plugin';
 
-let api: ShuAPI;
+let api: WangcaiAPI;
 
 function TerminalPane({ machineId, session, active, connected, generation }: {
   machineId: string; session: Session; active: boolean; connected: boolean; generation: number;
@@ -173,7 +173,7 @@ function App({ context }: { context: UIContext }) {
     return () => window.removeEventListener('keydown', listener);
   });
 
-  if (!config) return <div className="loading">{error || '正在打开 shū…'}</div>;
+  if (!config) return <div className="loading">{error || '正在打开 旺财…'}</div>;
   return <div className="app">
     {createPortal(<div className="sidebar">
       <nav aria-label="机器">{config.machines.map((item) => {
@@ -237,8 +237,8 @@ function App({ context }: { context: UIContext }) {
 }
 
 export function mount(container: HTMLElement, context: UIContext) {
-  container.classList.add('shu-terminal');
-  context.sidebar.classList.add('shu-terminal');
+  container.classList.add('wangcai-terminal');
+  context.sidebar.classList.add('wangcai-terminal');
   api = {
     click: (id, sessionId, location) => context.request('click', { id, sessionId, location }),
     config: () => context.request('config'),

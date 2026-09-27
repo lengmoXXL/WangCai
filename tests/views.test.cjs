@@ -7,12 +7,12 @@ const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
 
 test('view menu switches plugins and handles empty, disconnected and closed terminals', { timeout: 60000 }, async () => {
-  const home = realpathSync(mkdtempSync(join(tmpdir(), 'shu-views-')));
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-views-')));
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   delete env.ELECTRON_RUN_AS_NODE;
   let desktop;
   try {
-    const other = join(home, '.local/shared/shu/plugins/other');
+    const other = join(home, '.local/shared/wangcai/plugins/other');
     mkdirSync(other, { recursive: true });
     writeFileSync(join(other, 'main.ts'), 'export function activate() {}');
     writeFileSync(join(other, 'ui.tsx'), `
@@ -133,7 +133,7 @@ test('view menu switches plugins and handles empty, disconnected and closed term
     assert.deepEqual(errors, []);
   } finally {
     await desktop?.close();
-    try { execFileSync(resolve('shucli/dist/debug/shu'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
+    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
     rmSync(home, { recursive: true, force: true });
   }
 });

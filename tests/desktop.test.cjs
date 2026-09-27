@@ -7,7 +7,7 @@ const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
 
 test('Electron: local terminal, reconnect, machine settings and relaunch', { timeout: 60000 }, async () => {
-  const home = mkdtempSync(join(tmpdir(), 'shu-desktop-test-'));
+  const home = mkdtempSync(join(tmpdir(), 'wangcai-desktop-test-'));
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   delete env.ELECTRON_RUN_AS_NODE;
   let desktop;
@@ -17,6 +17,8 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
     const page = await desktop.firstWindow();
     page.on('pageerror', (error) => console.error('UI error:', error));
     await page.waitForFunction(() => { const button = document.querySelector('[aria-label="新建终端"]'); return button && !button.disabled; });
+    assert.equal(await page.title(), '旺财');
+    assert.equal(await desktop.evaluate(({ app }) => app.getName()), '旺财');
     return page;
   };
   try {
@@ -27,7 +29,7 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
     await page.keyboard.type("printf 'DESKTOP_%s\\n' success");
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => document.querySelector('.terminal-pane.active .xterm-rows')?.textContent.includes('DESKTOP_success'));
-    const sessions = await page.evaluate(() => window.shu.request('terminal', 'terminal', { id: 'local', op: 'list', params: {} }));
+    const sessions = await page.evaluate(() => window.wangcai.request('terminal', 'terminal', { id: 'local', op: 'list', params: {} }));
     assert.equal(sessions.length, 1);
     const localTabs = page.getByRole('tablist', { name: '本机 终端', exact: true });
     assert.equal(await localTabs.getByRole('tab').count(), 1);
@@ -36,36 +38,36 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
     await localTabs.getByRole('tab', { name: /终端 1/ }).click();
     await page.waitForFunction(() => document.querySelector('.terminal-pane.active .xterm-rows')?.textContent.includes('DESKTOP_success'));
     await localTabs.getByRole('button', { name: '结束终端 2' }).click();
-    await page.waitForFunction(() => document.querySelectorAll('.shu-terminal [role=tab]').length === 1);
+    await page.waitForFunction(() => document.querySelectorAll('.wangcai-terminal [role=tab]').length === 1);
     await page.getByRole('button', { name: '本机', exact: true }).click({ button: 'right' });
     await page.getByRole('menuitem', { name: '断开', exact: true }).click();
     await page.getByRole('button', { name: '本机', exact: true }).click({ button: 'right' });
     await page.getByRole('menuitem', { name: '连接', exact: true }).click();
     await page.waitForFunction(() => { const button = document.querySelector('[aria-label="新建终端"]'); return button && !button.disabled; });
     await page.waitForFunction(() => document.querySelector('.terminal-pane.active .xterm-rows')?.textContent.includes('DESKTOP_success'));
-    assert.equal((await page.evaluate(() => window.shu.request('terminal', 'terminal', { id: 'local', op: 'list', params: {} })))[0].id, sessions[0].id);
+    assert.equal((await page.evaluate(() => window.wangcai.request('terminal', 'terminal', { id: 'local', op: 'list', params: {} })))[0].id, sessions[0].id);
     await page.getByRole('button', { name: /机器设置/ }).click();
     await page.getByLabel('名称', { exact: true }).fill('测试服务器');
     await page.getByLabel('SSH Host', { exact: true }).fill('dev-server');
     await page.getByRole('button', { name: '添加机器', exact: true }).click();
     await page.locator('.machine-setting').filter({ hasText: '测试服务器' }).waitFor();
-    const stored = JSON.parse(readFileSync(join(home, '.local/shared/shu/data/terminal/machines.json'), 'utf8'));
+    const stored = JSON.parse(readFileSync(join(home, '.local/shared/wangcai/data/terminal/machines.json'), 'utf8'));
     assert.equal(stored.machines[1].host, 'dev-server');
-    assert.equal(existsSync(join(home, '.local/shared/shu/logs/terminal')), true);
+    assert.equal(existsSync(join(home, '.local/shared/wangcai/logs/terminal')), true);
     await page.getByRole('button', { name: '关闭设置' }).click();
     await page.screenshot({ path: 'tests/dist/screenshots/desktop.png' });
     await desktop.close(); desktop = undefined;
     page = await launch();
     await page.getByRole('tab', { name: /终端 1/ }).waitFor();
     await page.waitForFunction(() => document.querySelector('.terminal-pane.active .xterm-rows')?.textContent.includes('DESKTOP_success'));
-    assert.equal((await page.evaluate(() => window.shu.request('terminal', 'terminal', { id: 'local', op: 'list', params: {} })))[0].id, sessions[0].id);
+    assert.equal((await page.evaluate(() => window.wangcai.request('terminal', 'terminal', { id: 'local', op: 'list', params: {} })))[0].id, sessions[0].id);
     await page.getByRole('button', { name: /机器设置/ }).click();
     await page.locator('.machine-setting').filter({ hasText: '测试服务器' }).getByRole('button', { name: '移除' }).click();
-    assert.equal((await page.evaluate(() => window.shu.request('terminal', 'config'))).machines.length, 1);
+    assert.equal((await page.evaluate(() => window.wangcai.request('terminal', 'config'))).machines.length, 1);
     await page.getByRole('button', { name: '关闭设置' }).click();
     await page.getByRole('button', { name: '结束终端 1' }).click();
-    await page.waitForFunction(() => document.querySelectorAll('.shu-terminal [role=tab]').length === 0);
-    assert.deepEqual(await page.evaluate(() => window.shu.request('terminal', 'terminal', { id: 'local', op: 'list', params: {} })), []);
+    await page.waitForFunction(() => document.querySelectorAll('.wangcai-terminal [role=tab]').length === 0);
+    assert.deepEqual(await page.evaluate(() => window.wangcai.request('terminal', 'terminal', { id: 'local', op: 'list', params: {} })), []);
     await desktop.close(); desktop = undefined;
     const { resolveConfig } = await import('electron-vite');
     const { createServer } = await import('vite');
@@ -74,11 +76,11 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
     await devServer.listen();
     env.ELECTRON_RENDERER_URL = `http://127.0.0.1:${devServer.httpServer.address().port}`;
     page = await launch();
-    await page.waitForFunction(() => document.querySelectorAll('.shu-terminal [role=tab]').length === 0);
+    await page.waitForFunction(() => document.querySelectorAll('.wangcai-terminal [role=tab]').length === 0);
   } finally {
     if (desktop) await desktop.close().catch(() => {});
     await devServer?.close();
-    try { execFileSync(resolve('shucli/dist/debug/shu'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
+    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
     rmSync(home, { recursive: true, force: true });
   }
 });

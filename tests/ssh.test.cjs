@@ -16,8 +16,8 @@ async function until(check, diagnostic) {
 test('real OpenSSH forwarding discovers random node ports and reconnects', { timeout: 45000 }, async (t) => {
   const sshd = ['/usr/sbin/sshd', '/usr/local/sbin/sshd'].find(existsSync);
   if (!sshd) { t.skip('OpenSSH server is not installed'); return; }
-  const home = mkdtempSync(join(tmpdir(), 'shu-ssh-test-'));
-  const binary = resolve('shucli/dist/debug/shu');
+  const home = mkdtempSync(join(tmpdir(), 'wangcai-ssh-test-'));
+  const binary = resolve('wangcaicli/dist/debug/wangcai');
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   const cli = (...args) => execFileSync(binary, ['server', ...args], { env, encoding: 'utf8', timeout: 15000 });
   let server;
@@ -33,7 +33,7 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     const sshPort = reservation.address().port;
     await new Promise((resolve) => reservation.close(resolve));
     const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
-    writeFileSync(join(home, 'start-command'), `#!/bin/sh\n[ "$SSH_ORIGINAL_COMMAND" = ${quote('export PATH="$HOME/.local/bin:$PATH"; shu server start --json')} ] || exit 64\nexec env HOME=${quote(home)} ${quote(binary)} server start --json\n`, { mode: 0o700 });
+    writeFileSync(join(home, 'start-command'), `#!/bin/sh\n[ "$SSH_ORIGINAL_COMMAND" = ${quote('export PATH="$HOME/.local/bin:$PATH"; wangcai server start --json')} ] || exit 64\nexec env HOME=${quote(home)} ${quote(binary)} server start --json\n`, { mode: 0o700 });
     writeFileSync(join(home, 'sshd_config'), [
       `Port ${sshPort}`, 'ListenAddress 127.0.0.1', `HostKey ${join(home, 'host-key')}`,
       `PidFile ${join(home, 'sshd.pid')}`, `AuthorizedKeysFile ${join(home, 'client-key.pub')}`,
@@ -45,7 +45,7 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     await delay(300);
     if (server.exitCode !== null) { t.skip(`Local sshd unavailable: ${logs.trim()}`); return; }
     writeFileSync(join(home, 'ssh_config'), [
-      'Host shu-test', '  HostName 127.0.0.1', `  Port ${sshPort}`, `  User ${userInfo().username}`,
+      'Host wangcai-test', '  HostName 127.0.0.1', `  Port ${sshPort}`, `  User ${userInfo().username}`,
       `  IdentityFile ${join(home, 'client-key')}`, '  IdentitiesOnly yes', '  StrictHostKeyChecking yes',
       `  UserKnownHostsFile ${join(home, 'known_hosts')}`,
     ].join('\n'));
@@ -54,7 +54,7 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     mkdirSync(join(home, 'bin'));
     writeFileSync(join(home, 'bin/ssh'), `#!/bin/sh\nexec /usr/bin/ssh -F ${quote(join(home, 'ssh_config'))} "$@"\n`, { mode: 0o700 });
     process.env.PATH = `${join(home, 'bin')}:${originalPath}`;
-    connection = await connect({ type: 'ssh', host: 'shu-test' });
+    connection = await connect({ type: 'ssh', host: 'wangcai-test' });
     const info = JSON.parse(cli('status', '--json'));
     let state;
     connection.onState((value) => { state = value; });
@@ -77,18 +77,18 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     const remoteText = join(home, 'remote.md');
     writeFileSync(remoteText, '# Remote Markdown\n');
     try {
-      const directory = await handlers.list({ machine: { host: 'shu-test' }, path: home });
+      const directory = await handlers.list({ machine: { host: 'wangcai-test' }, path: home });
       assert.equal(directory.path, home);
       assert.ok(directory.entries.some(entry => entry.name === 'remote.md' && !entry.isDirectory));
-      assert.equal(await handlers.read({ machine: { id: 'remote', name: 'Remote', host: 'shu-test' }, path: remoteText }), '# Remote Markdown\n');
-      await assert.rejects(handlers.read({ machine: { host: 'shu-test' }, path: join(home, 'remote.bin') }), /二进制/);
+      assert.equal(await handlers.read({ machine: { id: 'remote', name: 'Remote', host: 'wangcai-test' }, path: remoteText }), '# Remote Markdown\n');
+      await assert.rejects(handlers.read({ machine: { host: 'wangcai-test' }, path: join(home, 'remote.bin') }), /二进制/);
     } finally { disposeFiles(); }
     const session = await connection.pty.create();
     let terminal = await connection.pty.attach(session.id);
     await terminal.write("sleep 0.3; printf 'SSH_%s\\n' survived\r");
     connection.disconnect();
     await delay(500);
-    connection = await connect({ type: 'ssh', host: 'shu-test' });
+    connection = await connect({ type: 'ssh', host: 'wangcai-test' });
     connection.onState((value) => { state = value; });
     assert.equal(state.sessions[0].id, session.id);
     terminal = await connection.pty.attach(session.id);

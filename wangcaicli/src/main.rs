@@ -17,7 +17,7 @@ use std::{
 use tokio_tungstenite::tungstenite::{self, Message};
 
 #[derive(Parser)]
-#[command(name = "shu", version, about = "Persistent terminal node")]
+#[command(name = "wangcai", version, about = "Persistent terminal node")]
 struct Cli {
     #[command(subcommand)]
     command: RootCommand,
@@ -56,7 +56,7 @@ pub struct ServerInfo {
 
 fn config_dir() -> Result<PathBuf> {
     let home = std::env::var_os("HOME").context("HOME is not set")?;
-    Ok(PathBuf::from(home).join(".config/shu"))
+    Ok(PathBuf::from(home).join(".config/wangcai"))
 }
 
 fn rpc(info: &ServerInfo, op: &str) -> Result<Value> {
@@ -78,11 +78,11 @@ fn rpc(info: &ServerInfo, op: &str) -> Result<Value> {
 fn running_info() -> Result<ServerInfo> {
     let path = config_dir()?.join("server.json");
     let info: ServerInfo = serde_json::from_slice(
-        &fs::read(path).context("Node is not running. Run: shu server start")?,
+        &fs::read(path).context("Node is not running. Run: wangcai server start")?,
     )?;
     let actual: ServerInfo = serde_json::from_value(
         rpc(&info, "info")
-            .context("Node is unreachable; its state file may be stale. Run: shu server start")?,
+            .context("Node is unreachable; its state file may be stale. Run: wangcai server start")?,
     )?;
     if actual.instance_id != info.instance_id || actual.pid != info.pid || actual.protocol != 1 {
         bail!("Node instance does not match server.json");
@@ -100,7 +100,7 @@ fn main() -> Result<()> {
             if as_json {
                 println!("{}", serde_json::to_string(&info)?);
             } else {
-                println!("Shu running: pid {}, 127.0.0.1:{}", info.pid, info.port);
+                println!("Wangcai running: pid {}, 127.0.0.1:{}", info.pid, info.port);
             }
         }
         ServerCommand::Stop => {
@@ -108,7 +108,7 @@ fn main() -> Result<()> {
             rpc(&info, "stop")?;
             for _ in 0..50 {
                 if running_info().is_err() {
-                    println!("Shu stopped");
+                    println!("Wangcai stopped");
                     return Ok(());
                 }
                 std::thread::sleep(Duration::from_millis(100));
@@ -132,7 +132,7 @@ fn main() -> Result<()> {
                 if as_json {
                     println!("{}", serde_json::to_string(&info)?);
                 } else {
-                    println!("Shu already running on 127.0.0.1:{}", info.port);
+                    println!("Wangcai already running on 127.0.0.1:{}", info.port);
                 }
                 return Ok(());
             }
@@ -159,7 +159,7 @@ fn main() -> Result<()> {
                     if as_json {
                         println!("{}", serde_json::to_string(&info)?);
                     } else {
-                        println!("Shu started on 127.0.0.1:{}", info.port);
+                        println!("Wangcai started on 127.0.0.1:{}", info.port);
                     }
                     return Ok(());
                 }
@@ -188,7 +188,7 @@ fn main() -> Result<()> {
                 .write(true)
                 .open(dir.join("server.lock"))?;
             lock.try_lock_exclusive()
-                .context("Shu node is already running")?;
+                .context("Wangcai node is already running")?;
             tokio::runtime::Runtime::new()?.block_on(async {
                 let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
                 let info = ServerInfo {

@@ -7,8 +7,8 @@ import 'monaco-editor/basic-languages/monaco.contribution.js';
 import 'monaco-editor/languages/features/json/jsonMode.js';
 import { jsonDefaults } from 'monaco-editor/languages/features/json/register.js';
 import 'monaco-editor/editor/contrib/find/browser/findController.js';
-import type { DirectoryEntry } from '@shu/sdk';
-import type { ActiveTerminal, FileClick, UIContext } from '@shu/sdk/plugin';
+import type { DirectoryEntry } from '@wangcai/sdk';
+import type { ActiveTerminal, FileClick, UIContext } from '@wangcai/sdk/plugin';
 import './style.css';
 
 export const title = '文件';

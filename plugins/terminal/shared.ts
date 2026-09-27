@@ -1,7 +1,7 @@
-import type { FileClick } from '@shu/sdk/plugin';
-import type { MachineState as ConnectionState } from '@shu/sdk';
+import type { FileClick } from '@wangcai/sdk/plugin';
+import type { MachineState as ConnectionState } from '@wangcai/sdk';
 export interface Machine { id: string; name: string; host?: string }
-export type { Session } from '@shu/sdk';
+export type { Session } from '@wangcai/sdk';
 export interface MachineState extends ConnectionState { machineId: string }
 export interface TerminalEvent {
   machineId: string;
@@ -13,7 +13,7 @@ export interface TerminalEvent {
   cols?: number;
 }
 export interface Config { machines: Machine[]; selected: string }
-export interface ShuAPI {
+export interface WangcaiAPI {
   click(machineId: string, sessionId: string, location: Pick<FileClick, 'path' | 'line' | 'column'>): Promise<void>;
   config(): Promise<Config>;
   saveMachine(machine: { id?: string; name: string; host: string }): Promise<Config>;

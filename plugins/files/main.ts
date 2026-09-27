@@ -1,6 +1,6 @@
 import { join } from 'node:path';
-import { connect, type MachineConnection } from '@shu/sdk';
-import type { FileClick, MainContext } from '@shu/sdk/plugin';
+import { connect, type MachineConnection } from '@wangcai/sdk';
+import type { FileClick, MainContext } from '@wangcai/sdk/plugin';
 
 export function activate(context: MainContext) {
   const pending = new Set<AbortController>();
@@ -12,7 +12,7 @@ export function activate(context: MainContext) {
     try {
       connection = await connect(machine.host
         ? { type: 'ssh', host: machine.host, signal: controller.signal }
-        : { type: 'local', binary: join(context.resourcesDirectory, 'shu'), signal: controller.signal });
+        : { type: 'local', binary: join(context.resourcesDirectory, 'wangcai'), signal: controller.signal });
       controller.signal.throwIfAborted();
       connections.add(connection);
       if (method === 'list') {

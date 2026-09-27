@@ -1,16 +1,16 @@
 {
-  "name": "shu-desktop",
+  "name": "wangcai-desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "shū — persistent terminals, local and remote",
+  "description": "旺财 — persistent terminals, local and remote",
   "main": "dist/main/index.js",
   "dependencies": {
-    "@shu/sdk": "file:../sdk",
+    "@wangcai/sdk": "file:../sdk",
     "esbuild": "^0.25.0"
   },
   "build": {
-    "appId": "dev.shu.desktop",
-    "productName": "shu",
+    "appId": "dev.wangcai.desktop",
+    "productName": "wangcai",
     "files": [
       "dist/main/**/*",
       "dist/preload/**/*",
@@ -18,8 +18,8 @@
     ],
     "extraResources": [
       {
-        "from": "../shucli/dist/release/shu",
-        "to": "shu"
+        "from": "../wangcaicli/dist/release/wangcai",
+        "to": "wangcai"
       },
       {
         "from": "dist/plugins",
@@ -29,7 +29,7 @@
     "mac": {
       "category": "public.app-category.developer-tools",
       "extendInfo": {
-        "CFBundleDisplayName": "shū"
+        "CFBundleDisplayName": "旺财"
       }
     },
     "asarUnpack": [

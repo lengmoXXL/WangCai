@@ -199,7 +199,7 @@ impl Node {
         command.cwd(std::env::var("HOME").context("HOME is not set")?);
         command.env("TERM", "xterm-256color");
         command.env("COLORTERM", "truecolor");
-        command.env("TERM_PROGRAM", "Shu");
+        command.env("TERM_PROGRAM", "Wangcai");
         let mut child = pty.slave.spawn_command(command)?;
         drop(pty.slave);
         let pid = child.process_id().context("Shell has no PID")?;
@@ -272,7 +272,7 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
             if request.headers().contains_key("origin") {
                 return Err(tokio_tungstenite::tungstenite::http::Response::builder()
                     .status(403)
-                    .body(Some("Connect using the Shu desktop client".into()))
+                    .body(Some("Connect using the Wangcai desktop client".into()))
                     .unwrap());
             }
             Ok(response)

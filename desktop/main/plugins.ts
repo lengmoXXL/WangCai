@@ -2,13 +2,13 @@ import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
-import type { Dispose, MainContext } from '@shu/sdk/plugin';
+import type { Dispose, MainContext } from '@wangcai/sdk/plugin';
 import type { PluginInfo } from '../shared';
 
 export async function loadPlugins(sdkPath: string, resourcesDirectory: string, emit: (id: string, event: string, data: unknown) => void, broadcast: (event: string, data: unknown) => void) {
   const { build } = await import('esbuild');
-  const directory = join(homedir(), '.local/shared/shu/plugins');
-  const cache = join(homedir(), '.cache/shu/plugins');
+  const directory = join(homedir(), '.local/shared/wangcai/plugins');
+  const cache = join(homedir(), '.cache/wangcai/plugins');
   const plugins: PluginInfo[] = [];
   const handlers = new Map<string, Map<string, (params: any) => unknown>>();
   const disposers: Dispose[] = [];
@@ -37,8 +37,8 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, e
       await build({
         entryPoints: [join(source, 'main.ts')], outfile: join(output, 'main.cjs'),
         bundle: true, platform: 'node', target: 'node22', sourcemap: 'inline',
-        plugins: [{ name: 'shu-sdk', setup(builder) {
-          builder.onResolve({ filter: /^@shu\/sdk$/ }, () => ({ path: sdkPath, external: true }));
+        plugins: [{ name: 'wangcai-sdk', setup(builder) {
+          builder.onResolve({ filter: /^@wangcai\/sdk$/ }, () => ({ path: sdkPath, external: true }));
         } }],
       });
       if (existsSync(join(source, 'ui.tsx'))) {
@@ -48,14 +48,14 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, e
           bundle: true, format: 'esm', target: 'chrome140', jsx: 'automatic',
           define: { 'process.env.NODE_ENV': '"production"' }, sourcemap: 'inline',
           plugins: [{ name: 'node-sdk-boundary', setup(builder) {
-            builder.onResolve({ filter: /^@shu\/sdk$/ }, () => ({ errors: [{ text: '@shu/sdk is only available in main.ts' }] }));
+            builder.onResolve({ filter: /^@wangcai\/sdk$/ }, () => ({ errors: [{ text: '@wangcai/sdk is only available in main.ts' }] }));
           } }],
         });
-        info.ui = `shu-plugin://plugins/${encodeURIComponent(id)}/ui.js`;
-        if (existsSync(join(output, 'ui.css'))) info.css = `shu-plugin://plugins/${encodeURIComponent(id)}/ui.css`;
+        info.ui = `wangcai-plugin://plugins/${encodeURIComponent(id)}/ui.js`;
+        if (existsSync(join(output, 'ui.css'))) info.css = `wangcai-plugin://plugins/${encodeURIComponent(id)}/ui.css`;
       }
-      const dataDirectory = join(homedir(), '.local/shared/shu/data', id);
-      const logDirectory = join(homedir(), '.local/shared/shu/logs', id);
+      const dataDirectory = join(homedir(), '.local/shared/wangcai/data', id);
+      const logDirectory = join(homedir(), '.local/shared/wangcai/logs', id);
       mkdirSync(dataDirectory, { recursive: true });
       mkdirSync(logDirectory, { recursive: true });
       const context: MainContext = {

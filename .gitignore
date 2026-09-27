@@ -1,4 +1,4 @@
-/shucli/dist/
+/wangcaicli/dist/
 /node_modules/
 *.log
 .DS_Store

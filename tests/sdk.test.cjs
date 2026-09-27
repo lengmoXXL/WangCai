@@ -13,10 +13,10 @@ async function until(check) {
 }
 
 test('Node SDK: local PTYs, binary files, detach and reconnect', { timeout: 30000 }, async () => {
-  const home = mkdtempSync(join(tmpdir(), 'shu-sdk-'));
+  const home = mkdtempSync(join(tmpdir(), 'wangcai-sdk-'));
   const previousHome = process.env.HOME;
   process.env.HOME = home;
-  const binary = resolve('shucli/dist/debug/shu');
+  const binary = resolve('wangcaicli/dist/debug/wangcai');
   let machine;
   try {
     await assert.rejects(connect({ type: 'local', binary: join(home, 'absent') }), /ENOENT/);

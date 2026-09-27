@@ -10,7 +10,7 @@ const { promisify } = require('node:util');
 const WebSocket = require('ws');
 const { Terminal } = require('@xterm/headless');
 
-const binary = resolve('shucli/dist/debug/shu');
+const binary = resolve('wangcaicli/dist/debug/wangcai');
 async function until(check, message) {
   const deadline = Date.now() + 6000;
   while (Date.now() < deadline) { if (await check()) return; await delay(30); }
@@ -74,15 +74,15 @@ class Client {
 }
 
 test('persistent terminal node lifecycle', { timeout: 60000 }, async (t) => {
-  const home = mkdtempSync(join(tmpdir(), 'shu-node-test-'));
+  const home = mkdtempSync(join(tmpdir(), 'wangcai-node-test-'));
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   const cli = (...args) => execFileSync(binary, ['server', ...args], { env, encoding: 'utf8', timeout: 15000, stdio: ['ignore', 'pipe', 'pipe'] });
   const clients = [];
   try {
     assert.throws(() => cli('status', '--json'), /not running/);
-    assert.equal(existsSync(join(home, '.config/shu/server.json')), false);
-    mkdirSync(join(home, '.config/shu'), { recursive: true });
-    writeFileSync(join(home, '.config/shu/server.json'), JSON.stringify({ pid: 1, port: 1, instance_id: 'stale', protocol: 1 }));
+    assert.equal(existsSync(join(home, '.config/wangcai/server.json')), false);
+    mkdirSync(join(home, '.config/wangcai'), { recursive: true });
+    writeFileSync(join(home, '.config/wangcai/server.json'), JSON.stringify({ pid: 1, port: 1, instance_id: 'stale', protocol: 1 }));
     const started = await Promise.all(Array.from({ length: 3 }, () => promisify(execFile)(binary, ['server', 'start', '--json'], { env, timeout: 15000 })));
     const info = JSON.parse(started[0].stdout);
     for (const result of started) assert.deepEqual(JSON.parse(result.stdout), info);
@@ -98,7 +98,7 @@ test('persistent terminal node lifecycle', { timeout: 60000 }, async (t) => {
       const second = await client.rpc('create', { rows: 24, cols: 80 });
       await client.rpc('attach', { session_id: first.id });
       await client.rpc('attach', { session_id: second.id });
-      await client.rpc('input', { session_id: first.id, data: "export SHU_TEST=kept; cd /tmp; printf '你好_%s_%s\\n' \"$SHU_TEST\" \"$PWD\"\r" });
+      await client.rpc('input', { session_id: first.id, data: "export WANGCAI_TEST=kept; cd /tmp; printf '你好_%s_%s\\n' \"$WANGCAI_TEST\" \"$PWD\"\r" });
       await until(async () => (await client.text(first.id)).includes('你好_kept_/tmp'), 'Unicode output');
       assert.ok(!(await client.text(second.id)).includes('你好_kept_/tmp'));
       await client.rpc('input', { session_id: second.id, data: "printf '\\033[?1049h\\033[2J\\033[H\\033[32mALT_SCREEN\\033[?2004h'; sleep 10\r" });
@@ -126,7 +126,7 @@ test('persistent terminal node lifecycle', { timeout: 60000 }, async (t) => {
       await assert.rejects(client.rpc('resize', { session_id: first.id, rows: 0, cols: 99999 }), /size/);
     });
     await t.test('process and output survive disconnect without replaying input', async () => {
-      await client.rpc('input', { session_id: first.id, data: "sleep 0.4; printf 'OFFLINE_%s\\n' \"$SHU_TEST\"\r" });
+      await client.rpc('input', { session_id: first.id, data: "sleep 0.4; printf 'OFFLINE_%s\\n' \"$WANGCAI_TEST\"\r" });
       await client.close();
       await delay(800);
       const reconnect = await new Client(info.port).connect(); clients.push(reconnect);

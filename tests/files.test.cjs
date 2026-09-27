@@ -8,7 +8,7 @@ const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
 
 test('view picker browses current terminal directory; file links preview code and Markdown', { timeout: 90000 }, async () => {
-  const home = realpathSync(mkdtempSync(join(tmpdir(), 'shu-files-')));
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-files-')));
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   delete env.ELECTRON_RUN_AS_NODE;
   let desktop;
@@ -28,11 +28,11 @@ test('view picker browses current terminal directory; file links preview code an
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
     await page.getByRole('button', { name: '新建终端', exact: true }).click();
-    const session = (await page.evaluate(() => window.shu.request('terminal', 'terminal', { id: 'local', op: 'list', params: {} })))[0];
+    const session = (await page.evaluate(() => window.wangcai.request('terminal', 'terminal', { id: 'local', op: 'list', params: {} })))[0];
     const clickLink = async (link, label = link, cwd = home) => {
       const output = label === link ? link : `\\033]8;;${link}\\007${label}\\033]8;;\\007`;
       const command = `cd '${cwd}'; printf '\\033[2J\\033[H%b\\n' '${output}'\r`;
-      await page.evaluate(({ id, command }) => window.shu.request('terminal', 'terminal', { id: 'local', op: 'input', params: { session_id: id, data: command } }), { id: session.id, command });
+      await page.evaluate(({ id, command }) => window.wangcai.request('terminal', 'terminal', { id: 'local', op: 'input', params: { session_id: id, data: command } }), { id: session.id, command });
       const row = page.locator('.terminal-pane.active .xterm-rows > div').filter({ hasText: label }).first();
       await page.waitForFunction(label => document.querySelector('.terminal-pane.active .xterm-rows > div')?.textContent.trim() === label, label);
       const point = await row.evaluate((element, label) => {
@@ -107,9 +107,9 @@ test('view picker browses current terminal directory; file links preview code an
     await clickLink(pathToFileURL(binary).href, 'BINARY_LINK');
     await page.getByRole('alert').filter({ hasText: '暂不支持二进制' }).waitFor();
     const beforeMissing = await fileTabs.getByRole('tab').count();
-    await page.evaluate(() => { window.missingClicks = []; window.shu.subscribe('onclick', data => window.missingClicks.push(data)); });
+    await page.evaluate(() => { window.missingClicks = []; window.wangcai.subscribe('onclick', data => window.missingClicks.push(data)); });
     await clickLink(pathToFileURL(join(home, 'missing.ts')).href, 'MISSING_LINK');
-    await page.evaluate(({ sessionId, path }) => window.shu.request('terminal', 'click', { id: 'local', sessionId, location: { path } }), { sessionId: session.id, path: 'missing.ts' });
+    await page.evaluate(({ sessionId, path }) => window.wangcai.request('terminal', 'click', { id: 'local', sessionId, location: { path } }), { sessionId: session.id, path: 'missing.ts' });
     assert.deepEqual(await page.evaluate(() => window.missingClicks), []);
     assert.equal(await fileTabs.getByRole('tab').count(), beforeMissing);
     assert.equal(await page.getByRole('alert').filter({ hasText: 'No such file' }).count(), 0);
@@ -129,9 +129,9 @@ test('view picker browses current terminal directory; file links preview code an
     await page.locator('#view-menu').getByRole('button', { name: '文件', exact: true }).click();
     await directory.getByRole('button', { name: 'sample.ts', exact: true }).waitFor();
     await page.screenshot({ path: 'tests/dist/screenshots/files-browser.png' });
-    await page.evaluate(({ id, path }) => window.shu.request('terminal', 'terminal', { id: 'local', op: 'input', params: { session_id: id, data: `cd '${path}'\r` } }), { id: session.id, path: join(home, 'sub') });
+    await page.evaluate(({ id, path }) => window.wangcai.request('terminal', 'terminal', { id: 'local', op: 'input', params: { session_id: id, data: `cd '${path}'\r` } }), { id: session.id, path: join(home, 'sub') });
     await page.waitForFunction(async ({ id, path }) => {
-      const result = await window.shu.request('files', 'list', { machine: { id: 'local', name: '本机' }, sessionId: id });
+      const result = await window.wangcai.request('files', 'list', { machine: { id: 'local', name: '本机' }, sessionId: id });
       return result.path === path;
     }, { id: session.id, path: join(home, 'sub') });
     await page.getByRole('button', { name: '新建侧栏标签页' }).click();
@@ -152,7 +152,7 @@ test('view picker browses current terminal directory; file links preview code an
     await page.getByRole('navigation', { name: '当前目录文件' }).getByRole('button', { name: 'inside.md', exact: true }).waitFor();
     await fileTabs.getByRole('tab', { name: '文件', exact: true }).click();
     await page.getByRole('navigation', { name: '当前目录文件' }).getByRole('button', { name: 'sample.ts', exact: true }).waitFor();
-    assert.equal((await page.evaluate(() => window.shu.request('terminal', 'terminal', { id: 'local', op: 'list', params: {} })))[0].id, session.id);
+    assert.equal((await page.evaluate(() => window.wangcai.request('terminal', 'terminal', { id: 'local', op: 'list', params: {} })))[0].id, session.id);
     assert.deepEqual(errors, []);
     assert.equal(await page.evaluate(() => document.documentElement.scrollTop), 0);
     await desktop.close(); desktop = undefined;
@@ -165,12 +165,12 @@ test('view picker browses current terminal directory; file links preview code an
     desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
     page = await desktop.firstWindow();
     await page.getByRole('button', { name: '机器设置' }).waitFor();
-    await page.evaluate(path => window.shu.publish('onclick', { type: 'file', machine: { id: 'local', name: '本机' }, path }), code);
+    await page.evaluate(path => window.wangcai.publish('onclick', { type: 'file', machine: { id: 'local', name: '本机' }, path }), code);
     await page.locator('.monaco-editor .view-lines').filter({ hasText: 'CODE_PREVIEW' }).waitFor();
   } finally {
     await desktop?.close();
     await devServer?.close();
-    try { execFileSync(resolve('shucli/dist/debug/shu'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
+    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
     rmSync(home, { recursive: true, force: true });
   }
 });

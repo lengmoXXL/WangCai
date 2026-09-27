@@ -5,8 +5,8 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync } from '
 import { homedir } from 'node:os';
 import { loadPlugins } from './plugins';
 
-app.setName('shū');
-protocol.registerSchemesAsPrivileged([{ scheme: 'shu-plugin', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
+app.setName('旺财');
+protocol.registerSchemesAsPrivileged([{ scheme: 'wangcai-plugin', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
 let window: BrowserWindow | undefined;
 
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -14,7 +14,7 @@ else {
   app.on('second-instance', () => { window?.show(); window?.focus(); });
   void app.whenReady().then(async () => {
     if (app.isPackaged) process.env.ESBUILD_BINARY_PATH = join(process.resourcesPath, `app.asar.unpacked/node_modules/@esbuild/darwin-${process.arch}/bin/esbuild`);
-    const directory = join(homedir(), '.local/shared/shu/plugins');
+    const directory = join(homedir(), '.local/shared/wangcai/plugins');
     const bundled = app.isPackaged ? join(process.resourcesPath, 'plugins') : join(app.getAppPath(), 'dist/plugins');
     for (const id of ['terminal', 'files']) {
       const target = join(directory, id);
@@ -26,11 +26,11 @@ else {
         renameSync(staging, target);
       } finally { rmSync(staging, { recursive: true, force: true }); }
     }
-    const plugins = await loadPlugins(require.resolve('@shu/sdk'),
-      app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../shucli/dist/debug'),
-      (id, event, data) => { if (window && !window.isDestroyed()) window.webContents.send('shu:event', id, event, data); },
-      (event, data) => { if (window && !window.isDestroyed()) window.webContents.send('shu:channel', event, data); });
-    protocol.handle('shu-plugin', async (request) => {
+    const plugins = await loadPlugins(require.resolve('@wangcai/sdk'),
+      app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug'),
+      (id, event, data) => { if (window && !window.isDestroyed()) window.webContents.send('wangcai:event', id, event, data); },
+      (event, data) => { if (window && !window.isDestroyed()) window.webContents.send('wangcai:channel', event, data); });
+    protocol.handle('wangcai-plugin', async (request) => {
       const url = new URL(request.url);
       const path = resolve(plugins.cache, `.${decodeURIComponent(url.pathname)}`);
       const local = relative(plugins.cache, path);
@@ -40,17 +40,17 @@ else {
       headers.set('Access-Control-Allow-Origin', '*');
       return new Response(response.body, { status: response.status, headers });
     });
-    ipcMain.handle('shu:publish', (_, event: string, data: unknown) => plugins.publish(event, data));
-    ipcMain.handle('shu:plugins', () => plugins.plugins);
-    ipcMain.handle('shu:request', (_, id: string, method: string, params: unknown) => plugins.request(id, method, params));
+    ipcMain.handle('wangcai:publish', (_, event: string, data: unknown) => plugins.publish(event, data));
+    ipcMain.handle('wangcai:plugins', () => plugins.plugins);
+    ipcMain.handle('wangcai:request', (_, id: string, method: string, params: unknown) => plugins.request(id, method, params));
     Menu.setApplicationMenu(Menu.buildFromTemplate([
-      { label: 'shū', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'quit' }] },
+      { label: '旺财', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'quit' }] },
       { label: 'Edit', submenu: [{ role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
       { label: 'View', submenu: [{ role: 'toggleDevTools' }, { role: 'togglefullscreen' }] },
     ]));
     window = new BrowserWindow({
       width: 1180, height: 780, minWidth: 740, minHeight: 460,
-      backgroundColor: '#11151b', title: 'shū', titleBarStyle: 'hiddenInset',
+      backgroundColor: '#11151b', title: '旺财', titleBarStyle: 'hiddenInset',
       webPreferences: { preload: join(__dirname, '../preload/preload.js') },
     });
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
