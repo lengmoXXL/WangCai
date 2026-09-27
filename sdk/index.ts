@@ -4,15 +4,26 @@ export type { ConnectionOptions, MachineState, Session, Size, Output, Snapshot, 
 export type { MachineConnection } from './connection';
 export type { Pty } from './pty';
 
+const connections = new Map<string, MachineConnection>();
+
 export async function connect(options: ConnectionOptions) {
   options.signal?.throwIfAborted();
-  const machine = new MachineConnection(options);
-  const cancel = () => machine.disconnect();
-  options.signal?.addEventListener('abort', cancel, { once: true });
+  const target = options.type === 'ssh' ? `ssh:${options.host}` : `local:${options.binary ?? 'wangcai'}`;
+  const shared = connections.get(target);
+  const machine = shared ?? new MachineConnection(options);
+  if (shared) machine.retain();
+  else {
+    connections.set(target, machine);
+    machine.onState((state) => { if (state.status === 'disconnected' && connections.get(target) === machine) connections.delete(target); });
+  }
+  const aborted = new Promise<never>((_, reject) => {
+    options.signal?.addEventListener('abort', () => reject(new Error('Connection cancelled')), { once: true });
+  });
   try {
-    await machine.ready;
+    await Promise.race([machine.ready, aborted]);
     return machine;
-  } finally {
-    options.signal?.removeEventListener('abort', cancel);
+  } catch (error) {
+    machine.disconnect();
+    throw error;
   }
 }

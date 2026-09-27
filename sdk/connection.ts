@@ -25,6 +25,7 @@ export class MachineConnection {
   private attempt = 0;
   private epoch = 0;
   private serial = 0;
+  private refs = 1;
 
   constructor(private options: ConnectionOptions) {
     this.state = { status: 'connecting', sessions: [], generation: 0 };
@@ -42,7 +43,18 @@ export class MachineConnection {
     for (const callback of this.listeners) callback({ ...this.state });
   }
 
+  retain() {
+    this.refs++;
+  }
+
   disconnect() {
+    if (this.refs === 0) return;
+    if (--this.refs > 0) return;
+    this.teardown();
+  }
+
+  private teardown() {
+    this.refs = 0;
     this.stopped = true;
     this.cleanup();
     this.rejectReady(new Error('Connection cancelled'));
@@ -110,7 +122,7 @@ export class MachineConnection {
     if (this.stopped) return;
     if (this.state.generation === 0) {
       this.rejectReady(error instanceof Error ? error : new Error(String(error)));
-      this.disconnect();
+      this.teardown();
       return;
     }
     this.cleanup();

@@ -61,6 +61,11 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     const localPort = Number(new URL(connection.ws.url).port);
     assert.ok(localPort > 0);
     assert.notEqual(localPort, info.port);
+    const shared = await connect({ type: 'ssh', host: 'wangcai-test' });
+    assert.equal(shared, connection);
+    connection.disconnect();
+    assert.equal(connection.state.status, 'connected');
+    assert.deepEqual(await shared.pty.list(), []);
     const bytes = Buffer.from([0, 255, 1, 128, 10]);
     writeFileSync(join(home, 'remote.bin'), bytes);
     assert.deepEqual(Buffer.from(await connection.fs.readFile(join(home, 'remote.bin'))), bytes);
