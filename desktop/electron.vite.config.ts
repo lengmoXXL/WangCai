@@ -4,11 +4,11 @@ import { fileURLToPath } from 'node:url';
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
-    build: { rollupOptions: { input: fileURLToPath(new URL('./main/index.ts', import.meta.url)) } },
+    build: { outDir: fileURLToPath(new URL('./dist/main', import.meta.url)), rollupOptions: { input: fileURLToPath(new URL('./main/index.ts', import.meta.url)) } },
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
-    build: { rollupOptions: { input: fileURLToPath(new URL('./preload/index.ts', import.meta.url)) } },
+    build: { outDir: fileURLToPath(new URL('./dist/preload', import.meta.url)), rollupOptions: { input: fileURLToPath(new URL('./preload/index.ts', import.meta.url)) } },
   },
   renderer: {
     root: fileURLToPath(new URL('./renderer', import.meta.url)),
@@ -17,6 +17,6 @@ export default defineConfig({
       apply: 'serve',
       transformIndexHtml: (html) => html.replace('ws://localhost:*', 'ws://localhost:* ws://127.0.0.1:*'),
     }],
-    build: { rollupOptions: { input: fileURLToPath(new URL('./renderer/index.html', import.meta.url)) } },
+    build: { outDir: fileURLToPath(new URL('./dist/renderer', import.meta.url)), rollupOptions: { input: fileURLToPath(new URL('./renderer/index.html', import.meta.url)) } },
   },
 });

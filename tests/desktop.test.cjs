@@ -53,8 +53,8 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
     await page.getByRole('button', { name: '添加机器', exact: true }).click();
     await page.locator('.machine-setting').filter({ hasText: '测试服务器' }).waitFor();
     await page.getByRole('button', { name: '关闭设置' }).click();
-    mkdirSync('out/screenshots', { recursive: true });
-    await page.screenshot({ path: 'out/screenshots/desktop.png' });
+    mkdirSync('tests/dist/screenshots', { recursive: true });
+    await page.screenshot({ path: 'tests/dist/screenshots/desktop.png' });
     await desktop.close(); desktop = undefined;
     page = await launch();
     await page.getByRole('tab', { name: /终端 1/ }).waitFor();

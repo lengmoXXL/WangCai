@@ -1,13 +1,12 @@
 /target/
 /node_modules/
-/dist/
-/out/
 *.log
 .DS_Store
 
 /sdk/dist/
 /plugins/*/node_modules/
 
-/desktop/out/
+/desktop/dist/
 /desktop/node_modules/
 /sdk/node_modules/
+/tests/dist/

@@ -11,7 +11,7 @@ test('packaged macOS app compiles an installed TSX plugin and uses bundled SDK/n
   const env = { ...process.env, HOME: home };
   delete env.ELECTRON_RUN_AS_NODE;
   let desktop;
-  const bundle = resolve('dist/mac/shu.app/Contents');
+  const bundle = resolve('desktop/dist/package/mac/shu.app/Contents');
   try {
     execFileSync(process.execPath, ['scripts/install-terminal.mjs'], { env, stdio: 'pipe', timeout: 30000 });
     const pluginSource = join(home, '.local/shared/shu/plugins/terminal/renderer.tsx');
