@@ -42,8 +42,8 @@
     }
   },
   "scripts": {
-    "dev": "node prepare-plugins.mjs && electron-vite dev",
-    "build": "node prepare-plugins.mjs && tsc --noEmit && electron-vite build",
+    "dev": "node tools/prepare-plugins.mjs && electron-vite dev",
+    "build": "node tools/prepare-plugins.mjs && tsc --noEmit && electron-vite build",
     "start": "electron .",
     "package": "npm run build && electron-builder --mac dir",
     "typecheck": "tsc --noEmit"
