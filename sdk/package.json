@@ -15,8 +15,8 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.cjs"
     },
-    "./plugin": {
-      "types": "./dist/plugin.d.ts"
+    "./channel": {
+      "types": "./dist/channel.d.ts"
     }
   },
   "scripts": {

@@ -1,5 +1,9 @@
-import type { Dispose, TabContent, UIContext } from '@wangcai/sdk/plugin';
+import type { Channel, Context } from '@wangcai/sdk/channel';
+import { denied, type Dispose, type TabRecord } from '../shared';
 import './style.css';
+
+type TabContent = { dispose: Dispose; onSelect?(): void };
+type TabOptions = { id: string; title: string; tooltip?: string; workspaceId?: string; mount(container: HTMLElement): TabContent };
 
 const root = document.getElementById('root')!;
 const disposers: Dispose[] = [];
@@ -85,7 +89,12 @@ async function start() {
     };
     paint();
   }
-  const tabs = new Map<string, { button: HTMLButtonElement; panel: HTMLElement; content: TabContent }>();
+  type Tab = { button: HTMLButtonElement; panel: HTMLElement; content: TabContent };
+  const tabKey = (plugin: string, id: string) => JSON.stringify([plugin, id]);
+  const tabs = new Map<string, Tab>();
+  const records = new Map<string, TabRecord>();
+  const persist = () => { void window.wangcai.saveTabs([...records.values()]); };
+  for (const record of await window.wangcai.loadTabs()) records.set(tabKey(record.plugin, record.id), record);
   let selected = '';
   const select = (id: string) => {
     selected = id;
@@ -150,72 +159,97 @@ async function start() {
         await loaded;
       }
       let sidebar: HTMLElement | undefined;
-      const context: UIContext = {
-        get sidebar() {
-          if (sidebar) return sidebar;
-          sidebar = document.createElement('section');
-          sidebar.className = 'sidebar-slot';
-          sidebar.dataset.plugin = plugin.id;
-          left.append(sidebar);
-          left.hidden = false;
-          return sidebar;
-        },
-        tabs: { open(options) {
-          const key = JSON.stringify([plugin.id, options.id]);
-          const existing = tabs.get(key);
-          if (existing) {
-            void existing.content.dispose();
-            existing.panel.replaceChildren();
-            existing.content = options.mount(existing.panel);
-            select(key);
-            return;
-          }
-          const element = document.createElement('div');
-          element.className = 'sidebar-tab';
-          const button = document.createElement('button');
-          button.setAttribute('role', 'tab');
-          button.textContent = options.title;
-          button.title = options.tooltip ?? options.title;
-          button.onclick = () => select(key);
-          const close = document.createElement('button');
-          close.className = 'close-tab';
-          close.textContent = '×';
-          close.setAttribute('aria-label', `关闭 ${options.title}`);
-          close.onclick = () => {
-            const keys = [...tabs.keys()];
-            const index = keys.indexOf(key);
-            void tabs.get(key)!.content.dispose();
-            tabs.delete(key);
-            panel.remove(); element.remove();
-            if (selected === key) select(keys[index - 1] ?? keys[index + 1] ?? '');
-          };
-          element.append(button, close);
-          header.insertBefore(element, picker);
-          const panel = document.createElement('section');
-          panel.className = 'sidebar-panel';
-          panel.dataset.plugin = plugin.id;
-          panel.setAttribute('role', 'tabpanel');
-          panel.setAttribute('aria-label', options.title);
-          content.append(panel);
-          tabs.set(key, { button, panel, content: options.mount(panel) });
+      const sidebarSlot = () => {
+        if (sidebar) return sidebar;
+        sidebar = document.createElement('section');
+        sidebar.className = 'sidebar-slot';
+        sidebar.dataset.plugin = plugin.id;
+        left.append(sidebar);
+        left.hidden = false;
+        return sidebar;
+      };
+      const openTab = (options: TabOptions) => {
+        const key = tabKey(plugin.id, options.id);
+        const record: TabRecord = { plugin: plugin.id, id: options.id, workspaceId: options.workspaceId };
+        records.set(key, record);
+        persist();
+        const existing = tabs.get(key);
+        if (existing) {
+          void existing.content.dispose();
+          existing.panel.replaceChildren();
+          existing.content = options.mount(existing.panel);
           select(key);
-        } },
-        publish: window.wangcai.publish,
-        subscribe(event, callback) {
-          const off = window.wangcai.subscribe(event, callback);
-          subscriptions.add(off);
-          return () => { off(); subscriptions.delete(off); };
+          return;
+        }
+        const element = document.createElement('div');
+        element.className = 'sidebar-tab';
+        const button = document.createElement('button');
+        button.setAttribute('role', 'tab');
+        button.textContent = options.title;
+        button.title = options.tooltip ?? options.title;
+        button.onclick = () => select(key);
+        const close = document.createElement('button');
+        close.className = 'close-tab';
+        close.textContent = '×';
+        close.setAttribute('aria-label', `关闭 ${options.title}`);
+        close.onclick = () => {
+          const keys = [...tabs.keys()];
+          const index = keys.indexOf(key);
+          void tabs.get(key)!.content.dispose();
+          tabs.delete(key);
+          records.delete(key);
+          persist();
+          panel.remove(); element.remove();
+          if (selected === key) select(keys[index - 1] ?? keys[index + 1] ?? '');
+        };
+        element.append(button, close);
+        header.insertBefore(element, picker);
+        const panel = document.createElement('section');
+        panel.className = 'sidebar-panel';
+        panel.dataset.plugin = plugin.id;
+        panel.setAttribute('role', 'tabpanel');
+        panel.setAttribute('aria-label', options.title);
+        content.append(panel);
+        tabs.set(key, { button, panel, content: options.mount(panel) });
+        select(key);
+      };
+      const context: Context = {
+        global: {
+          publish: window.wangcai.publish,
+          subscribe(topic, callback) {
+            const off = window.wangcai.subscribe(topic, callback as (data: unknown) => void);
+            subscriptions.add(off);
+            return () => { off(); subscriptions.delete(off); };
+          },
+          request: denied('global', 'request'),
+          handle: denied('global', 'handle'),
         },
-        request: (method, params) => window.wangcai.request(plugin.id, method, params),
-        on(event, callback) {
-          const off = window.wangcai.on((id, name, data) => { if (id === plugin.id && name === event) callback(data as never); });
-          subscriptions.add(off);
-          return () => { off(); subscriptions.delete(off); };
+        ui: {
+          publish: denied('ui', 'publish'),
+          subscribe(topic, callback) {
+            const off = window.wangcai.on((id, event, data) => { if (id === plugin.id && event === topic) callback(data as never); });
+            subscriptions.add(off);
+            return () => { off(); subscriptions.delete(off); };
+          },
+          request: (method, params) => window.wangcai.request(plugin.id, method, params),
+          handle: denied('ui', 'handle'),
+        },
+        host: {
+          publish: denied('host', 'publish'),
+          subscribe: denied('host', 'subscribe'),
+          request: (async (topic: string, params?: unknown) => {
+            if (topic === 'sidebar') return sidebarSlot();
+            if (topic === 'tabs') return openTab(params as TabOptions);
+            throw new Error(`Unsupported host topic: ${topic}`);
+          }) as Channel['request'],
+          handle: denied('host', 'handle'),
         },
       };
       const module = await import(/* @vite-ignore */ plugin.ui!);
       if (module.open) container.hidden = true;
       dispose = await module.mount(container, context);
+      const pluginRecords = [...records.values()].filter((record) => record.plugin === plugin.id);
+      if (module.restore && pluginRecords.length) await module.restore(context, pluginRecords);
       if (module.open) {
         const item = document.createElement('button');
         item.textContent = module.title ?? plugin.id;

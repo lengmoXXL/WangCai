@@ -1,4 +1,8 @@
-import type { ActiveTerminal } from '@wangcai/sdk/plugin';
+export interface ActiveTerminal {
+  machine: { id: string; name: string; host?: string };
+  sessionId: string;
+  workspaceId?: string;
+}
 
 export interface GitFile { path: string; oldPath?: string; status: string }
 export type Stage = 'staged' | 'unstaged' | 'untracked' | 'conflicted';

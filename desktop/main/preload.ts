@@ -15,5 +15,7 @@ const api: PluginBridge = {
     ipcRenderer.on('wangcai:event', listener);
     return () => { ipcRenderer.removeListener('wangcai:event', listener); };
   },
+  loadTabs: () => ipcRenderer.invoke('wangcai:tabs'),
+  saveTabs: (tabs) => ipcRenderer.invoke('wangcai:save-tabs', tabs),
 };
 contextBridge.exposeInMainWorld('wangcai', api);

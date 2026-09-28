@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
-import type { Dispose, MainContext } from '@wangcai/sdk/plugin';
-import type { PluginInfo } from '../shared';
+import type { Channel, Context } from '@wangcai/sdk/channel';
+import { denied, type Dispose, type PluginInfo } from '../shared';
 
 export async function loadPlugins(sdkPath: string, resourcesDirectory: string, emit: (id: string, event: string, data: unknown) => void, broadcast: (event: string, data: unknown) => void) {
   const { build } = await import('esbuild');
@@ -58,21 +58,40 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, e
       const logDirectory = join(homedir(), '.local/shared/wangcai/logs', id);
       mkdirSync(dataDirectory, { recursive: true });
       mkdirSync(logDirectory, { recursive: true });
-      const context: MainContext = {
-        dataDirectory, logDirectory, resourcesDirectory,
-        publish,
-        subscribe(event, callback) {
-          let callbacks = subscriptions.get(event);
-          if (!callbacks) subscriptions.set(event, callbacks = new Set());
-          callbacks.add(callback);
-          return () => { callbacks.delete(callback); };
+      const context: Context = {
+        global: {
+          publish,
+          subscribe(topic, callback) {
+            let callbacks = subscriptions.get(topic);
+            if (!callbacks) subscriptions.set(topic, callbacks = new Set());
+            callbacks.add(callback);
+            return () => { callbacks.delete(callback); };
+          },
+          request: denied('global', 'request'),
+          handle: denied('global', 'handle'),
         },
-        handle(method, handler) {
-          if (methods.has(method)) throw new Error(`Duplicate plugin method: ${method}`);
-          methods.set(method, handler);
-          return () => { methods.delete(method); };
+        ui: {
+          publish: async (topic, data) => { emit(id, topic, data); },
+          subscribe: denied('ui', 'subscribe'),
+          request: denied('ui', 'request'),
+          handle(topic, handler) {
+            if (topic.includes(':')) throw new Error(`Plugin method names cannot contain ":": ${topic}`);
+            if (methods.has(topic)) throw new Error(`Duplicate plugin method: ${topic}`);
+            methods.set(topic, handler);
+            return () => { methods.delete(topic); };
+          },
         },
-        emit: (event, data) => emit(id, event, data),
+        host: {
+          publish: denied('host', 'publish'),
+          subscribe: denied('host', 'subscribe'),
+          request: (async (topic: string) => {
+            if (topic === 'dataDirectory') return dataDirectory;
+            if (topic === 'logDirectory') return logDirectory;
+            if (topic === 'resourcesDirectory') return resourcesDirectory;
+            throw new Error(`Unsupported host topic: ${topic}`);
+          }) as Channel['request'],
+          handle: denied('host', 'handle'),
+        },
       };
       const dispose = await requirePlugin(join(output, 'main.cjs')).activate(context);
       if (dispose) disposers.push(dispose);

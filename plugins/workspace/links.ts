@@ -1,5 +1,5 @@
 import type { ILink, Terminal } from '@xterm/xterm';
-import type { FileClick } from '@wangcai/sdk/plugin';
+import type { FileClick } from './shared';
 
 export function fileLocation(text: string): Pick<FileClick, 'path' | 'line' | 'column'> | undefined {
   if (text.startsWith('file://')) {

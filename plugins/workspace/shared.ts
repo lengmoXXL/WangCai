@@ -1,8 +1,15 @@
-import type { FileClick } from '@wangcai/sdk/plugin';
 import type { MachineState as ConnectionState } from '@wangcai/sdk';
-export interface Machine { id: string; name: string; host?: string }
-export interface Workspace { id: string; machineId: string; sessionId?: string }
 export type { Session } from '@wangcai/sdk';
+
+export interface Machine { id: string; name: string; host?: string }
+export interface FileClick {
+  type: 'file' | 'directory';
+  machine: Machine;
+  path: string;
+  line?: number;
+  column?: number;
+}
+export interface Workspace { id: string; machineId: string; sessionId?: string }
 export interface MachineState extends ConnectionState { machineId: string }
 export interface TerminalEvent {
   machineId: string;

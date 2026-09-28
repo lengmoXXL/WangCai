@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { loadPlugins } from './plugins';
+import type { TabRecord } from '../shared';
 
 app.setName('旺财');
 protocol.registerSchemesAsPrivileged([{ scheme: 'wangcai-plugin', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
@@ -43,6 +44,12 @@ else {
     ipcMain.handle('wangcai:publish', (_, event: string, data: unknown) => plugins.publish(event, data));
     ipcMain.handle('wangcai:plugins', () => plugins.plugins);
     ipcMain.handle('wangcai:request', (_, id: string, method: string, params: unknown) => plugins.request(id, method, params));
+    const tabsPath = join(app.getPath('userData'), 'tabs.json');
+    ipcMain.handle('wangcai:tabs', () => existsSync(tabsPath) ? JSON.parse(readFileSync(tabsPath, 'utf8')) as TabRecord[] : []);
+    ipcMain.handle('wangcai:save-tabs', (_: unknown, tabs: TabRecord[]) => {
+      writeFileSync(`${tabsPath}.tmp`, JSON.stringify(tabs, null, 2));
+      renameSync(`${tabsPath}.tmp`, tabsPath);
+    });
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { label: '旺财', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'quit' }] },
       { label: 'Edit', submenu: [{ role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },

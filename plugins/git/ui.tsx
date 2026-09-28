@@ -3,11 +3,12 @@ import { createRoot } from 'react-dom/client';
 import * as monaco from 'monaco-editor/editor/editor.api.js';
 import 'monaco-editor/basic-languages/monaco.contribution.js';
 import 'monaco-editor/editor/contrib/find/browser/findController.js';
-import type { ActiveTerminal, UIContext } from '@wangcai/sdk/plugin';
-import type { Commit, Comparison, Diff, GitFile, History, Overview, Stage } from './shared';
+import type { Context } from '@wangcai/sdk/channel';
+import type { ActiveTerminal, Commit, Comparison, Diff, GitFile, History, Overview, Stage } from './shared';
 import './style.css';
 
 export const title = 'Git';
+let activeWorkspaceId: string | undefined;
 const stages: Record<Stage, string> = { conflicted: '冲突', staged: '已暂存', unstaged: '未暂存', untracked: '未跟踪' };
 
 function DiffEditor({ diff, path, split, wrap }: { diff: Diff; path: string; split: boolean; wrap: boolean }) {
@@ -35,14 +36,14 @@ function DiffEditor({ diff, path, split, wrap }: { diff: Diff; path: string; spl
 }
 
 function DiffPane({ context, terminal, root, comparison, split, wrap, refresh }: {
-  context: UIContext; terminal: ActiveTerminal; root: string; comparison: Comparison; split: boolean; wrap: boolean; refresh: number;
+  context: Context; terminal: ActiveTerminal; root: string; comparison: Comparison; split: boolean; wrap: boolean; refresh: number;
 }) {
   const [diff, setDiff] = useState<Diff>();
   const [error, setError] = useState('');
   useEffect(() => {
     let alive = true;
     setDiff(undefined); setError('');
-    void context.request<Diff>('diff', { terminal, root, comparison }).then(value => { if (alive) setDiff(value); })
+    void context.ui.request<Diff>('diff', { terminal, root, comparison }).then(value => { if (alive) setDiff(value); })
       .catch((error: Error) => { if (alive) setError(error.message); });
     return () => { alive = false; };
   }, [context, terminal, root, comparison, refresh]);
@@ -65,7 +66,7 @@ function FileRow({ file, select }: { file: GitFile; select: (beside: boolean) =>
 }
 
 function CommitRow({ commit, context, terminal, root, selected, toggle, select }: {
-  commit: Commit; context: UIContext; terminal: ActiveTerminal; root: string; selected: boolean;
+  commit: Commit; context: Context; terminal: ActiveTerminal; root: string; selected: boolean;
   toggle: () => void; select: (comparison: Comparison, beside: boolean) => void;
 }) {
   const [files, setFiles] = useState<GitFile[]>();
@@ -74,7 +75,7 @@ function CommitRow({ commit, context, terminal, root, selected, toggle, select }
     if (!selected || files) return;
     let alive = true;
     setError('');
-    void context.request<GitFile[]>('files', { terminal, root, rev: commit.sha }).then(value => { if (alive) setFiles(value); })
+    void context.ui.request<GitFile[]>('files', { terminal, root, rev: commit.sha }).then(value => { if (alive) setFiles(value); })
       .catch((error: Error) => { if (alive) setError(error.message); });
     return () => { alive = false; };
   }, [selected, context, terminal, root, commit.sha, files]);
@@ -94,7 +95,7 @@ function CommitRow({ commit, context, terminal, root, selected, toggle, select }
   </div>;
 }
 
-function Repository({ context, terminal, activation }: { context: UIContext; terminal: ActiveTerminal; activation: number }) {
+function Repository({ context, terminal, activation }: { context: Context; terminal: ActiveTerminal; activation: number }) {
   const [overview, setOverview] = useState<Overview>();
   const [error, setError] = useState('');
   const [refresh, setRefresh] = useState(0);
@@ -111,7 +112,7 @@ function Repository({ context, terminal, activation }: { context: UIContext; ter
   useEffect(() => {
     const current = ++generation.current;
     setLoading(true); setOlder(false); setError('');
-    void context.request<Overview>('overview', { terminal }).then(value => {
+    void context.ui.request<Overview>('overview', { terminal }).then(value => {
       if (current !== generation.current) return;
       if (repositoryRoot.current !== value.root) { setPanes([]); setOpened(value.commits[0]?.sha ?? null); setFocused(0); }
       repositoryRoot.current = value.root;
@@ -154,7 +155,7 @@ function Repository({ context, terminal, activation }: { context: UIContext; ter
           {overview.hasMore && <button className="git-more" disabled={older || loading} onClick={() => {
             const current = generation.current;
             setOlder(true);
-            void context.request<History>('history', { terminal, root: overview.root, head: overview.head, skip: overview.commits.length }).then(value => {
+            void context.ui.request<History>('history', { terminal, root: overview.root, head: overview.head, skip: overview.commits.length }).then(value => {
               if (current === generation.current) setOverview(previous => ({ ...previous!, commits: [...previous!.commits, ...value.commits], hasMore: value.hasMore }));
             }).catch((error: Error) => { if (current === generation.current) setError(error.message); })
               .finally(() => { if (current === generation.current) setOlder(false); });
@@ -172,27 +173,37 @@ function Repository({ context, terminal, activation }: { context: UIContext; ter
   </section>;
 }
 
-function GitView({ context, activation }: { context: UIContext; activation: number }) {
+function GitView({ context, activation }: { context: Context; activation: number }) {
   const [terminal, setTerminal] = useState<ActiveTerminal | null>(null);
   useEffect(() => {
-    const off = context.subscribe<ActiveTerminal | null>('terminal:active', value => setTerminal(previous =>
+    const off = context.global.subscribe<ActiveTerminal | null>('terminal:active', value => setTerminal(previous =>
       JSON.stringify(previous) === JSON.stringify(value) ? previous : value));
-    void context.publish('terminal:query', null);
+    void context.global.publish('terminal:query', null);
     return off;
   }, [context, activation]);
   if (!terminal) return <div className="git-note">请选择一个已连接的终端</div>;
   return <Repository key={JSON.stringify(terminal)} context={context} terminal={terminal} activation={activation} />;
 }
 
-export function open(context: UIContext) {
-  context.tabs.open({ id: 'history', title: 'Git', mount(container) {
+export function open(context: Context) {
+  openTab(context, activeWorkspaceId);
+}
+
+export function restore(context: Context, tabs: { id: string; workspaceId?: string }[]) {
+  for (const tab of tabs) if (tab.id === 'history') openTab(context, tab.workspaceId);
+}
+
+function openTab(context: Context, workspaceId?: string) {
+  void context.host.request('tabs', { id: 'history', title: 'Git', workspaceId, mount(container: HTMLElement) {
     const root = createRoot(container);
     let activation = 0;
     return { onSelect: () => root.render(<GitView context={context} activation={++activation} />), dispose: () => root.unmount() };
   } });
 }
 
-export async function mount() {
+export async function mount(_container: HTMLElement, context: Context) {
+  const offActive = context.global.subscribe<ActiveTerminal | null>('terminal:active', (value) => { activeWorkspaceId = value?.workspaceId; });
+  void context.global.publish('terminal:query', null);
   const response = await fetch(new URL('./ui.worker.js', import.meta.url));
   if (!response.ok) throw new Error('Cannot load Git diff worker');
   const workerURL = URL.createObjectURL(new Blob([await response.text()], { type: 'text/javascript' }));
@@ -205,6 +216,7 @@ export async function mount() {
   } };
   self.MonacoEnvironment = environment;
   return () => {
+    offActive();
     for (const worker of workers) worker.terminate();
     URL.revokeObjectURL(workerURL);
     if (self.MonacoEnvironment === environment) self.MonacoEnvironment = previous;

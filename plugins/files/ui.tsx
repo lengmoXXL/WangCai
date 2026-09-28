@@ -8,10 +8,12 @@ import 'monaco-editor/languages/features/json/jsonMode.js';
 import { jsonDefaults } from 'monaco-editor/languages/features/json/register.js';
 import 'monaco-editor/editor/contrib/find/browser/findController.js';
 import type { DirectoryEntry } from '@wangcai/sdk';
-import type { ActiveTerminal, FileClick, UIContext } from '@wangcai/sdk/plugin';
+import type { Context } from '@wangcai/sdk/channel';
+import type { ActiveTerminal, FileClick } from './shared';
 import './style.css';
 
 export const title = '文件';
+let activeWorkspaceId: string | undefined;
 jsonDefaults.setModeConfiguration({ tokens: true });
 
 function Preview({ file, text }: { file: FileClick; text: string }) {
@@ -39,7 +41,7 @@ function Preview({ file, text }: { file: FileClick; text: string }) {
   return <div className="code-preview" ref={element} />;
 }
 
-function Directory({ context, location }: { context: UIContext; location: { machine: FileClick['machine']; sessionId?: string; path?: string } | null }) {
+function Directory({ context, location }: { context: Context; location: { machine: FileClick['machine']; sessionId?: string; path?: string } | null }) {
   const [path, setPath] = useState(location?.path);
   const [directory, setDirectory] = useState<{ path: string; entries: DirectoryEntry[] }>();
   const [error, setError] = useState('');
@@ -47,7 +49,7 @@ function Directory({ context, location }: { context: UIContext; location: { mach
     if (!location) return;
     let alive = true;
     setDirectory(undefined); setError('');
-    void context.request<{ path: string; entries: DirectoryEntry[] }>('list', { ...location, path }).then((result) => {
+    void context.ui.request<{ path: string; entries: DirectoryEntry[] }>('list', { ...location, path }).then((result) => {
       if (alive) setDirectory(result);
     }).catch((error: Error) => { if (alive) setError(error.message); });
     return () => { alive = false; };
@@ -62,7 +64,7 @@ function Directory({ context, location }: { context: UIContext; location: { mach
       {directory.entries.map((entry) => <button key={entry.name} onClick={() => {
         const path = `${directory.path === '/' ? '' : directory.path}/${entry.name}`;
         if (entry.isDirectory) setPath(path);
-        else void context.publish('onclick', { type: 'file', machine: location.machine, path });
+        else void context.global.publish('onclick', { type: 'file', machine: location.machine, path });
       }}><svg className="file-icon" data-kind={entry.isDirectory ? 'folder' : 'file'} aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4">
         {entry.isDirectory ? <path d="M2 5h6l2 2h8v10H2z" /> : <path d="M5 2h6l4 4v12H5z M11 2v5h4 M8 11h4 M8 14h4" />}
       </svg><span>{entry.name}{entry.isDirectory ? '/' : ''}</span></button>)}
@@ -71,22 +73,22 @@ function Directory({ context, location }: { context: UIContext; location: { mach
   </div>;
 }
 
-function DirectoryView({ context }: { context: UIContext }) {
+function DirectoryView({ context }: { context: Context }) {
   const [terminal, setTerminal] = useState<ActiveTerminal | null>(null);
   useEffect(() => {
-    const off = context.subscribe<ActiveTerminal | null>('terminal:active', setTerminal);
-    void context.publish('terminal:query', null);
+    const off = context.global.subscribe<ActiveTerminal | null>('terminal:active', setTerminal);
+    void context.global.publish('terminal:query', null);
     return off;
   }, [context]);
   return <Directory key={`${terminal?.machine.id}:${terminal?.sessionId}`} context={context} location={terminal} />;
 }
 
-function FileView({ context, file }: { context: UIContext; file: FileClick }) {
+function FileView({ context, file }: { context: Context; file: FileClick }) {
   const [text, setText] = useState<string>();
   const [error, setError] = useState('');
   useEffect(() => {
     let alive = true;
-    void context.request<string>('read', file).then((text) => { if (alive) setText(text); })
+    void context.ui.request<string>('read', file).then((text) => { if (alive) setText(text); })
       .catch((error: Error) => { if (alive) setError(error.message); });
     return () => { alive = false; };
   }, [context, file]);
@@ -97,8 +99,16 @@ function FileView({ context, file }: { context: UIContext; file: FileClick }) {
   </section>;
 }
 
-export function open(context: UIContext) {
-  context.tabs.open({ id: 'directory', title: '文件', mount(container) {
+export function open(context: Context) {
+  openTab(context, activeWorkspaceId);
+}
+
+export function restore(context: Context, tabs: { id: string; workspaceId?: string }[]) {
+  for (const tab of tabs) if (tab.id === 'directory') openTab(context, tab.workspaceId);
+}
+
+function openTab(context: Context, workspaceId?: string) {
+  void context.host.request('tabs', { id: 'directory', title: '文件', workspaceId, mount(container: HTMLElement) {
     const root = createRoot(container);
     let revision = 0;
     return {
@@ -108,7 +118,7 @@ export function open(context: UIContext) {
   } });
 }
 
-export async function mount(_container: HTMLElement, context: UIContext) {
+export async function mount(_container: HTMLElement, context: Context) {
   const response = await fetch(new URL('./ui.worker.js', import.meta.url));
   if (!response.ok) throw new Error('Cannot load file preview worker');
   const workerURL = URL.createObjectURL(new Blob([await response.text()], { type: 'text/javascript' }));
@@ -118,12 +128,14 @@ export async function mount(_container: HTMLElement, context: UIContext) {
     workers.add(worker);
     return worker;
   } };
-  const off = context.subscribe<FileClick>('onclick', (file) => {
+  const offActive = context.global.subscribe<ActiveTerminal | null>('terminal:active', (value) => { activeWorkspaceId = value?.workspaceId; });
+  void context.global.publish('terminal:query', null);
+  const off = context.global.subscribe<FileClick>('onclick', (file) => {
     if (file.type !== 'file' && file.type !== 'directory') return;
-    context.tabs.open({
+    void context.host.request('tabs', {
       id: JSON.stringify([file.machine.host ?? file.machine.id, file.path]),
-      title: file.path.split('/').filter(Boolean).pop() ?? '/', tooltip: `${file.machine.name}: ${file.path}`,
-      mount(container) {
+      title: file.path.split('/').filter(Boolean).pop() ?? '/', tooltip: `${file.machine.name}: ${file.path}`, workspaceId: activeWorkspaceId,
+      mount(container: HTMLElement) {
         const root = createRoot(container);
         let revision = 0;
         return {
@@ -136,6 +148,7 @@ export async function mount(_container: HTMLElement, context: UIContext) {
     });
   });
   return () => {
+    offActive();
     off();
     for (const worker of workers) worker.terminate();
     URL.revokeObjectURL(workerURL);

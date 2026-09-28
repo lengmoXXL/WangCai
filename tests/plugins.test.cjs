@@ -25,16 +25,16 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
       writeFileSync(join(path, 'main.ts'), `
         import { writeFileSync } from 'node:fs';
         import { join } from 'node:path';
-        export function activate(context) {
-          writeFileSync(join(context.logDirectory, 'plugin.log'), '${name}');
+        export async function activate(context) {
+          writeFileSync(join(await context.host.request('logDirectory'), 'plugin.log'), '${name}');
           const received = [];
-          const off = context.subscribe('onclick', data => received.push(data));
-          context.handle('received', () => received);
-          context.handle('unsubscribe', off);
-          context.handle('stop', () => context.emit('stop'));
-          context.handle('publish', data => context.publish('onclick', data));
-          context.handle('echo', (data: string) => { context.emit('echo', data); return '${name}:' + data; });
-          return () => writeFileSync(join(context.dataDirectory, 'cleaned'), 'yes');
+          const off = context.global.subscribe('onclick', data => received.push(data));
+          context.ui.handle('received', () => received);
+          context.ui.handle('unsubscribe', off);
+          context.ui.handle('stop', () => context.ui.publish('stop'));
+          context.ui.handle('publish', data => context.global.publish('onclick', data));
+          context.ui.handle('echo', (data: string) => { context.ui.publish('echo', data); return '${name}:' + data; });
+          return async () => writeFileSync(join(await context.host.request('dataDirectory'), 'cleaned'), 'yes');
         }
       `);
       writeFileSync(join(path, 'ui.tsx'), `
@@ -42,10 +42,10 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
         import './style.css';
         export function mount(container, context) {
           const root = createRoot(container);
-          const stop = context.subscribe('onclick', data => container.dataset.channel = data);
-          context.on('stop', stop);
-          const off = context.on('echo', (text) => container.dataset.event = text);
-          root.render(<button onClick={async () => { container.dataset.reply = await context.request('echo', 'hello'); await context.publish('onclick', '${name}'); }}>${name} v1</button>);
+          const stop = context.global.subscribe('onclick', data => container.dataset.channel = data);
+          context.ui.subscribe('stop', stop);
+          const off = context.ui.subscribe('echo', (text) => container.dataset.event = text);
+          root.render(<button onClick={async () => { container.dataset.reply = await context.ui.request('echo', 'hello'); await context.global.publish('onclick', '${name}'); }}>${name} v1</button>);
           return () => { off(); root.unmount(); };
         }
       `);
@@ -53,11 +53,11 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
     }
     const broken = join(home, '.local/shared/wangcai/plugins/broken');
     mkdirSync(broken);
-    writeFileSync(join(broken, 'main.ts'), `import { writeFileSync } from 'node:fs'; import { join } from 'node:path'; export function activate(context) { context.subscribe('onclick', () => writeFileSync(join(context.dataDirectory, 'leaked'), 'yes')); throw new Error('intentional failure'); }`);
+    writeFileSync(join(broken, 'main.ts'), `import { writeFileSync } from 'node:fs'; import { join } from 'node:path'; export function activate(context) { context.global.subscribe('onclick', async () => writeFileSync(join(await context.host.request('dataDirectory'), 'leaked'), 'yes')); throw new Error('intentional failure'); }`);
     const failedUI = join(home, '.local/shared/wangcai/plugins/failed-ui');
     mkdirSync(failedUI);
     writeFileSync(join(failedUI, 'main.ts'), 'export function activate() {}');
-    writeFileSync(join(failedUI, 'ui.tsx'), `export function mount(container, context) { container.hidden = true; context.subscribe('onclick', () => document.body.dataset.leaked = 'yes'); throw new Error('UI failure'); }`);
+    writeFileSync(join(failedUI, 'ui.tsx'), `export function mount(container, context) { container.hidden = true; context.global.subscribe('onclick', () => document.body.dataset.leaked = 'yes'); throw new Error('UI failure'); }`);
     let page = await launch();
     await page.getByText('alpha v1', { exact: true }).click();
     await page.waitForFunction(() => document.querySelector('[data-plugin=alpha]')?.getAttribute('data-reply') === 'alpha:hello');

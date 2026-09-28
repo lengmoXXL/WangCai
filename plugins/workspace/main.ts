@@ -2,11 +2,24 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { connect, type MachineConnection, type Pty } from '@wangcai/sdk';
-import type { FileClick, MainContext } from '@wangcai/sdk/plugin';
-import type { Config, Machine, MachineState, Workspace } from './shared';
+import type { Context } from '@wangcai/sdk/channel';
+import type { Config, FileClick, Machine, MachineState, Workspace } from './shared';
 
-export function activate(context: MainContext) {
-  const path = join(context.dataDirectory, 'config.json');
+export type WorkspaceApi = {
+  click(params: { id: string; sessionId: string; location: Pick<FileClick, 'path' | 'line' | 'column'> }): Promise<void>;
+  config(): Config;
+  'save-machine'(machine: { id?: string; name: string; host: string }): Config;
+  'remove-machine'(id: string): Config;
+  'select-machine'(id: string): void;
+  connect(id: string): Promise<MachineState>;
+  disconnect(id: string): void;
+  'open-workspace'(params: { machineId: string; workspaceId?: string }): Promise<{ config: Config; workspaceId: string }>;
+  'close-workspace'(id: string): Promise<Config>;
+  pty(params: { id: string; op: string; params: Record<string, unknown> }): Promise<unknown>;
+};
+
+export async function activate(context: Context) {
+  const path = join(await context.host.request('dataDirectory'), 'config.json');
   let config: Config = { machines: [{ id: 'local', name: '本机' }], workspaces: [], selected: 'local' };
   const connections = new Map<string, MachineConnection>();
   const pending = new Map<string, { controller: AbortController; result: Promise<MachineState> }>();
@@ -42,7 +55,7 @@ export function activate(context: MainContext) {
     const previous = states.get(id);
     const state: MachineState = { machineId: id, status: 'disconnected', sessions: previous?.sessions ?? [], generation: previous?.generation ?? 0 };
     states.set(id, state);
-    context.emit('state', state);
+    void context.ui.publish('state', state);
   }
 
   async function open(id: string): Promise<MachineState> {
@@ -54,26 +67,26 @@ export function activate(context: MainContext) {
     if (!machine) throw new Error('Unknown machine');
     const state: MachineState = { machineId: id, status: 'connecting', sessions: states.get(id)?.sessions ?? [], generation: 0 };
     states.set(id, state);
-    context.emit('state', state);
+    void context.ui.publish('state', state);
     const controller = new AbortController();
     const result = (async () => {
       try {
         const node = await connect(machine.host
           ? { type: 'ssh', host: machine.host, signal: controller.signal }
-          : { type: 'local', binary: join(context.resourcesDirectory, 'wangcai'), signal: controller.signal });
+          : { type: 'local', binary: join(await context.host.request('resourcesDirectory'), 'wangcai'), signal: controller.signal });
         if (controller.signal.aborted) { node.disconnect(); throw new Error('Connection cancelled'); }
         connections.set(id, node);
         node.onState((value) => {
           const state = { ...value, machineId: id };
           states.set(id, state);
-          context.emit('state', state);
+          void context.ui.publish('state', state);
         });
         return { ...node.state, machineId: id };
       } catch (error) {
         if (controller.signal.aborted) throw error;
         const failed: MachineState = { ...state, status: 'disconnected', error: String(error) };
         states.set(id, failed);
-        context.emit('state', failed);
+        void context.ui.publish('state', failed);
         throw error;
       } finally {
         if (pending.get(id)?.controller === controller) pending.delete(id);
@@ -83,17 +96,17 @@ export function activate(context: MainContext) {
     return result;
   }
 
-  handlers.push(context.handle('click', async ({ id, sessionId, location }: { id: string; sessionId: string; location: Pick<FileClick, 'path' | 'line' | 'column'> }) => {
+  handlers.push(context.ui.handle('click', async ({ id, sessionId, location }: { id: string; sessionId: string; location: Pick<FileClick, 'path' | 'line' | 'column'> }) => {
     const machine = config.machines.find((machine) => machine.id === id);
     const node = connections.get(id);
     if (!machine || !node) throw new Error('Machine is not connected');
     const path = posix.isAbsolute(location.path) ? posix.resolve(location.path) : posix.resolve(await node.pty.cwd(sessionId), location.path);
     const stat = await node.fs.stat(path);
     if (!stat) return;
-    await context.publish('onclick', { type: stat.isDirectory ? 'directory' : 'file', machine, ...location, path });
+    await context.global.publish('onclick', { type: stat.isDirectory ? 'directory' : 'file', machine, ...location, path });
   }));
-  handlers.push(context.handle('config', () => config));
-  handlers.push(context.handle('save-machine', (machine: { id?: string; name: string; host: string }) => {
+  handlers.push(context.ui.handle('config', () => config));
+  handlers.push(context.ui.handle('save-machine', (machine: { id?: string; name: string; host: string }) => {
     if (machine.id === 'local') throw new Error('The local machine cannot be edited.');
     const name = machine.name.trim();
     const host = machine.host.trim();
@@ -106,7 +119,7 @@ export function activate(context: MainContext) {
     save();
     return config;
   }));
-  handlers.push(context.handle('remove-machine', (id: string) => {
+  handlers.push(context.ui.handle('remove-machine', (id: string) => {
     if (id === 'local') throw new Error('The local machine cannot be removed.');
     disconnect(id);
     config.machines = config.machines.filter((machine) => machine.id !== id);
@@ -115,14 +128,14 @@ export function activate(context: MainContext) {
     save();
     return config;
   }));
-  handlers.push(context.handle('select-machine', (id: string) => {
+  handlers.push(context.ui.handle('select-machine', (id: string) => {
     if (!config.machines.some((machine) => machine.id === id)) throw new Error('Unknown machine');
     config.selected = id;
     save();
   }));
-  handlers.push(context.handle('connect', open));
-  handlers.push(context.handle('disconnect', disconnect));
-  handlers.push(context.handle('open-workspace', async ({ machineId, workspaceId }: { machineId: string; workspaceId?: string }) => {
+  handlers.push(context.ui.handle('connect', open));
+  handlers.push(context.ui.handle('disconnect', disconnect));
+  handlers.push(context.ui.handle('open-workspace', async ({ machineId, workspaceId }: { machineId: string; workspaceId?: string }) => {
     let workspace = workspaceId ? config.workspaces.find((item) => item.id === workspaceId) : undefined;
     if (!workspace) {
       workspace = { id: randomUUID(), machineId };
@@ -139,7 +152,7 @@ export function activate(context: MainContext) {
     save();
     return { config, workspaceId: workspace.id };
   }));
-  handlers.push(context.handle('close-workspace', async (id: string) => {
+  handlers.push(context.ui.handle('close-workspace', async (id: string) => {
     const workspace = config.workspaces.find((item) => item.id === id);
     if (!workspace) return config;
     if (workspace.sessionId) {
@@ -150,7 +163,7 @@ export function activate(context: MainContext) {
     save();
     return config;
   }));
-  handlers.push(context.handle('pty', async ({ id, op, params }: { id: string; op: string; params: { session_id: string; data: string; rows: number; cols: number } }) => {
+  handlers.push(context.ui.handle('pty', async ({ id, op, params }: { id: string; op: string; params: { session_id: string; data: string; rows: number; cols: number } }) => {
     const key = `${id}:${params.session_id}`;
     if (op === 'detach') {
       const terminal = terminals.get(key);
@@ -164,8 +177,8 @@ export function activate(context: MainContext) {
       case 'attach': {
         const terminal = await node.pty.attach(params.session_id);
         terminals.set(key, terminal);
-        terminal.onSnapshot((event) => context.emit('terminal', { ...event, event: 'snapshot', machineId: id, session_id: terminal.id }));
-        terminal.onData((event) => context.emit('terminal', { ...event, event: 'output', machineId: id, session_id: terminal.id }));
+        terminal.onSnapshot((event) => { void context.ui.publish('terminal', { ...event, event: 'snapshot', machineId: id, session_id: terminal.id }); });
+        terminal.onData((event) => { void context.ui.publish('terminal', { ...event, event: 'output', machineId: id, session_id: terminal.id }); });
         return;
       }
       case 'input':

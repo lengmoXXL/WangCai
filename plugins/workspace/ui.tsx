@@ -4,12 +4,14 @@ import { createRoot } from 'react-dom/client';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { fileLocation, registerFileLinks } from './links';
+import type { WorkspaceApi } from './main';
 import type { Config, MachineState, Session, WangcaiAPI, Workspace } from './shared';
 import '@xterm/xterm/css/xterm.css';
 import './style.css';
-import type { UIContext } from '@wangcai/sdk/plugin';
+import type { Context } from '@wangcai/sdk/channel';
 
 let api: WangcaiAPI;
+let sidebar: HTMLElement;
 
 function TerminalPane({ machineId, session, active, connected, generation }: {
   machineId: string; session: Session; active: boolean; connected: boolean; generation: number;
@@ -128,7 +130,7 @@ function Settings({ config, onUpdate, onClose }: { config: Config; onUpdate: (co
   </div>;
 }
 
-function App({ context }: { context: UIContext }) {
+function App({ context }: { context: Context }) {
   const [config, setConfig] = useState<Config>();
   const [states, setStates] = useState<Record<string, MachineState>>({});
   const [selectedWorkspaces, setSelectedWorkspaces] = useState<Record<string, string>>({});
@@ -162,10 +164,10 @@ function App({ context }: { context: UIContext }) {
   const generation = state?.generation ?? 0;
   const errorMessage = error || state?.error;
   useEffect(() => {
-    const publish = () => context.publish('terminal:active', connected && machine && activeSession ? { machine, sessionId: activeSession.id } : null);
+    const publish = () => context.global.publish('terminal:active', connected && machine && activeSession && activeWorkspace ? { machine, sessionId: activeSession.id, workspaceId: activeWorkspace.id } : null);
     void publish();
-    return context.subscribe('terminal:query', publish);
-  }, [context, machine, activeSession?.id, connected]);
+    return context.global.subscribe('terminal:query', publish);
+  }, [context, machine, activeSession?.id, activeWorkspace?.id, connected]);
 
   const selectWorkspace = (machineId: string, workspaceId: string) => {
     setSelectedWorkspaces((workspaces) => ({ ...workspaces, [machineId]: workspaceId }));
@@ -240,7 +242,7 @@ function App({ context }: { context: UIContext }) {
       <div className="sidebar-actions">
         <button className="settings-button" onClick={() => setSettings(true)}>机器设置</button>
       </div>
-    </div>, context.sidebar)}
+    </div>, sidebar)}
     <main>
       {errorMessage && <div className="error-banner"><span>{errorMessage}</span>{error && <button onClick={() => setError('')}>×</button>}</div>}
       <div className="terminal-area">
@@ -263,22 +265,24 @@ function App({ context }: { context: UIContext }) {
   </div>;
 }
 
-export function mount(container: HTMLElement, context: UIContext) {
+export async function mount(container: HTMLElement, context: Context) {
   container.classList.add('wangcai-workspace');
-  context.sidebar.classList.add('wangcai-workspace');
+  sidebar = await context.host.request<HTMLElement>('sidebar');
+  sidebar.classList.add('wangcai-workspace');
+  const call = <K extends keyof WorkspaceApi>(method: K, params?: Parameters<WorkspaceApi[K]>[0]) => context.ui.request<Awaited<ReturnType<WorkspaceApi[K]>>>(method, params);
   api = {
-    click: (id, sessionId, location) => context.request('click', { id, sessionId, location }),
-    config: () => context.request('config'),
-    saveMachine: (machine) => context.request('save-machine', machine),
-    removeMachine: (id) => context.request('remove-machine', id),
-    selectMachine: (id) => context.request('select-machine', id),
-    connect: (id) => context.request('connect', id),
-    disconnect: (id) => context.request('disconnect', id),
-    openWorkspace: (machineId, workspaceId) => context.request('open-workspace', { machineId, workspaceId }),
-    closeWorkspace: (id) => context.request('close-workspace', id),
-    pty: (id, op, params = {}) => context.request('pty', { id, op, params }),
-    onState: (callback) => context.on('state', callback),
-    onTerminal: (callback) => context.on('terminal', callback),
+    click: (id, sessionId, location) => call('click', { id, sessionId, location }),
+    config: () => call('config'),
+    saveMachine: (machine) => call('save-machine', machine),
+    removeMachine: (id) => call('remove-machine', id),
+    selectMachine: (id) => call('select-machine', id),
+    connect: (id) => call('connect', id),
+    disconnect: (id) => call('disconnect', id),
+    openWorkspace: (machineId, workspaceId) => call('open-workspace', { machineId, workspaceId }),
+    closeWorkspace: (id) => call('close-workspace', id),
+    pty: (id, op, params = {}) => call('pty', { id, op, params }),
+    onState: (callback) => context.ui.subscribe('state', callback),
+    onTerminal: (callback) => context.ui.subscribe('terminal', callback),
   };
   const root = createRoot(container);
   root.render(<App context={context} />);

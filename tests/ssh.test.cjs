@@ -78,7 +78,7 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     filePlugin.paths = module.paths;
     filePlugin._compile(buildSync({ entryPoints: ['plugins/files/main.ts'], bundle: true, platform: 'node', packages: 'external', write: false }).outputFiles[0].text, resolve('tests/files-main.cjs'));
     const handlers = {};
-    const disposeFiles = filePlugin.exports.activate({ handle: (name, handler) => { handlers[name] = handler; return () => {}; } });
+    const disposeFiles = filePlugin.exports.activate({ ui: { handle: (name, handler) => { handlers[name] = handler; return () => {}; } } });
     const remoteText = join(home, 'remote.md');
     writeFileSync(remoteText, '# Remote Markdown\n');
     try {
@@ -100,7 +100,7 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     gitPlugin.paths = module.paths;
     gitPlugin._compile(buildSync({ entryPoints: ['plugins/git/main.ts'], bundle: true, platform: 'node', packages: 'external', write: false }).outputFiles[0].text, resolve('tests/git-main.cjs'));
     const gitHandlers = {};
-    const disposeGit = gitPlugin.exports.activate({ handle: (name, handler) => { gitHandlers[name] = handler; return () => {}; } });
+    const disposeGit = gitPlugin.exports.activate({ ui: { handle: (name, handler) => { gitHandlers[name] = handler; return () => {}; } } });
     const target = { machine: { id: 'remote', name: 'Remote', host: 'wangcai-test' }, sessionId: session.id };
     const cwdOutput = [];
     const off = terminal.onData(event => cwdOutput.push(Buffer.from(event.data).toString()));
