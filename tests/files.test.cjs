@@ -123,7 +123,8 @@ test('view picker browses current terminal directory; file links preview code an
     assert.deepEqual(await page.evaluate(() => window.missingClicks), []);
     assert.equal(await fileTabs.getByRole('tab').count(), beforeMissing);
     assert.equal(await page.getByRole('alert').filter({ hasText: 'No such file' }).count(), 0);
-    while (await page.locator('.close-tab:not([aria-label="关闭 文件"])').count()) await page.locator('.close-tab:not([aria-label="关闭 文件"])').last().click();
+    const closeOthers = page.locator('.close-tab:not([aria-label="关闭 文件"])');
+    while (await closeOthers.count()) await closeOthers.last().click();
     await directory.getByRole('button', { name: 'sample.ts', exact: true }).waitFor();
     await directory.getByRole('button', { name: 'sub/', exact: true }).click();
     await page.getByText('空目录', { exact: true }).waitFor();
@@ -148,6 +149,8 @@ test('view picker browses current terminal directory; file links preview code an
     await page.locator('#view-menu').getByRole('button', { name: '文件', exact: true }).click();
     await page.getByText('空目录', { exact: true }).waitFor();
     await page.getByRole('button', { name: '新建工作区', exact: true }).click();
+    await page.getByRole('button', { name: '新建侧栏标签页' }).click();
+    await page.locator('#view-menu').getByRole('button', { name: '文件', exact: true }).click();
     await directory.getByRole('button', { name: 'sample.ts', exact: true }).waitFor();
     await page.getByRole('tablist', { name: '本机 工作区' }).getByRole('tab').first().click();
     await page.getByText('空目录', { exact: true }).waitFor();

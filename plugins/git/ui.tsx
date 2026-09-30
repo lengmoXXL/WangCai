@@ -173,14 +173,16 @@ function Repository({ context, terminal, activation }: { context: Context; termi
   </section>;
 }
 
-function GitView({ context, activation }: { context: Context; activation: number }) {
+function GitView({ context, activation, workspaceId }: { context: Context; activation: number; workspaceId?: string }) {
   const [terminal, setTerminal] = useState<ActiveTerminal | null>(null);
   useEffect(() => {
-    const off = context.global.subscribe<ActiveTerminal | null>('terminal:active', value => setTerminal(previous =>
-      JSON.stringify(previous) === JSON.stringify(value) ? previous : value));
+    const off = context.global.subscribe<ActiveTerminal | null>('terminal:active', (value) => {
+      if (workspaceId !== undefined && value !== null && value.workspaceId !== workspaceId) return;
+      setTerminal(previous => JSON.stringify(previous) === JSON.stringify(value) ? previous : value);
+    });
     void context.global.publish('terminal:query', null);
     return off;
-  }, [context, activation]);
+  }, [context, activation, workspaceId]);
   if (!terminal) return <div className="git-note">请选择一个已连接的终端</div>;
   return <Repository key={JSON.stringify(terminal)} context={context} terminal={terminal} activation={activation} />;
 }
@@ -197,7 +199,7 @@ function openTab(context: Context, workspaceId?: string) {
   void context.host.request('tabs', { id: 'history', title: 'Git', workspaceId, mount(container: HTMLElement) {
     const root = createRoot(container);
     let activation = 0;
-    return { onSelect: () => root.render(<GitView context={context} activation={++activation} />), dispose: () => root.unmount() };
+    return { onSelect: () => root.render(<GitView context={context} activation={++activation} workspaceId={workspaceId} />), dispose: () => root.unmount() };
   } });
 }
 

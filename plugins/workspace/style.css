@@ -32,7 +32,7 @@
 .wangcai-workspace .terminal-pane { display: none; height: 100%; padding: 10px 8px 6px 12px; flex-direction: column; }
 .wangcai-workspace .terminal-pane.active { display: flex; }
 .wangcai-workspace .terminal-surface { flex: 1; min-height: 0; }
-.wangcai-workspace .terminal-message { flex-shrink: 0; color: #96a4b2; font-size: 11px; padding: 6px 0; }
+.wangcai-workspace .terminal-message { flex-shrink: 0; display: flex; align-items: center; gap: 8px; color: #96a4b2; font-size: 11px; padding: 6px 0; }
 .wangcai-workspace .error-banner { display: flex; gap: 12px; justify-content: space-between; padding: 8px 12px; font-size: 11px; background: #322925; color: #e6c3a2; max-height: 100px; overflow: auto; white-space: pre-wrap; }
 .wangcai-workspace .error-banner button { padding: 0 5px; align-self: flex-start; }
 .wangcai-workspace .error { color: #e9a894; overflow-wrap: anywhere; }

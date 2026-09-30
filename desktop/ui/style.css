@@ -26,7 +26,7 @@ body { background: #11151b; color: #dce3eb; font-family: -apple-system, sans-ser
 .sidebar-tab button:focus-visible { outline: 2px solid #9bc7bc; outline-offset: -2px; }
 .sidebar-content { flex: 1; min-height: 0; }
 .sidebar-panel { height: 100%; min-width: 0; overflow: hidden; }
-.plugin[hidden], .desktop-sidebar[hidden], .sidebar-divider[hidden], .sidebar-panel[hidden] { display: none; }
+.plugin[hidden], .desktop-sidebar[hidden], .sidebar-divider[hidden], .sidebar-panel[hidden], .sidebar-tab[hidden] { display: none; }
 .view-picker, .sidebar-toggle { width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent; color: #aab6c2; cursor: pointer; -webkit-app-region: no-drag; }
 .view-picker { flex-shrink: 0; align-self: center; margin: 0 4px; font-size: 20px; }
 .sidebar-toggle { position: fixed; top: 4px; right: 6px; z-index: 4; background: #161b22; }

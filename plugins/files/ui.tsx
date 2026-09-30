@@ -73,13 +73,16 @@ function Directory({ context, location }: { context: Context; location: { machin
   </div>;
 }
 
-function DirectoryView({ context }: { context: Context }) {
+function DirectoryView({ context, workspaceId }: { context: Context; workspaceId?: string }) {
   const [terminal, setTerminal] = useState<ActiveTerminal | null>(null);
   useEffect(() => {
-    const off = context.global.subscribe<ActiveTerminal | null>('terminal:active', setTerminal);
+    const off = context.global.subscribe<ActiveTerminal | null>('terminal:active', (value) => {
+      if (workspaceId !== undefined && value !== null && value.workspaceId !== workspaceId) return;
+      setTerminal(value);
+    });
     void context.global.publish('terminal:query', null);
     return off;
-  }, [context]);
+  }, [context, workspaceId]);
   return <Directory key={`${terminal?.machine.id}:${terminal?.sessionId}`} context={context} location={terminal} />;
 }
 
@@ -112,7 +115,7 @@ function openTab(context: Context, workspaceId?: string) {
     const root = createRoot(container);
     let revision = 0;
     return {
-      onSelect: () => root.render(<DirectoryView key={++revision} context={context} />),
+      onSelect: () => root.render(<DirectoryView key={++revision} context={context} workspaceId={workspaceId} />),
       dispose: () => root.unmount(),
     };
   } });

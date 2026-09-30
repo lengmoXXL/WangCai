@@ -47,7 +47,7 @@ test('Git tab follows terminal cwd and displays two read-only diffs', { timeout:
     await worktree.getByRole('button', { name: '并排查看 sample.ts' }).click();
     await page.locator('.git-pane').nth(1).locator('.git-editor .view-lines').filter({ hasText: 'WORKTREE_VALUE' }).waitFor();
     assert.equal(await page.locator('.git-pane').count(), 2);
-    assert.equal(await page.locator('.sidebar-tab').count(), 1);
+    assert.equal(await page.locator('.sidebar-tab:visible').count(), 1);
     assert.equal(await page.locator('.git-diff[data-reading=split]').count(), 2);
     await page.getByRole('button', { name: '双栏', exact: true }).click();
     assert.equal(await page.locator('.git-diff[data-reading=inline]').count(), 2);
@@ -63,7 +63,7 @@ test('Git tab follows terminal cwd and displays two read-only diffs', { timeout:
     await page.locator('.git-editor .view-lines').filter({ hasText: 'ORIGINAL_VALUE' }).waitFor();
     await page.getByRole('button', { name: '新建侧栏标签页' }).click();
     await page.locator('#view-menu').getByRole('button', { name: 'Git', exact: true }).click();
-    assert.equal(await page.locator('.sidebar-tab').count(), 1);
+    assert.equal(await page.locator('.sidebar-tab:visible').count(), 1);
     await page.evaluate(({ home, sessionId }) => window.wangcai.request('workspace', 'pty', { id: 'local', op: 'input', params: { session_id: sessionId, data: `cd '${home}'\r` } }), { home, sessionId });
     await page.getByRole('button', { name: '刷新 Git' }).click();
     await page.locator('.git-note[role=alert]').filter({ hasText: 'not a git repository' }).waitFor();

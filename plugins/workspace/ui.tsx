@@ -151,13 +151,11 @@ function App({ context }: { context: Context }) {
   const state = selected ? states[selected] : undefined;
   const workspaces = (config?.workspaces ?? []).filter((workspace) => workspace.machineId === selected);
   const sessionFor = (workspace: Workspace) => (states[workspace.machineId]?.sessions ?? []).find((session) => session.id === workspace.sessionId);
-  const liveSession = (workspace: Workspace) => {
-    const session = sessionFor(workspace);
-    return session?.exit_code === null ? session : undefined;
-  };
+  const liveSession = (session: Session | undefined) => session?.exit_code === null ? session : undefined;
   const activeWorkspaceId = selected ? selectedWorkspaces[selected] : undefined;
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? workspaces[0];
-  const activeSession = activeWorkspace ? liveSession(activeWorkspace) : undefined;
+  const activeWorkspaceSession = activeWorkspace ? sessionFor(activeWorkspace) : undefined;
+  const activeSession = liveSession(activeWorkspaceSession);
   const connected = state?.status === 'connected';
   const menuStatus = menu ? states[menu.machineId]?.status : undefined;
   const menuConnected = menuStatus === 'connected' || menuStatus === 'connecting';
@@ -168,6 +166,9 @@ function App({ context }: { context: Context }) {
     void publish();
     return context.global.subscribe('terminal:query', publish);
   }, [context, machine, activeSession?.id, activeWorkspace?.id, connected]);
+  useEffect(() => {
+    if (config) context.global.publish('workspace:list', config.workspaces.map((workspace) => workspace.id));
+  }, [context, config]);
 
   const selectWorkspace = (machineId: string, workspaceId: string) => {
     setSelectedWorkspaces((workspaces) => ({ ...workspaces, [machineId]: workspaceId }));
@@ -230,7 +231,7 @@ function App({ context }: { context: Context }) {
                 event.preventDefault();
                 event.currentTarget.click();
               }}>
-                <span className="tab-label"><span className={`status-dot ${liveSession(workspace) ? 'connected' : 'disconnected'}`} />工作区 {number}</span><button aria-label={`结束工作区 ${number}`} disabled={!itemConnected} onClick={(event) => {
+                <span className="tab-label"><span className={`status-dot ${liveSession(sessionFor(workspace)) ? 'connected' : 'disconnected'}`} />工作区 {number}</span><button aria-label={`结束工作区 ${number}`} disabled={!itemConnected} onClick={(event) => {
                   event.stopPropagation();
                   void api.closeWorkspace(workspace.id).then(setConfig).catch((error: Error) => setError(error.message));
                 }}>×</button>
@@ -250,7 +251,10 @@ function App({ context }: { context: Context }) {
           const session = sessionFor(workspace);
           return session ? <TerminalPane key={`${workspace.id}:${session.id}`} machineId={selected!} session={session} active={workspace.id === activeWorkspace?.id} connected={connected} generation={generation} /> : null;
         })}
-        {activeWorkspace && !sessionFor(activeWorkspace) && <div className="terminal-message">终端未运行，点击左侧工作区重建</div>}
+        {activeWorkspace && !activeSession && <div className="terminal-message">
+          {!activeWorkspaceSession && '终端未运行'}
+          <button onClick={() => selectWorkspace(activeWorkspace.machineId, activeWorkspace.id)}>重新打开终端</button>
+        </div>}
       </div>
     </main>
     {menu && <div className="menu-backdrop" onClick={() => { setMenu(undefined); menu.trigger.focus(); }}>

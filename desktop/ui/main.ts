@@ -89,24 +89,78 @@ async function start() {
     };
     paint();
   }
-  type Tab = { button: HTMLButtonElement; panel: HTMLElement; content: TabContent };
-  const tabKey = (plugin: string, id: string) => JSON.stringify([plugin, id]);
+  type Tab = { key: string; element: HTMLElement; button: HTMLButtonElement; panel: HTMLElement; content: TabContent; workspaceId?: string };
+  const group = (workspaceId?: string) => workspaceId ?? '';
+  let activeWorkspaceId: string | undefined;
+  let current = '';
+  const selected = new Map<string, string>();
+  const tabKey = (plugin: string, id: string, workspaceId?: string) => JSON.stringify([plugin, group(workspaceId), id]);
   const tabs = new Map<string, Tab>();
   const records = new Map<string, TabRecord>();
   const persist = () => { void window.wangcai.saveTabs([...records.values()]); };
-  for (const record of await window.wangcai.loadTabs()) records.set(tabKey(record.plugin, record.id), record);
-  let selected = '';
-  const select = (id: string) => {
-    selected = id;
+  for (const record of await window.wangcai.loadTabs()) records.set(tabKey(record.plugin, record.id, record.workspaceId), record);
+  const show = () => {
     right.hidden = !tabs.size;
     toggle.setAttribute('aria-expanded', String(!right.hidden));
     for (const [key, tab] of tabs) {
-      tab.panel.hidden = key !== id;
-      tab.button.setAttribute('aria-selected', String(key === id));
+      const visible = tab.workspaceId === undefined || tab.workspaceId === activeWorkspaceId;
+      const isCurrent = key === current;
+      tab.element.hidden = !visible;
+      tab.button.setAttribute('aria-selected', String(isCurrent));
+      tab.panel.hidden = !visible || !isCurrent;
     }
-    tabs.get(id)?.content.onSelect?.();
-    tabs.get(id)?.button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   };
+  const refresh = () => tabs.get(current)?.content.onSelect?.();
+  const select = (key: string) => {
+    const tab = tabs.get(key);
+    current = tab ? key : '';
+    if (tab) selected.set(group(tab.workspaceId), key);
+    show();
+    refresh();
+    tab?.button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  };
+  const removeTab = (key: string) => {
+    const tab = tabs.get(key)!;
+    void tab.content.dispose();
+    tab.element.remove();
+    tab.panel.remove();
+    tabs.delete(key);
+    records.delete(key);
+  };
+  const settle = () => {
+    persist();
+    const wanted = selected.get(group(activeWorkspaceId)) ?? selected.get(group());
+    current = wanted && tabs.has(wanted) ? wanted : '';
+    show();
+    refresh();
+  };
+  disposers.push(window.wangcai.subscribe('workspace:list', (value) => {
+    const workspaceIds = new Set(value as string[]);
+    for (const [key, tab] of [...tabs]) {
+      if (tab.workspaceId === undefined || workspaceIds.has(tab.workspaceId)) continue;
+      if (activeWorkspaceId === tab.workspaceId) activeWorkspaceId = undefined;
+      removeTab(key);
+    }
+    settle();
+  }));
+  disposers.push(window.wangcai.subscribe('terminal:active', (value) => {
+    const next = (value as { workspaceId?: string } | null)?.workspaceId;
+    if (next === undefined || next === activeWorkspaceId) return;
+    activeWorkspaceId = next;
+    for (const [key, tab] of [...tabs]) {
+      if (tab.workspaceId !== undefined) continue;
+      const record = records.get(key)!;
+      const moved = tabKey(record.plugin, record.id, next);
+      tabs.delete(key);
+      tab.workspaceId = next;
+      tab.key = moved;
+      tabs.set(moved, tab);
+      records.delete(key);
+      records.set(moved, { ...record, workspaceId: next });
+      if (selected.get(group()) === key) selected.set(group(next), moved);
+    }
+    settle();
+  }));
   const picker = document.createElement('button');
   picker.className = 'view-picker';
   picker.textContent = '+';
@@ -132,7 +186,7 @@ async function start() {
   toggle.onclick = () => {
     right.hidden = !right.hidden;
     toggle.setAttribute('aria-expanded', String(!right.hidden));
-    if (!right.hidden) tabs.get(selected)?.content.onSelect?.();
+    if (!right.hidden) refresh();
     menu.hidePopover();
   };
   root.append(toggle, menu);
@@ -169,8 +223,9 @@ async function start() {
         return sidebar;
       };
       const openTab = (options: TabOptions) => {
-        const key = tabKey(plugin.id, options.id);
-        const record: TabRecord = { plugin: plugin.id, id: options.id, workspaceId: options.workspaceId };
+        const workspaceId = options.workspaceId ?? activeWorkspaceId;
+        const key = tabKey(plugin.id, options.id, workspaceId);
+        const record: TabRecord = { plugin: plugin.id, id: options.id, workspaceId };
         records.set(key, record);
         persist();
         const existing = tabs.get(key);
@@ -187,30 +242,28 @@ async function start() {
         button.setAttribute('role', 'tab');
         button.textContent = options.title;
         button.title = options.tooltip ?? options.title;
-        button.onclick = () => select(key);
         const close = document.createElement('button');
         close.className = 'close-tab';
         close.textContent = '×';
         close.setAttribute('aria-label', `关闭 ${options.title}`);
-        close.onclick = () => {
-          const keys = [...tabs.keys()];
-          const index = keys.indexOf(key);
-          void tabs.get(key)!.content.dispose();
-          tabs.delete(key);
-          records.delete(key);
-          persist();
-          panel.remove(); element.remove();
-          if (selected === key) select(keys[index - 1] ?? keys[index + 1] ?? '');
-        };
-        element.append(button, close);
-        header.insertBefore(element, picker);
         const panel = document.createElement('section');
         panel.className = 'sidebar-panel';
         panel.dataset.plugin = plugin.id;
         panel.setAttribute('role', 'tabpanel');
         panel.setAttribute('aria-label', options.title);
+        const tab: Tab = { key, element, button, panel, workspaceId, content: options.mount(panel) };
+        button.onclick = () => select(tab.key);
+        close.onclick = () => {
+          const siblings = [...tabs].filter(([, item]) => group(item.workspaceId) === group(tab.workspaceId)).map(([itemKey]) => itemKey);
+          const index = siblings.indexOf(tab.key);
+          removeTab(tab.key);
+          persist();
+          if (current === tab.key) select(siblings[index - 1] ?? siblings[index + 1] ?? '');
+        };
+        element.append(button, close);
+        header.insertBefore(element, picker);
         content.append(panel);
-        tabs.set(key, { button, panel, content: options.mount(panel) });
+        tabs.set(key, tab);
         select(key);
       };
       const context: Context = {
