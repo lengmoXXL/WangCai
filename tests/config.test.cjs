@@ -46,6 +46,7 @@ test('user config: init.ts drives the UI theme, the fonts and the terminal', { t
     writeFileSync(init, 'export default { theme: ');
     page = await launch();
     assert.deepEqual(await page.evaluate(() => [getComputedStyle(document.body).backgroundColor, document.documentElement.style.colorScheme]), ['rgb(17, 21, 27)', 'dark']);
+    assert.equal(await page.evaluate(async () => (await window.wangcai.config()).font.terminal.lineHeight), 1);
     await desktop.close(); desktop = undefined;
   } finally {
     if (desktop) await desktop.close().catch(() => {});

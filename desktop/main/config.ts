@@ -7,7 +7,7 @@ import type { Profile, Theme } from '@wangcai/sdk';
 const DEFAULT_PROFILE: Profile = {
   font: {
     ui: { family: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
-    terminal: { family: '"SFMono-Regular", Menlo, Monaco, monospace', size: 13, lineHeight: 1.25 },
+    terminal: { family: '"SFMono-Regular", Menlo, Monaco, monospace', size: 13, lineHeight: 1 },
   },
   theme: {
     background: '#11151b',
