@@ -7,7 +7,7 @@ import 'monaco-editor/basic-languages/monaco.contribution.js';
 import 'monaco-editor/languages/features/json/jsonMode.js';
 import { jsonDefaults } from 'monaco-editor/languages/features/json/register.js';
 import 'monaco-editor/editor/contrib/find/browser/findController.js';
-import type { DirectoryEntry } from '@wangcai/sdk';
+import type { DirectoryEntry, Profile, Theme } from '@wangcai/sdk';
 import type { Context } from '@wangcai/sdk/channel';
 import type { ActiveTerminal, FileClick } from './shared';
 import './style.css';
@@ -15,6 +15,38 @@ import './style.css';
 export const title = '文件';
 let activeWorkspaceId: string | undefined;
 jsonDefaults.setModeConfiguration({ tokens: true });
+
+function editorTheme(theme: Theme): monaco.editor.IStandaloneThemeData {
+  const hex = (color: string) => color.slice(1);
+  const alpha = (color: string, value: number) => `${color}${Math.round(value * 255).toString(16).padStart(2, '0')}`;
+  return {
+    base: getComputedStyle(document.documentElement).colorScheme === 'light' ? 'vs' : 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: hex(theme.muted) },
+      { token: 'string', foreground: hex(theme.green) },
+      { token: 'number', foreground: hex(theme.yellow) },
+      { token: 'keyword', foreground: hex(theme.magenta) },
+      { token: 'type', foreground: hex(theme.cyan) },
+      { token: 'function', foreground: hex(theme.blue) },
+      { token: 'constant', foreground: hex(theme.brightMagenta) },
+      { token: 'delimiter', foreground: hex(theme.brightBlack) },
+    ],
+    colors: {
+      'editor.background': theme.background,
+      'editor.foreground': theme.foreground,
+      'editorLineNumber.foreground': theme.muted,
+      'editorCursor.foreground': theme.cursor,
+      'editor.selectionBackground': theme.selection,
+      'editorWidget.background': theme.overlay,
+      'editorWidget.border': theme.border,
+      'editorGutter.background': theme.background,
+      'scrollbarSlider.background': alpha(theme.muted, 0.25),
+      'scrollbarSlider.hoverBackground': alpha(theme.muted, 0.4),
+      'scrollbarSlider.activeBackground': alpha(theme.muted, 0.5),
+    },
+  };
+}
 
 function Preview({ file, text }: { file: FileClick; text: string }) {
   const element = useRef<HTMLDivElement>(null);
@@ -24,7 +56,7 @@ function Preview({ file, text }: { file: FileClick; text: string }) {
     const name = file.path.split('/').pop()!;
     const language = monaco.languages.getLanguages().find((item) => item.filenames?.includes(name) || item.extensions?.some((extension) => name.endsWith(extension)))?.id ?? 'plaintext';
     const editor = monaco.editor.create(element.current!, {
-      value: text, language, theme: 'vs-dark', readOnly: true, domReadOnly: true,
+      value: text, language, theme: 'wangcai', readOnly: true, domReadOnly: true,
       automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false,
       fontSize: 13, lineNumbersMinChars: 3, renderLineHighlight: 'none',
       ariaLabel: '代码预览', contextmenu: false,
@@ -122,6 +154,8 @@ function openTab(context: Context, workspaceId?: string) {
 }
 
 export async function mount(_container: HTMLElement, context: Context) {
+  const profile = await context.host.request<Profile>('config');
+  monaco.editor.defineTheme('wangcai', editorTheme(profile.theme));
   const response = await fetch(new URL('./ui.worker.js', import.meta.url));
   if (!response.ok) throw new Error('Cannot load file preview worker');
   const workerURL = URL.createObjectURL(new Blob([await response.text()], { type: 'text/javascript' }));

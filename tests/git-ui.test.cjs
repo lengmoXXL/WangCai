@@ -53,6 +53,7 @@ test('Git tab follows terminal cwd and displays two read-only diffs', { timeout:
     assert.equal(await page.locator('.git-diff[data-reading=inline]').count(), 2);
     await page.getByRole('button', { name: '折行', exact: true }).click();
     assert.equal(await page.locator('.git-diff[data-wrap=false]').count(), 2);
+    assert.deepEqual(await page.locator('.git-editor .monaco-editor').first().evaluate((element) => ['--vscode-editor-background', '--vscode-diffEditor-insertedTextBackground', '--vscode-diffEditor-removedTextBackground'].map((name) => getComputedStyle(element).getPropertyValue(name))), ['#11151b', 'rgba(155, 199, 188, 0.2)', 'rgba(230, 140, 140, 0.2)']);
     const workerReady = page.waitForEvent('worker');
     await page.evaluate(() => window.MonacoEnvironment.getWorker('', 'editorWorkerService'));
     const worker = await workerReady;

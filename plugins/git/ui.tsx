@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import * as monaco from 'monaco-editor/editor/editor.api.js';
 import 'monaco-editor/basic-languages/monaco.contribution.js';
 import 'monaco-editor/editor/contrib/find/browser/findController.js';
+import type { Profile, Theme } from '@wangcai/sdk';
 import type { Context } from '@wangcai/sdk/channel';
 import type { ActiveTerminal, Commit, Comparison, Diff, GitFile, History, Overview, Stage } from './shared';
 import './style.css';
@@ -10,6 +11,43 @@ import './style.css';
 export const title = 'Git';
 let activeWorkspaceId: string | undefined;
 const stages: Record<Stage, string> = { conflicted: '冲突', staged: '已暂存', unstaged: '未暂存', untracked: '未跟踪' };
+
+function editorTheme(theme: Theme): monaco.editor.IStandaloneThemeData {
+  const hex = (color: string) => color.slice(1);
+  const alpha = (color: string, value: number) => `${color}${Math.round(value * 255).toString(16).padStart(2, '0')}`;
+  return {
+    base: getComputedStyle(document.documentElement).colorScheme === 'light' ? 'vs' : 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: hex(theme.muted) },
+      { token: 'string', foreground: hex(theme.green) },
+      { token: 'number', foreground: hex(theme.yellow) },
+      { token: 'keyword', foreground: hex(theme.magenta) },
+      { token: 'type', foreground: hex(theme.cyan) },
+      { token: 'function', foreground: hex(theme.blue) },
+      { token: 'constant', foreground: hex(theme.brightMagenta) },
+      { token: 'delimiter', foreground: hex(theme.brightBlack) },
+    ],
+    colors: {
+      'editor.background': theme.background,
+      'editor.foreground': theme.foreground,
+      'editorLineNumber.foreground': theme.muted,
+      'editorCursor.foreground': theme.cursor,
+      'editor.selectionBackground': theme.selection,
+      'editorWidget.background': theme.overlay,
+      'editorWidget.border': theme.border,
+      'editorGutter.background': theme.background,
+      'multiDiffEditor.border': theme.border,
+      'diffEditor.insertedTextBackground': alpha(theme.green, 0.2),
+      'diffEditor.removedTextBackground': alpha(theme.red, 0.2),
+      'diffEditor.insertedLineBackground': alpha(theme.green, 0.08),
+      'diffEditor.removedLineBackground': alpha(theme.red, 0.08),
+      'scrollbarSlider.background': alpha(theme.muted, 0.25),
+      'scrollbarSlider.hoverBackground': alpha(theme.muted, 0.4),
+      'scrollbarSlider.activeBackground': alpha(theme.muted, 0.5),
+    },
+  };
+}
 
 function DiffEditor({ diff, path, split, wrap }: { diff: Diff; path: string; split: boolean; wrap: boolean }) {
   const element = useRef<HTMLDivElement>(null);
@@ -20,7 +58,7 @@ function DiffEditor({ diff, path, split, wrap }: { diff: Diff; path: string; spl
     const original = monaco.editor.createModel(diff.oldText, language);
     const modified = monaco.editor.createModel(diff.newText, language);
     const view = monaco.editor.createDiffEditor(element.current!, {
-      theme: 'vs-dark', readOnly: true, domReadOnly: true,
+      theme: 'wangcai', readOnly: true, domReadOnly: true,
       automaticLayout: true, scrollBeyondLastLine: false,
       renderOverviewRuler: false, hideUnchangedRegions: { enabled: true },
       useInlineViewWhenSpaceIsLimited: false, fontSize: 13, lineNumbersMinChars: 3,
@@ -204,6 +242,8 @@ function openTab(context: Context, workspaceId?: string) {
 }
 
 export async function mount(_container: HTMLElement, context: Context) {
+  const profile = await context.host.request<Profile>('config');
+  monaco.editor.defineTheme('wangcai', editorTheme(profile.theme));
   const offActive = context.global.subscribe<ActiveTerminal | null>('terminal:active', (value) => { activeWorkspaceId = value?.workspaceId; });
   void context.global.publish('terminal:query', null);
   const response = await fetch(new URL('./ui.worker.js', import.meta.url));
