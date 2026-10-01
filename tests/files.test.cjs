@@ -29,7 +29,8 @@ test('view picker browses current terminal directory; file links preview code, M
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-    await page.getByRole('button', { name: '新建工作区', exact: true }).click();
+    await page.locator('.machine.connected').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: /新建工作区/ }).click();
     const sessionId = await page.waitForFunction(async () => (await window.wangcai.request('workspace', 'config')).workspaces[0]?.sessionId).then((handle) => handle.jsonValue());
     const clickLink = async (link, label = link, cwd = home) => {
       const output = label === link ? link : `\\033]8;;${link}\\007${label}\\033]8;;\\007`;
@@ -171,7 +172,8 @@ test('view picker browses current terminal directory; file links preview code, M
     await page.getByRole('button', { name: '新建侧栏标签页' }).click();
     await page.locator('#view-menu').getByRole('button', { name: '文件', exact: true }).click();
     await page.getByText('空目录', { exact: true }).waitFor();
-    await page.getByRole('button', { name: '新建工作区', exact: true }).click();
+    await page.locator('.machine.connected').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: /新建工作区/ }).click();
     await page.getByRole('button', { name: '新建侧栏标签页' }).click();
     await page.locator('#view-menu').getByRole('button', { name: '文件', exact: true }).click();
     await directory.getByRole('button', { name: 'sample.ts', exact: true }).waitFor();
@@ -200,7 +202,7 @@ test('view picker browses current terminal directory; file links preview code, M
     env.ELECTRON_RENDERER_URL = `http://127.0.0.1:${devServer.httpServer.address().port}`;
     desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
     page = await desktop.firstWindow();
-    await page.getByRole('button', { name: '机器设置' }).waitFor();
+    await page.locator('.machine.connected').waitFor();
     await page.evaluate(path => window.wangcai.publish('onclick', { type: 'file', machine: { id: 'local', name: '本机' }, path }), code);
     await page.locator('.monaco-editor .view-lines').filter({ hasText: 'CODE_PREVIEW' }).waitFor();
   } finally {

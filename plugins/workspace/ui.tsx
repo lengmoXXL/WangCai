@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { fileLocation, registerFileLinks } from './links';
 import type { WorkspaceApi } from './main';
-import type { Config, MachineState, Session, WangcaiAPI, Workspace } from './shared';
+import type { Config, Machine, MachineState, Session, WangcaiAPI, Workspace } from './shared';
 import '@xterm/xterm/css/xterm.css';
 import './style.css';
 import type { Profile } from '@wangcai/sdk';
@@ -101,44 +102,35 @@ function TerminalPane({ machineId, session, active, connected, generation, profi
   </div>;
 }
 
-function Settings({ config, onUpdate, onClose }: { config: Config; onUpdate: (config: Config) => void; onClose: () => void }) {
-  const [editing, setEditing] = useState<string>();
-  const [name, setName] = useState('');
-  const [host, setHost] = useState('');
+function MachineForm({ machine, onUpdate, onClose }: { machine?: Machine; onUpdate: (config: Config) => void; onClose: () => void }) {
+  const [name, setName] = useState(machine?.name ?? '');
+  const [host, setHost] = useState(machine?.host ?? '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const reset = () => { setEditing(undefined); setName(''); setHost(''); setError(''); };
   return <div className="modal-backdrop" onClick={onClose}>
-    <section className="settings" role="dialog" aria-modal="true" aria-label="机器设置" onClick={(event) => event.stopPropagation()}>
-      <header><h2>机器设置</h2><button className="icon-button" onClick={onClose} aria-label="关闭设置">×</button></header>
-      <div className="machine-settings-list">
-        {config.machines.filter((machine) => machine.host).map((machine) => <div className="machine-setting" key={machine.id}>
-          <span><strong>{machine.name}</strong>{machine.host !== machine.name && <small>{machine.host}</small>}</span>
-          <div className="actions">
-            <button onClick={() => { setEditing(machine.id); setName(machine.name); setHost(machine.host!); setError(''); }}>编辑</button>
-            <button onClick={() => { void api.removeMachine(machine.id).then((config) => { onUpdate(config); if (editing === machine.id) reset(); }).catch((error: Error) => setError(error.message)); }}>移除</button>
-          </div>
-        </div>)}
-      </div>
+    <section className="machine-form" role="dialog" aria-modal="true" aria-label={machine ? '编辑机器' : '添加机器'} onClick={(event) => event.stopPropagation()}>
+      <header><h2>{machine ? '编辑机器' : '添加机器'}</h2><button className="icon-button" onClick={onClose} aria-label="关闭">×</button></header>
       <form onSubmit={(event) => {
         event.preventDefault(); setSaving(true); setError('');
-        void api.saveMachine({ id: editing, name, host }).then((config) => { onUpdate(config); reset(); }).catch((error: Error) => setError(error.message)).finally(() => setSaving(false));
+        void api.saveMachine({ id: machine?.id, name, host }).then((config) => { onUpdate(config); onClose(); }).catch((error: Error) => setError(error.message)).finally(() => setSaving(false));
       }}>
         <label>名称<input required placeholder="开发服务器" value={name} onChange={(event) => setName(event.target.value)} /></label>
         <label>SSH Host<input required placeholder="dev-server 或 user@host" value={host} onChange={(event) => setHost(event.target.value)} /></label>
         {error && <p className="error">{error}</p>}
-        <footer>{editing && <button type="button" onClick={reset}>取消编辑</button>}<button className="primary" disabled={saving} type="submit">{saving ? '保存中…' : editing ? '保存修改' : '添加机器'}</button></footer>
+        <footer><button type="button" onClick={onClose}>取消</button><button className="primary" disabled={saving} type="submit">{saving ? '保存中…' : machine ? '保存修改' : '添加机器'}</button></footer>
       </form>
     </section>
   </div>;
 }
 
+type Menu = { left: number; top: number; trigger: HTMLElement; label?: string; kind: 'header' | 'machine' | 'workspace' | 'empty'; machineId?: string; workspaceId?: string };
+
 function App({ context, profile }: { context: Context; profile: Profile }) {
   const [config, setConfig] = useState<Config>();
   const [states, setStates] = useState<Record<string, MachineState>>({});
   const [selectedWorkspaces, setSelectedWorkspaces] = useState<Record<string, string>>({});
-  const [settings, setSettings] = useState(false);
-  const [menu, setMenu] = useState<{ machineId: string; left: number; top: number; trigger: HTMLElement }>();
+  const [form, setForm] = useState<{ machine?: Machine }>();
+  const [menu, setMenu] = useState<Menu>();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -161,8 +153,6 @@ function App({ context, profile }: { context: Context; profile: Profile }) {
   const activeWorkspaceSession = activeWorkspace ? sessionFor(activeWorkspace) : undefined;
   const activeSession = liveSession(activeWorkspaceSession);
   const connected = state?.status === 'connected';
-  const menuStatus = menu ? states[menu.machineId]?.status : undefined;
-  const menuConnected = menuStatus === 'connected' || menuStatus === 'connecting';
   const generation = state?.generation ?? 0;
   const errorMessage = error || state?.error;
   useEffect(() => {
@@ -193,10 +183,27 @@ function App({ context, profile }: { context: Context; profile: Profile }) {
       setSelectedWorkspaces((workspaces) => ({ ...workspaces, [machineId]: result.workspaceId }));
     }).catch((error: Error) => setError(error.message)).finally(() => setBusy(false));
   };
+  const openMenu = (event: MouseEvent<HTMLElement>, target: Omit<Menu, 'left' | 'top' | 'trigger'>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setMenu({ ...target, trigger: event.currentTarget, left: event.clientX, top: event.clientY });
+  };
+  const closeMenu = () => {
+    if (!menu) return;
+    setMenu(undefined);
+    menu.trigger.focus();
+  };
+  const menuElement = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const node = menuElement.current;
+    if (!menu || !node) return;
+    node.style.left = `${Math.max(8, Math.min(menu.left, window.innerWidth - node.offsetWidth - 8))}px`;
+    node.style.top = `${Math.max(8, Math.min(menu.top, window.innerHeight - node.offsetHeight - 8))}px`;
+  }, [menu]);
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
-      if (event.metaKey && event.key === 't' && !settings) { event.preventDefault(); createWorkspace(); }
-      if (event.key === 'Escape') { setSettings(false); setMenu(undefined); menu?.trigger.focus(); }
+      if (event.metaKey && event.key === 't' && !form) { event.preventDefault(); createWorkspace(); }
+      if (event.key === 'Escape') { closeMenu(); setForm(undefined); }
     };
     window.addEventListener('keydown', listener);
     return () => window.removeEventListener('keydown', listener);
@@ -208,48 +215,64 @@ function App({ context, profile }: { context: Context; profile: Profile }) {
     setConfig({ ...config, selected: machineId });
     void api.selectMachine(machineId);
   };
+  const applyConfig = (config: Config) => {
+    setConfig(config);
+    void api.connect(config.selected);
+  };
+  const menuMachine = config.machines.find((item) => item.id === menu?.machineId);
+  const menuWorkspace = config.workspaces.find((workspace) => workspace.id === menu?.workspaceId);
+  const menuItems: ({ label: string; hint?: string; disabled?: boolean; run: () => void } | { separator: true })[] = [];
+  if (menu?.kind === 'header') menuItems.push({ label: '添加机器…', run: () => setForm({}) });
+  if (menu?.kind === 'machine' && menuMachine) {
+    const status = states[menuMachine.id]?.status ?? 'disconnected';
+    menuItems.push({ label: `在 ${menuMachine.name} 新建工作区`, hint: '⌘T', disabled: status !== 'connected' || busy, run: () => { selectMachine(menuMachine.id); createWorkspace(menuMachine.id); } });
+    menuItems.push({ label: status === 'connected' ? '断开连接' : status === 'connecting' ? '取消连接' : `连接 ${menuMachine.name}`, run: () => { void (status === 'disconnected' ? api.connect(menuMachine.id) : api.disconnect(menuMachine.id)).catch((error: Error) => setError(error.message)); } });
+    if (menuMachine.id !== 'local') {
+      menuItems.push({ separator: true });
+      menuItems.push({ label: '编辑机器…', run: () => setForm({ machine: menuMachine }) });
+      menuItems.push({ label: '移除机器…', run: () => { void api.removeMachine(menuMachine.id).then(applyConfig).catch((error: Error) => setError(error.message)); } });
+    }
+  }
+  if (menu?.kind === 'workspace' && menuWorkspace) {
+    const workspaceConnected = states[menuWorkspace.machineId]?.status === 'connected';
+    if (!liveSession(sessionFor(menuWorkspace))) menuItems.push({ label: '重新打开终端', disabled: !workspaceConnected || busy, run: () => selectWorkspace(menuWorkspace.machineId, menuWorkspace.id) });
+    menuItems.push({ label: '关闭工作区', disabled: !workspaceConnected, run: () => { void api.closeWorkspace(menuWorkspace.id).then(setConfig).catch((error: Error) => setError(error.message)); } });
+  }
+  if (menu?.kind === 'empty') {
+    menuItems.push({ label: '新建工作区', hint: '⌘T', disabled: !connected || busy, run: () => createWorkspace() });
+    menuItems.push({ label: '添加机器…', run: () => setForm({}) });
+  }
+
   return <div className="app">
-    {createPortal(<div className="sidebar">
-      <nav aria-label="机器">{config.machines.map((item) => {
+    {createPortal(<div className="sidebar" onContextMenu={(event) => openMenu(event, { kind: 'empty' })}>
+      <div className="sidebar-header" onContextMenu={(event) => openMenu(event, { kind: 'header' })}>工作区</div>
+      <nav aria-label="工作区">{config.machines.map((item) => {
         const itemStatus = states[item.id]?.status ?? 'disconnected';
         const itemSelected = selected === item.id;
-        const itemConnected = itemStatus === 'connected';
-        return <section className="machine-group" aria-label={item.name} key={item.id}>
-          <div className="machine-row" tabIndex={-1} onContextMenu={(event) => {
-            event.preventDefault();
-            setMenu({ machineId: item.id, left: Math.max(0, Math.min(event.clientX, window.innerWidth - 132)), top: Math.max(0, Math.min(event.clientY, window.innerHeight - 48)), trigger: event.currentTarget });
-          }}>
-            <button title={item.host ?? '本机'} aria-current={itemSelected ? 'page' : undefined} className={`machine ${itemSelected ? 'selected' : ''}`} onClick={() => selectMachine(item.id)}><span className={`status-dot ${itemStatus}`} /><span className="machine-name">{item.name}</span></button>
-            <button className="new-tab" title={`在 ${item.name} 新建工作区`} aria-label="新建工作区" disabled={!itemConnected || busy} onClick={() => {
-              selectMachine(item.id);
-              createWorkspace(item.id);
-            }}>+</button>
-          </div>
-          <div role="tablist" aria-label={`${item.name} 工作区`} aria-orientation="vertical">
+        return <section className="machine-group" key={item.id}>
+          <button title={item.host ?? '本机'} aria-current={itemSelected ? 'page' : undefined} className={`machine ${itemStatus} ${itemSelected ? 'current' : ''}`} onClick={() => selectMachine(item.id)} onContextMenu={(event) => openMenu(event, { kind: 'machine', label: item.name, machineId: item.id })}>
+            <svg className="glyph" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2.2 2.4h11.6v4.5H2.2zM2.2 9.1h11.6v4.5H2.2z" /><path d="M4.8 4.6h4.4M4.8 11.3h4.4" /></svg>
+            <span className="machine-name">{item.name}</span>
+          </button>
+          <div role="tablist" aria-label={`${item.name} 工作区`} aria-orientation="vertical" className={`workspaces ${itemStatus === 'connected' ? '' : 'offline'}`}>
             {config.workspaces.filter((workspace) => workspace.machineId === item.id).map((workspace, index) => {
               const current = itemSelected && activeWorkspace?.id === workspace.id;
-              const number = index + 1;
-              const label = workspace.name ?? `工作区 ${number}`;
-              return <div role="tab" aria-selected={current} tabIndex={0} key={workspace.id} className={`tab ${current ? 'selected' : ''}`} onClick={() => {
+              const label = workspace.name ?? `工作区 ${index + 1}`;
+              return <div role="tab" aria-selected={current} tabIndex={0} key={workspace.id} className={`workspace ${current ? 'selected' : ''} ${liveSession(sessionFor(workspace)) ? 'running' : ''}`} onClick={() => {
                 selectMachine(item.id);
                 selectWorkspace(item.id, workspace.id);
-              }} onKeyDown={(event) => {
+              }} onContextMenu={(event) => openMenu(event, { kind: 'workspace', label, workspaceId: workspace.id })} onKeyDown={(event) => {
                 if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
                 event.preventDefault();
                 event.currentTarget.click();
               }}>
-                <span className="tab-label"><span className={`status-dot ${liveSession(sessionFor(workspace)) ? 'connected' : 'disconnected'}`} /><span className="tab-name">{label}</span></span><button aria-label={`结束工作区 ${label}`} disabled={!itemConnected} onClick={(event) => {
-                  event.stopPropagation();
-                  void api.closeWorkspace(workspace.id).then(setConfig).catch((error: Error) => setError(error.message));
-                }}>×</button>
+                <svg className="glyph" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M1.6 3.2c0-.6.5-1.1 1.1-1.1h3l1.1 1.4h5.5c.6 0 1.1.5 1.1 1.1v6.2c0 .6-.5 1.1-1.1 1.1H2.7c-.6 0-1.1-.5-1.1-1.1z" /></svg>
+                <span className="name">{label}</span>
               </div>;
             })}
           </div>
         </section>;
       })}</nav>
-      <div className="sidebar-actions">
-        <button className="settings-button" onClick={() => setSettings(true)}>机器设置</button>
-      </div>
     </div>, sidebar)}
     <main>
       {errorMessage && <div className="error-banner"><span>{errorMessage}</span>{error && <button onClick={() => setError('')}>×</button>}</div>}
@@ -264,15 +287,15 @@ function App({ context, profile }: { context: Context; profile: Profile }) {
         </div>}
       </div>
     </main>
-    {menu && <div className="menu-backdrop" onClick={() => { setMenu(undefined); menu.trigger.focus(); }}>
-      <div className="machine-menu" role="menu" aria-label="机器操作" style={{ left: menu.left, top: menu.top }} onClick={(event) => event.stopPropagation()}>
-        <button role="menuitem" autoFocus onClick={() => {
-          void (menuConnected ? api.disconnect(menu.machineId) : api.connect(menu.machineId)).catch((error: Error) => setError(error.message));
-          setMenu(undefined); menu.trigger.focus();
-        }}>{menuStatus === 'connected' ? '断开' : menuStatus === 'connecting' ? '取消连接' : '连接'}</button>
+    {menu && <div className="menu-backdrop" onClick={closeMenu}>
+      <div className="context-menu" ref={menuElement} role="menu" aria-label="操作" onClick={(event) => event.stopPropagation()}>
+        {menu.label && <strong>{menu.label}</strong>}
+        {menuItems.map((item, index) => 'separator' in item
+          ? <hr key={index} />
+          : <button key={item.label} role="menuitem" autoFocus={index === 0} disabled={item.disabled} onClick={() => { closeMenu(); item.run(); }}>{item.label}{item.hint && <span>{item.hint}</span>}</button>)}
       </div>
     </div>}
-    {settings && <Settings config={config} onUpdate={(config) => { setConfig(config); void api.connect(config.selected); }} onClose={() => setSettings(false)} />}
+    {form && <MachineForm machine={form.machine} onUpdate={applyConfig} onClose={() => setForm(undefined)} />}
   </div>;
 }
 

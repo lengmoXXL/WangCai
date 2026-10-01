@@ -33,7 +33,7 @@ test('view menu switches plugins and handles empty, disconnected and closed term
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-    await page.getByRole('button', { name: '机器设置' }).waitFor();
+    await page.locator('.machine.connected').waitFor();
     const toggle = page.getByRole('button', { name: '切换右侧栏' });
     await toggle.click();
     const picker = page.getByRole('button', { name: '新建侧栏标签页' });
@@ -61,13 +61,14 @@ test('view menu switches plugins and handles empty, disconnected and closed term
     assert.equal(await page.locator('.sidebar-panel:visible').count(), 1);
     await picker.click();
     await menu.getByRole('button', { name: '文件', exact: true }).click();
-    await page.getByRole('button', { name: '新建工作区', exact: true }).click();
+    await page.locator('.machine.connected').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: /新建工作区/ }).click();
     const directory = page.getByRole('navigation', { name: '当前目录文件' });
     await directory.getByRole('button', { name: '.hidden.md', exact: true }).waitFor();
     assert.equal(await directory.getByRole('button', { name: '.hidden.md', exact: true }).locator('svg[data-kind=file]').count(), 1);
     assert.equal(await directory.getByRole('button', { name: '子目录 with spaces/', exact: true }).locator('svg[data-kind=folder]').count(), 1);
     for (const [side, label, delta, minimum, shrink] of [
-      ['left', '调整左侧栏宽度', 60, 140, -600],
+      ['left', '调整左侧栏宽度', 60, 120, -600],
       ['right', '调整右侧栏宽度', -80, 260, 800],
     ]) {
       const pane = page.locator(`.sidebar-${side}`);
@@ -116,7 +117,8 @@ test('view menu switches plugins and handles empty, disconnected and closed term
     await page.getByRole('tab', { name: '测试视图', exact: true }).click();
     assert.equal(await page.getByLabel('视图内容').inputValue(), 'preserved');
     assert.equal(await directory.isVisible(), false);
-    await page.getByRole('button', { name: '结束工作区 ~', exact: true }).click();
+    await page.getByRole('tab', { name: '~', exact: true }).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: '关闭工作区', exact: true }).click();
     await page.getByRole('tablist', { name: '本机 工作区' }).getByRole('tab').waitFor({ state: 'detached' });
     assert.equal(await page.locator('.sidebar-panel[data-plugin=files]').count(), 0);
     const existing = await page.evaluate(async () => (await window.wangcai.request('workspace', 'config')).workspaces.map((workspace) => workspace.id));
@@ -126,7 +128,8 @@ test('view menu switches plugins and handles empty, disconnected and closed term
     await picker.click();
     await menu.getByRole('button', { name: '文件', exact: true }).click();
     await noTerminal.waitFor();
-    await page.getByRole('button', { name: '新建工作区', exact: true }).click();
+    await page.locator('.machine.connected').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: /新建工作区/ }).click();
     await directory.getByRole('button', { name: '.hidden.md', exact: true }).waitFor();
     const sessionId = await page.evaluate(async () => (await window.wangcai.request('workspace', 'config')).workspaces.at(-1).sessionId);
     await page.evaluate((id) => window.wangcai.request('workspace', 'pty', { id: 'local', op: 'input', params: { session_id: id, data: 'exit\r' } }), sessionId);
@@ -135,11 +138,11 @@ test('view menu switches plugins and handles empty, disconnected and closed term
     await restart.click();
     await restart.waitFor({ state: 'detached' });
     await page.getByRole('button', { name: '本机', exact: true }).click({ button: 'right' });
-    await page.getByRole('menuitem', { name: '断开', exact: true }).click();
+    await page.getByRole('menuitem', { name: '断开连接', exact: true }).click();
     await noTerminal.waitFor();
     assert.equal(await directory.isVisible(), false);
     await page.getByRole('button', { name: '本机', exact: true }).click({ button: 'right' });
-    await page.getByRole('menuitem', { name: '连接', exact: true }).click();
+    await page.getByRole('menuitem', { name: '连接 本机', exact: true }).click();
     await directory.getByRole('button', { name: '.hidden.md', exact: true }).waitFor();
     await toggle.click();
     await page.waitForFunction(() => document.querySelector('.sidebar-right').hidden);

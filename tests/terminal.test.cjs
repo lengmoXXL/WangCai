@@ -26,7 +26,7 @@ test('the terminal view opens its own shell in the sidebar, reattaches it and ki
   const launch = async () => {
     desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
     const page = await desktop.firstWindow();
-    await page.waitForFunction(() => { const button = document.querySelector('[aria-label="新建工作区"]'); return button && !button.disabled; });
+    await page.locator('.machine.connected').waitFor();
     return page;
   };
   const openView = async (page, name) => {
@@ -53,7 +53,8 @@ test('the terminal view opens its own shell in the sidebar, reattaches it and ki
     assert.equal(await notice.textContent(), '请先打开一个工作区终端', 'without a workspace terminal the view explains itself');
     await page.getByRole('button', { name: '关闭 终端' }).click();
 
-    await page.getByRole('button', { name: '新建工作区', exact: true }).click();
+    await page.locator('.machine.connected').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: /新建工作区/ }).click();
     const workspaceSession = await page.waitForFunction(async () => (await window.wangcai.request('workspace', 'config')).workspaces[0]?.sessionId).then((handle) => handle.jsonValue());
     await typeUntil(page, '.terminal-pane.active .xterm-helper-textarea', `cd '${directory}'`, async () => await page.getByRole('tablist', { name: '本机 工作区', exact: true }).getByRole('tab').filter({ hasText: '示例 project' }).count() > 0);
 

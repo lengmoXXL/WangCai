@@ -16,7 +16,7 @@ test('packaged app installs plugins, previews files and preserves user changes',
     assert.equal(execFileSync('plutil', ['-extract', 'CFBundleName', 'raw', join(bundle, 'Info.plist')], { encoding: 'utf8' }).trim(), '旺财');
     desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/旺财'), args: [`--user-data-dir=${join(home, 'electron')}`], env });
     let page = await desktop.firstWindow();
-    await page.getByRole('button', { name: '机器设置' }).waitFor();
+    await page.locator('.machine.connected').waitFor();
     const code = join(home, 'packaged.ts');
     writeFileSync(code, 'const packaged = "PACKAGED_PREVIEW";\n');
     await page.evaluate(path => window.wangcai.publish('onclick', { type: 'file', machine: { id: 'local', name: '本机' }, path }), code);
@@ -36,12 +36,13 @@ test('packaged app installs plugins, previews files and preserves user changes',
     await desktop.close(); desktop = undefined;
     const pluginSource = join(home, '.local/shared/wangcai/plugins/workspace/ui.tsx');
     const source = readFileSync(pluginSource, 'utf8');
-    writeFileSync(pluginSource, source.replace('机器设置</button>', '本地修改生效</button>'));
+    writeFileSync(pluginSource, source.replace('>工作区</div>', '>本地修改生效</div>'));
     desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/旺财'), args: [`--user-data-dir=${join(home, 'electron')}`], env });
     page = await desktop.firstWindow();
-    try { await page.getByRole('button', { name: '本地修改生效' }).waitFor({ timeout: 15000 }); }
+    try { await page.getByText('本地修改生效', { exact: true }).waitFor({ timeout: 15000 }); }
     catch (error) { console.error(await page.locator('body').innerText()); throw error; }
-    await page.getByRole('button', { name: '新建工作区', exact: true }).click();
+    await page.locator('.machine.connected').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: /新建工作区/ }).click();
     await page.getByRole('tablist', { name: '本机 工作区' }).getByRole('tab').waitFor();
     await page.locator('.terminal-pane.active .xterm-helper-textarea').focus();
     await page.keyboard.type("printf 'PACKAGED_%s\\n' success");
@@ -52,7 +53,7 @@ test('packaged app installs plugins, previews files and preserves user changes',
     rmSync(join(home, '.local/shared/wangcai/plugins/workspace'), { recursive: true });
     desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/旺财'), args: [`--user-data-dir=${join(home, 'electron')}`], env });
     page = await desktop.firstWindow();
-    await page.getByRole('button', { name: '机器设置' }).waitFor();
+    await page.locator('.machine.connected').waitFor();
   } finally {
     await desktop?.close();
     try { execFileSync(join(bundle, 'Resources/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}

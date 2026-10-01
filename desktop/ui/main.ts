@@ -55,7 +55,7 @@ async function start() {
     right: stored.right ?? Math.min(600, root.clientWidth * .4) / root.clientWidth,
   };
   for (const [side, pane, opposite, minimum] of [
-    ['left', left, right, 140], ['right', right, left, 260],
+    ['left', left, right, 120], ['right', right, left, 260],
   ] as const) {
     const divider = document.createElement('div');
     divider.className = `sidebar-divider divider-${side}`;

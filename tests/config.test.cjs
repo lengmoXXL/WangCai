@@ -15,7 +15,7 @@ test('user config: init.ts drives the UI theme, the fonts and the terminal', { t
   const launch = async () => {
     desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
     const page = await desktop.firstWindow();
-    await page.getByRole('button', { name: '机器设置' }).waitFor();
+    await page.locator('.machine.connected').waitFor();
     return page;
   };
   try {
@@ -34,7 +34,8 @@ test('user config: init.ts drives the UI theme, the fonts and the terminal', { t
       const body = getComputedStyle(document.body);
       return [body.backgroundColor, body.color, body.fontFamily, getComputedStyle(document.documentElement).getPropertyValue('--wc-border'), document.documentElement.style.colorScheme];
     }), ['rgb(247, 248, 250)', 'rgb(32, 48, 64)', '"Config UI Font"', '#252c35', 'light']);
-    await page.getByRole('button', { name: '新建工作区', exact: true }).click();
+    await page.locator('.machine.connected').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: /新建工作区/ }).click();
     await page.locator('.terminal-pane.active .xterm-helper-textarea').waitFor();
     await page.waitForFunction(() => getComputedStyle(document.querySelector('.xterm-scrollable-element')).backgroundColor === 'rgb(247, 248, 250)');
     assert.deepEqual(await page.evaluate(() => {

@@ -25,13 +25,13 @@ test('Git tab follows terminal cwd and displays two read-only diffs', { timeout:
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-    await page.getByRole('button', { name: '机器设置' }).waitFor();
+    await page.locator('.machine').waitFor();
     await page.getByRole('button', { name: '切换右侧栏' }).click();
     await page.getByRole('button', { name: '新建侧栏标签页' }).click();
     await page.locator('#view-menu').getByRole('button', { name: 'Git', exact: true }).click();
     await page.getByText('请选择一个已连接的终端', { exact: true }).waitFor();
-    await page.locator('.status-dot.connected').waitFor();
-    await page.getByRole('button', { name: '新建工作区', exact: true }).click();
+    await page.locator('.machine.connected').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: /新建工作区/ }).click();
     await page.locator('.git-note[role=alert]').filter({ hasText: 'not a git repository' }).waitFor();
     const sessionId = (await page.evaluate(() => window.wangcai.request('workspace', 'config'))).workspaces[0].sessionId;
     await page.evaluate(({ repo, sessionId }) => window.wangcai.request('workspace', 'pty', { id: 'local', op: 'input', params: { session_id: sessionId, data: `cd '${repo.replaceAll("'", "'\\''")}'\r` } }), { repo, sessionId });
@@ -84,8 +84,8 @@ test('Git tab follows terminal cwd and displays two read-only diffs', { timeout:
     await page.evaluate(({ home, sessionId }) => window.wangcai.request('workspace', 'pty', { id: 'local', op: 'input', params: { session_id: sessionId, data: `cd '${home}'\r` } }), { home, sessionId });
     await page.getByRole('button', { name: '刷新 Git' }).click();
     await page.locator('.git-note[role=alert]').filter({ hasText: 'not a git repository' }).waitFor();
-    await page.locator('.machine-row').click({ button: 'right' });
-    await page.getByRole('menuitem', { name: '断开', exact: true }).click();
+    await page.locator('.machine').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: '断开连接', exact: true }).click();
     await page.getByText('请选择一个已连接的终端', { exact: true }).waitFor();
     assert.deepEqual(errors, []);
   } finally {
