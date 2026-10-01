@@ -11,9 +11,10 @@ test('packaged app installs plugins, previews files and preserves user changes',
   const env = { ...process.env, HOME: home, PATH: '/usr/bin:/bin' };
   delete env.ELECTRON_RUN_AS_NODE;
   let desktop;
-  const bundle = resolve('desktop/dist/package/mac/wangcai.app/Contents');
+  const bundle = resolve('desktop/dist/package/mac/旺财.app/Contents');
   try {
-    desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/wangcai'), args: [`--user-data-dir=${join(home, 'electron')}`], env });
+    assert.equal(execFileSync('plutil', ['-extract', 'CFBundleName', 'raw', join(bundle, 'Info.plist')], { encoding: 'utf8' }).trim(), '旺财');
+    desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/旺财'), args: [`--user-data-dir=${join(home, 'electron')}`], env });
     let page = await desktop.firstWindow();
     await page.getByRole('button', { name: '机器设置' }).waitFor();
     const code = join(home, 'packaged.ts');
@@ -36,7 +37,7 @@ test('packaged app installs plugins, previews files and preserves user changes',
     const pluginSource = join(home, '.local/shared/wangcai/plugins/workspace/ui.tsx');
     const source = readFileSync(pluginSource, 'utf8');
     writeFileSync(pluginSource, source.replace('机器设置</button>', '本地修改生效</button>'));
-    desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/wangcai'), args: [`--user-data-dir=${join(home, 'electron')}`], env });
+    desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/旺财'), args: [`--user-data-dir=${join(home, 'electron')}`], env });
     page = await desktop.firstWindow();
     try { await page.getByRole('button', { name: '本地修改生效' }).waitFor({ timeout: 15000 }); }
     catch (error) { console.error(await page.locator('body').innerText()); throw error; }
@@ -49,7 +50,7 @@ test('packaged app installs plugins, previews files and preserves user changes',
     assert.ok(JSON.parse(readFileSync(join(home, '.config/wangcai/server.json'))).port > 0);
     await desktop.close(); desktop = undefined;
     rmSync(join(home, '.local/shared/wangcai/plugins/workspace'), { recursive: true });
-    desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/wangcai'), args: [`--user-data-dir=${join(home, 'electron')}`], env });
+    desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/旺财'), args: [`--user-data-dir=${join(home, 'electron')}`], env });
     page = await desktop.firstWindow();
     await page.getByRole('button', { name: '机器设置' }).waitFor();
   } finally {
