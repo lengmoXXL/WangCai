@@ -145,6 +145,7 @@ test('view picker browses current terminal directory; file links preview code an
       const result = await window.wangcai.request('files', 'list', { machine: { id: 'local', name: '本机' }, sessionId: id });
       return result.path === path;
     }, { id: sessionId, path: join(home, 'sub') });
+    await page.getByRole('tablist', { name: '本机 工作区' }).getByRole('tab').filter({ hasText: 'sub' }).waitFor();
     await page.getByRole('button', { name: '新建侧栏标签页' }).click();
     await page.locator('#view-menu').getByRole('button', { name: '文件', exact: true }).click();
     await page.getByText('空目录', { exact: true }).waitFor();

@@ -190,7 +190,47 @@ export async function activate(context: Context) {
       default: throw new Error('Unknown terminal operation');
     }
   }));
+  const homes = new Map<string, Promise<string>>();
+  function homeOf(machineId: string, node: MachineConnection) {
+    let value = homes.get(machineId);
+    if (!value) {
+      value = node.subprocess.exec('/bin/sh', ['-c', 'printf %s "$HOME"'], { cwd: '/' })
+        .then((result) => result.code === 0 ? Buffer.from(result.stdout).toString().trim() : '')
+        .catch(() => '');
+      homes.set(machineId, value);
+    }
+    return value;
+  }
+
+  let renaming = false;
+  async function rename() {
+    if (renaming) return;
+    renaming = true;
+    try {
+      let changed = false;
+      for (const workspace of config.workspaces) {
+        const node = connections.get(workspace.machineId);
+        if (!node || !workspace.sessionId) continue;
+        let cwd: string;
+        try { cwd = await node.pty.cwd(workspace.sessionId); } catch { continue; }
+        const home = await homeOf(workspace.machineId, node);
+        const name = cwd === home ? '~' : posix.basename(cwd) || '/';
+        if (name !== workspace.name) {
+          workspace.name = name;
+          changed = true;
+        }
+      }
+      if (changed) {
+        save();
+        void context.ui.publish('config', config);
+      }
+    } finally {
+      renaming = false;
+    }
+  }
+  const renamer = setInterval(() => void rename(), 1000);
   return () => {
+    clearInterval(renamer);
     for (const remove of handlers) remove();
     for (const id of new Set([...connections.keys(), ...pending.keys()])) disconnect(id);
   };

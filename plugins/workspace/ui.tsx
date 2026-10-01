@@ -140,8 +140,9 @@ function App({ context }: { context: Context }) {
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     const off = api.onState((state) => setStates((states) => ({ ...states, [state.machineId]: state })));
+    const offConfig = api.onConfig(setConfig);
     void api.config().then(setConfig).catch((error: Error) => setError(error.message));
-    return off;
+    return () => { off(); offConfig(); };
   }, []);
   const selected = config?.selected;
   const machine = config?.machines.find((m) => m.id === selected);
@@ -223,6 +224,7 @@ function App({ context }: { context: Context }) {
             {config.workspaces.filter((workspace) => workspace.machineId === item.id).map((workspace, index) => {
               const current = itemSelected && activeWorkspace?.id === workspace.id;
               const number = index + 1;
+              const label = workspace.name ?? `工作区 ${number}`;
               return <div role="tab" aria-selected={current} tabIndex={0} key={workspace.id} className={`tab ${current ? 'selected' : ''}`} onClick={() => {
                 selectMachine(item.id);
                 selectWorkspace(item.id, workspace.id);
@@ -231,7 +233,7 @@ function App({ context }: { context: Context }) {
                 event.preventDefault();
                 event.currentTarget.click();
               }}>
-                <span className="tab-label"><span className={`status-dot ${liveSession(sessionFor(workspace)) ? 'connected' : 'disconnected'}`} />工作区 {number}</span><button aria-label={`结束工作区 ${number}`} disabled={!itemConnected} onClick={(event) => {
+                <span className="tab-label"><span className={`status-dot ${liveSession(sessionFor(workspace)) ? 'connected' : 'disconnected'}`} /><span className="tab-name">{label}</span></span><button aria-label={`结束工作区 ${label}`} disabled={!itemConnected} onClick={(event) => {
                   event.stopPropagation();
                   void api.closeWorkspace(workspace.id).then(setConfig).catch((error: Error) => setError(error.message));
                 }}>×</button>
@@ -285,6 +287,7 @@ export async function mount(container: HTMLElement, context: Context) {
     openWorkspace: (machineId, workspaceId) => call('open-workspace', { machineId, workspaceId }),
     closeWorkspace: (id) => call('close-workspace', id),
     pty: (id, op, params = {}) => call('pty', { id, op, params }),
+    onConfig: (callback) => context.ui.subscribe('config', callback),
     onState: (callback) => context.ui.subscribe('state', callback),
     onTerminal: (callback) => context.ui.subscribe('terminal', callback),
   };

@@ -116,7 +116,7 @@ test('view menu switches plugins and handles empty, disconnected and closed term
     await page.getByRole('tab', { name: '测试视图', exact: true }).click();
     assert.equal(await page.getByLabel('视图内容').inputValue(), 'preserved');
     assert.equal(await directory.isVisible(), false);
-    await page.getByRole('button', { name: '结束工作区 1', exact: true }).click();
+    await page.getByRole('button', { name: '结束工作区 ~', exact: true }).click();
     await page.getByRole('tablist', { name: '本机 工作区' }).getByRole('tab').waitFor({ state: 'detached' });
     assert.equal(await page.locator('.sidebar-panel[data-plugin=files]').count(), 0);
     const existing = await page.evaluate(async () => (await window.wangcai.request('workspace', 'config')).workspaces.map((workspace) => workspace.id));

@@ -9,7 +9,7 @@ export interface FileClick {
   line?: number;
   column?: number;
 }
-export interface Workspace { id: string; machineId: string; sessionId?: string }
+export interface Workspace { id: string; machineId: string; sessionId?: string; name?: string }
 export interface MachineState extends ConnectionState { machineId: string }
 export interface TerminalEvent {
   machineId: string;
@@ -32,6 +32,7 @@ export interface WangcaiAPI {
   openWorkspace(machineId: string, workspaceId?: string): Promise<{ config: Config; workspaceId: string }>;
   closeWorkspace(id: string): Promise<Config>;
   pty(machineId: string, op: string, params?: Record<string, unknown>): Promise<unknown>;
+  onConfig(callback: (config: Config) => void): () => void;
   onState(callback: (state: MachineState) => void): () => void;
   onTerminal(callback: (event: TerminalEvent) => void): () => void;
 }

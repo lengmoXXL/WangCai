@@ -41,7 +41,7 @@ test('packaged app installs plugins, previews files and preserves user changes',
     try { await page.getByRole('button', { name: '本地修改生效' }).waitFor({ timeout: 15000 }); }
     catch (error) { console.error(await page.locator('body').innerText()); throw error; }
     await page.getByRole('button', { name: '新建工作区', exact: true }).click();
-    await page.getByRole('tab', { name: /工作区 1/ }).waitFor();
+    await page.getByRole('tablist', { name: '本机 工作区' }).getByRole('tab').waitFor();
     await page.locator('.terminal-pane.active .xterm-helper-textarea').focus();
     await page.keyboard.type("printf 'PACKAGED_%s\\n' success");
     await page.keyboard.press('Enter');

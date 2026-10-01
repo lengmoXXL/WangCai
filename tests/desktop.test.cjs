@@ -1,13 +1,13 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { _electron: electron } = require('playwright');
-const { mkdtempSync, rmSync, readFileSync, existsSync } = require('node:fs');
+const { mkdtempSync, realpathSync, rmSync, readFileSync, existsSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
 
 test('Electron: local terminal, reconnect, machine settings and relaunch', { timeout: 60000 }, async () => {
-  const home = mkdtempSync(join(tmpdir(), 'wangcai-desktop-test-'));
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-desktop-test-')));
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   delete env.ELECTRON_RUN_AS_NODE;
   let desktop;
@@ -23,21 +23,21 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
   };
   try {
     let page = await launch();
+    const localTabs = page.getByRole('tablist', { name: '本机 工作区', exact: true });
     await page.getByRole('button', { name: '新建工作区', exact: true }).click();
-    await page.getByRole('tab', { name: /工作区 1/ }).waitFor();
+    await localTabs.getByRole('tab').filter({ hasText: '~' }).waitFor();
     await page.locator('.terminal-pane.active .xterm-helper-textarea').focus();
     await page.keyboard.type("printf 'DESKTOP_%s\\n' success");
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => document.querySelector('.terminal-pane.active .xterm-rows')?.textContent.includes('DESKTOP_success'));
     const workspaces = (await page.evaluate(() => window.wangcai.request('workspace', 'config'))).workspaces;
     assert.equal(workspaces.length, 1);
-    const localTabs = page.getByRole('tablist', { name: '本机 工作区', exact: true });
     assert.equal(await localTabs.getByRole('tab').count(), 1);
     await page.getByRole('button', { name: '新建工作区', exact: true }).click();
-    await localTabs.getByRole('tab', { name: /工作区 2/ }).waitFor();
-    await localTabs.getByRole('tab', { name: /工作区 1/ }).click();
+    await localTabs.getByRole('tab').nth(1).waitFor();
+    await localTabs.getByRole('tab').nth(0).click();
     await page.waitForFunction(() => document.querySelector('.terminal-pane.active .xterm-rows')?.textContent.includes('DESKTOP_success'));
-    await localTabs.getByRole('button', { name: '结束工作区 2' }).click();
+    await localTabs.getByRole('tab').nth(1).getByRole('button').click();
     await page.waitForFunction(() => document.querySelectorAll('.wangcai-workspace [role=tab]').length === 1);
     await page.getByRole('button', { name: '本机', exact: true }).click({ button: 'right' });
     await page.getByRole('menuitem', { name: '断开', exact: true }).click();
@@ -68,7 +68,7 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
     await page.screenshot({ path: 'tests/dist/screenshots/desktop.png' });
     await desktop.close(); desktop = undefined;
     page = await launch();
-    await page.getByRole('tab', { name: /工作区 1/ }).waitFor();
+    await page.getByRole('tablist', { name: '本机 工作区', exact: true }).getByRole('tab').filter({ hasText: '~' }).waitFor();
     await page.waitForFunction(() => document.querySelector('.terminal-pane.active .xterm-rows')?.textContent.includes('DESKTOP_success'));
     assert.equal((await page.evaluate(() => window.wangcai.request('workspace', 'config'))).workspaces[0].sessionId, workspaces[0].sessionId);
     await page.getByRole('tab', { name: '文件', exact: true }).waitFor();
@@ -76,7 +76,7 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
     await page.locator('.machine-setting').filter({ hasText: '测试服务器' }).getByRole('button', { name: '移除' }).click();
     assert.equal((await page.evaluate(() => window.wangcai.request('workspace', 'config'))).machines.length, 1);
     await page.getByRole('button', { name: '关闭设置' }).click();
-    await page.getByRole('button', { name: '结束工作区 1' }).click();
+    await page.getByRole('button', { name: '结束工作区 ~', exact: true }).click();
     await page.waitForFunction(() => document.querySelectorAll('.wangcai-workspace [role=tab]').length === 0);
     assert.deepEqual((await page.evaluate(() => window.wangcai.request('workspace', 'config'))).workspaces, []);
     await desktop.close(); desktop = undefined;
