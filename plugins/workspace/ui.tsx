@@ -167,9 +167,11 @@ function App({ context }: { context: Context }) {
     void publish();
     return context.global.subscribe('terminal:query', publish);
   }, [context, machine, activeSession?.id, activeWorkspace?.id, connected]);
+  const workspaceIdKey = config?.workspaces.map((workspace) => workspace.id).join(' ');
   useEffect(() => {
-    if (config) context.global.publish('workspace:list', config.workspaces.map((workspace) => workspace.id));
-  }, [context, config]);
+    if (workspaceIdKey === undefined) return;
+    void context.global.publish('workspace:list', workspaceIdKey === '' ? [] : workspaceIdKey.split(' '));
+  }, [context, workspaceIdKey]);
 
   const selectWorkspace = (machineId: string, workspaceId: string) => {
     setSelectedWorkspaces((workspaces) => ({ ...workspaces, [machineId]: workspaceId }));
