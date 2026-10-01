@@ -10,7 +10,9 @@
 .git-toolbar button { padding: 4px 6px; }
 .git-toolbar button[aria-pressed=true] { color: var(--wc-accent); background: var(--wc-selection); }
 .git-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
-.git-rail { width: 260px; min-width: 180px; max-width: 70%; flex-shrink: 0; resize: horizontal; overflow: auto; border-right: 1px solid var(--wc-border); }
+.git-rail { flex-shrink: 0; overflow: auto; }
+.git-divider { flex: 0 0 4px; cursor: col-resize; background: var(--wc-border); touch-action: none; }
+.git-divider:hover, .git-divider:focus-visible { background: var(--wc-accent); outline: none; }
 .git-root { padding: 8px; color: var(--wc-muted); overflow-wrap: anywhere; }
 .git-page summary { padding: 7px 8px; cursor: pointer; background: var(--wc-overlay); }
 .git-page summary small { color: var(--wc-muted); }

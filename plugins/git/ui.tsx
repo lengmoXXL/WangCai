@@ -145,6 +145,12 @@ function Repository({ context, terminal, activation }: { context: Context; termi
   const [split, setSplit] = useState(true);
   const [wrap, setWrap] = useState(true);
   const [rail, setRail] = useState(true);
+  const [railWidth, setRailWidth] = useState(260);
+  const body = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ origin: number; width: number }>(undefined);
+  const railMinimum = 180;
+  const railMaximum = Math.round((body.current?.clientWidth ?? 0) * 0.7);
+  const clampWidth = (requested: number) => Math.round(Math.max(railMinimum, Math.min(railMaximum, requested)));
   const generation = useRef(0);
   const repositoryRoot = useRef('');
   useEffect(() => {
@@ -175,8 +181,8 @@ function Repository({ context, terminal, activation }: { context: Context; termi
       <button onClick={() => setWrap(!wrap)} aria-pressed={wrap}>折行</button>
       <button aria-label="刷新 Git" disabled={loading} onClick={() => setRefresh(value => value + 1)}>刷新</button>
     </header>
-    {error ? <div className="git-note" role="alert">{error}</div> : !overview ? <div className="git-note">正在读取 Git…</div> : <div className="git-body">
-      {rail && <nav className="git-rail" aria-label="Git 改动与历史">
+    {error ? <div className="git-note" role="alert">{error}</div> : !overview ? <div className="git-note">正在读取 Git…</div> : <div className="git-body" ref={body}>
+      {rail && <nav className="git-rail" style={{ width: railWidth }} aria-label="Git 改动与历史">
         <div className="git-root" title={overview.root}>{overview.root}</div>
         {!overview.changes.length && <div className="git-note">工作区干净</div>}
         {(Object.entries(stages) as [Stage, string][]).map(([stage, title]) => {
@@ -200,6 +206,12 @@ function Repository({ context, terminal, activation }: { context: Context; termi
           }}>{older ? '正在读取…' : '加载更多提交'}</button>}
         </details>
       </nav>}
+      {rail && <div className="git-divider" role="separator" aria-orientation="vertical" aria-label="调整 Git 列表宽度" tabIndex={0}
+        aria-valuenow={railWidth} aria-valuemin={railMinimum} aria-valuemax={railMaximum}
+        onPointerDown={(event) => { event.preventDefault(); drag.current = { origin: event.clientX, width: railWidth }; event.currentTarget.setPointerCapture(event.pointerId); }}
+        onPointerMove={(event) => { if (drag.current && event.currentTarget.hasPointerCapture(event.pointerId)) setRailWidth(clampWidth(drag.current.width + event.clientX - drag.current.origin)); }}
+        onPointerUp={(event) => { drag.current = undefined; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}
+        onKeyDown={(event) => { if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return; event.preventDefault(); setRailWidth(clampWidth(railWidth + (event.key === 'ArrowRight' ? 20 : -20))); }} />}
       <div className="git-board">
         {!panes.length && <div className="git-note">选择文件查看 diff；点击 + 可并排比较</div>}
         {panes.map((comparison, index) => <section className="git-pane" key={JSON.stringify(comparison)} data-focused={focused === index} onMouseDown={() => setFocused(index)} aria-label={`Diff ${comparison.path}`}>
