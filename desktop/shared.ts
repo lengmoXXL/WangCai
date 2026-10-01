@@ -1,5 +1,10 @@
 import type { Profile } from '@wangcai/sdk';
 
+// The shell serves this document for a plugin to frame as a preview of an HTML file.
+export const previewScheme = 'wangcai-preview';
+export const previewUrl = `${previewScheme}://preview/`;
+export const previewMessage = 'wangcai-preview';
+
 export interface PluginInfo { id: string; ui?: string; css?: string; error?: string }
 export interface TabRecord { plugin: string; workspaceId?: string; id: string }
 export type Dispose = () => void | Promise<void>;

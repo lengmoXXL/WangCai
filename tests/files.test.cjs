@@ -7,7 +7,7 @@ const { join, resolve } = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
 
-test('view picker browses current terminal directory; file links preview code and Markdown', { timeout: 90000 }, async () => {
+test('view picker browses current terminal directory; file links preview code, Markdown and HTML', { timeout: 90000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-files-')));
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -17,10 +17,12 @@ test('view picker browses current terminal directory; file links preview code an
     const code = join(home, 'sample.ts');
     const markdown = join(home, '说明 file.md');
     const binary = join(home, 'binary.bin');
+    const html = join(home, 'page.html');
     const json = join(home, 'settings.json');
     writeFileSync(json, '{"ready":true}');
     writeFileSync(code, 'const first = 1;\nconst second = "CODE_PREVIEW";\n');
     writeFileSync(markdown, '# Markdown preview\n\n**Rendered content**\n\n| Key | Value |\n| --- | --- |\n| a | b |\n\n```\n' + 'wide code block '.repeat(80) + '\n```\n\n<script>window.previewScriptRan = true</script>');
+    writeFileSync(html, '<!doctype html>\n<!-- HTML_SOURCE -->\n<h1 id="heading">Rendered page</h1>\n<script>document.getElementById("heading").dataset.scripted = "yes"</script>\n');
     writeFileSync(binary, Buffer.from([0, 1, 255, 2]));
     desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
     let page = await desktop.firstWindow();
@@ -122,6 +124,15 @@ test('view picker browses current terminal directory; file links preview code an
     assert.equal(await fileTabs.getByRole('tab').count(), tabCount);
 
     await page.screenshot({ path: 'tests/dist/screenshots/files-preview.png' });
+    await clickLink(pathToFileURL(html).href, 'HTML_LINK');
+    const htmlFrame = page.frameLocator('.html-frame');
+    await htmlFrame.locator('#heading[data-scripted=yes]').waitFor();
+    assert.equal(await htmlFrame.locator('#heading').innerText(), 'Rendered page');
+    assert.equal(await page.locator('.html-frame').getAttribute('sandbox'), 'allow-scripts');
+    await page.getByRole('button', { name: '源码', exact: true }).click();
+    await page.locator('.monaco-editor .view-lines').filter({ hasText: 'HTML_SOURCE' }).waitFor();
+    await page.getByRole('button', { name: '预览', exact: true }).click();
+    await htmlFrame.getByRole('heading', { name: 'Rendered page' }).waitFor();
     await clickLink(pathToFileURL(json).href, 'JSON_LINK');
     await page.locator('.monaco-editor .view-lines').filter({ hasText: 'ready' }).waitFor();
     await page.waitForFunction(() => new Set([...document.querySelectorAll('.monaco-editor .view-line span')].map(el => getComputedStyle(el).color)).size > 1);

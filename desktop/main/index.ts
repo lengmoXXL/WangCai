@@ -5,10 +5,18 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, r
 import { homedir } from 'node:os';
 import { loadPlugins } from './plugins';
 import { loadProfile } from './config';
-import type { TabRecord } from '../shared';
+import { previewMessage, previewScheme, previewUrl, type TabRecord } from '../shared';
 
 app.setName('旺财');
-protocol.registerSchemesAsPrivileged([{ scheme: 'wangcai-plugin', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'wangcai-plugin', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
+  { scheme: previewScheme, privileges: { standard: true, secure: true } },
+]);
+// A previewed page is made of inline scripts and remote assets, which the renderer's CSP forbids; serving it
+// from its own scheme gives it a policy of its own, and the sandboxed frame keeps the page off the app.
+const PREVIEW_CSP = "default-src 'none'; script-src 'unsafe-inline' http: https:; style-src 'unsafe-inline' http: https: data:; img-src http: https: data: blob:; font-src http: https: data:; connect-src http: https: data:; media-src http: https: data: blob:; frame-src http: https: data: blob:; base-uri 'none'";
+// Writing the page into this document, rather than setting innerHTML, is what runs its scripts.
+const PREVIEW_DOCUMENT = `<!doctype html><meta charset="utf-8"><script>parent.postMessage('${previewMessage}', '*'); addEventListener('message', (event) => { document.open(); document.write(event.data); document.close(); });</script>`;
 let window: BrowserWindow | undefined;
 
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -45,6 +53,9 @@ else {
       headers.set('Access-Control-Allow-Origin', '*');
       return new Response(response.body, { status: response.status, headers });
     });
+    protocol.handle(previewScheme, (request) => request.url === previewUrl
+      ? new Response(PREVIEW_DOCUMENT, { headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': PREVIEW_CSP } })
+      : new Response('Not found', { status: 404 }));
     ipcMain.handle('wangcai:publish', (_, event: string, data: unknown) => plugins.publish(event, data));
     ipcMain.handle('wangcai:plugins', () => plugins.plugins);
     ipcMain.handle('wangcai:request', (_, id: string, method: string, params: unknown) => plugins.request(id, method, params));

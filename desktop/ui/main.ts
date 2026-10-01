@@ -1,5 +1,5 @@
 import type { Channel, Context } from '@wangcai/sdk/channel';
-import { denied, type Dispose, type TabRecord } from '../shared';
+import { denied, previewMessage, previewUrl, type Dispose, type TabRecord } from '../shared';
 import './style.css';
 
 type TabContent = { dispose: Dispose; onSelect?(): void };
@@ -310,6 +310,7 @@ async function start() {
             if (topic === 'sidebar') return sidebarSlot();
             if (topic === 'config') return profile;
             if (topic === 'tabs') return openTab(params as TabOptions);
+            if (topic === 'preview') return { url: previewUrl, message: previewMessage };
             throw new Error(`Unsupported host topic: ${topic}`);
           }) as Channel['request'],
           handle: denied('host', 'handle'),

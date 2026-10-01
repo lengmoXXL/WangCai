@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -14,6 +14,7 @@ import './style.css';
 
 export const title = '文件';
 let activeWorkspaceId: string | undefined;
+let preview: { url: string; message: string };
 jsonDefaults.setModeConfiguration({ tokens: true });
 
 function editorTheme(theme: Theme): monaco.editor.IStandaloneThemeData {
@@ -50,9 +51,22 @@ function editorTheme(theme: Theme): monaco.editor.IStandaloneThemeData {
 
 function Preview({ file, text }: { file: FileClick; text: string }) {
   const element = useRef<HTMLDivElement>(null);
+  const frame = useRef<HTMLIFrameElement>(null);
   const markdown = /\.(md|markdown)$/i.test(file.path);
+  const html = /\.html?$/i.test(file.path);
+  const [source, setSource] = useState(false);
+  const rendered = markdown || (html && !source);
+  // The preview document asks for its content as soon as it loads, so the listener has to be in place first.
+  useLayoutEffect(() => {
+    const deliver = (event: MessageEvent) => {
+      const target = frame.current?.contentWindow;
+      if (target && event.data === preview.message && event.source === target) target.postMessage(text, '*');
+    };
+    addEventListener('message', deliver);
+    return () => removeEventListener('message', deliver);
+  }, [text]);
   useEffect(() => {
-    if (markdown) return;
+    if (rendered) return;
     const name = file.path.split('/').pop()!;
     const language = monaco.languages.getLanguages().find((item) => item.filenames?.includes(name) || item.extensions?.some((extension) => name.endsWith(extension)))?.id ?? 'plaintext';
     const editor = monaco.editor.create(element.current!, {
@@ -65,11 +79,19 @@ function Preview({ file, text }: { file: FileClick; text: string }) {
     editor.setPosition(position);
     editor.revealPositionInCenter(position);
     return () => { editor.getModel()?.dispose(); editor.dispose(); };
-  }, [file, text, markdown]);
+  }, [file, text, rendered]);
   if (markdown) return <article className="markdown-preview"><Markdown remarkPlugins={[remarkGfm]} skipHtml components={{
     a: ({ children }) => <span>{children}</span>,
     img: ({ alt }) => <span>{alt}</span>,
   }}>{text}</Markdown></article>;
+  if (html) return <div className="html-preview">
+    <header className="preview-toolbar">
+      <button aria-pressed={!source} onClick={() => setSource(false)}>预览</button>
+      <button aria-pressed={source} onClick={() => setSource(true)}>源码</button>
+    </header>
+    {source ? <div className="code-preview" ref={element} />
+      : <iframe className="html-frame" ref={frame} title="HTML 预览" sandbox="allow-scripts" src={preview.url} />}
+  </div>;
   return <div className="code-preview" ref={element} />;
 }
 
@@ -155,6 +177,7 @@ function openTab(context: Context, workspaceId?: string) {
 
 export async function mount(_container: HTMLElement, context: Context) {
   const profile = await context.host.request<Profile>('config');
+  preview = await context.host.request<typeof preview>('preview');
   monaco.editor.defineTheme('wangcai', editorTheme(profile.theme));
   const response = await fetch(new URL('./ui.worker.js', import.meta.url));
   if (!response.ok) throw new Error('Cannot load file preview worker');
