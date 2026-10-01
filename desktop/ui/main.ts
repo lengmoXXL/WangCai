@@ -12,6 +12,16 @@ window.addEventListener('beforeunload', () => {
   closing = true;
   for (const dispose of disposers.reverse()) void dispose();
 });
+// Scroll events do not bubble, so only a capture-phase listener can see the sidebar panels scroll.
+const SCROLLBAR_IDLE = 700;
+const idleTimers = new WeakMap<Element, number>();
+document.addEventListener('scroll', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement) || !target.closest('.sidebar-right')) return;
+  target.dataset.scrolling = '';
+  clearTimeout(idleTimers.get(target));
+  idleTimers.set(target, window.setTimeout(() => delete target.dataset.scrolling, SCROLLBAR_IDLE));
+}, true);
 
 async function start() {
   const plugins = await window.wangcai.plugins();

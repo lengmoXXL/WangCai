@@ -7,9 +7,11 @@ body { background: var(--wc-background); color: var(--wc-foreground); font-famil
 .desktop-sidebar { flex-shrink: 0; min-width: 0; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; }
 .sidebar-left { padding-top: 36px; background: var(--wc-surface); -webkit-app-region: drag; }
 .sidebar-slot { flex: 1; min-height: 0; -webkit-app-region: no-drag; }
-.sidebar-right ::-webkit-scrollbar { width: 14px; height: 12px; }
+.sidebar-right ::-webkit-scrollbar { width: 10px; height: 12px; }
 .sidebar-right ::-webkit-scrollbar-track, .sidebar-right ::-webkit-scrollbar-corner { background: transparent; }
-.sidebar-right ::-webkit-scrollbar-thumb { background: #79797966; }
+.sidebar-right ::-webkit-scrollbar-thumb { background: transparent; }
+.sidebar-right:hover ::-webkit-scrollbar-thumb,
+.sidebar-right [data-scrolling]::-webkit-scrollbar-thumb { background: #79797966; }
 .sidebar-right ::-webkit-scrollbar-thumb:hover { background: #646464b3; }
 .sidebar-right ::-webkit-scrollbar-thumb:active { background: #bfbfbf66; }
 .sidebar-right ::-webkit-scrollbar-button { display: none; }

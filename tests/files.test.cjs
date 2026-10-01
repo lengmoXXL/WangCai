@@ -91,6 +91,8 @@ test('view picker browses current terminal directory; file links preview code an
     assert.equal(await page.locator('.markdown-preview strong').innerText(), 'Rendered content');
     assert.equal(await page.locator('.markdown-preview table').count(), 1);
     assert.equal(await page.evaluate(() => window.previewScriptRan), undefined);
+    // Hovering the sidebar reveals its scrollbar thumbs, so park the pointer before asserting idle panels hide theirs.
+    await page.mouse.move(0, 0);
     for (const selector of ['.file-directory', '.markdown-preview', '.markdown-preview pre', '.sidebar-tabs']) {
       assert.deepEqual(await page.locator(selector).evaluate(element => {
         const bar = getComputedStyle(element, '::-webkit-scrollbar');
@@ -98,8 +100,16 @@ test('view picker browses current terminal directory; file links preview code an
         return [bar.width, bar.height, thumb.backgroundColor, thumb.borderRadius,
           getComputedStyle(element, '::-webkit-scrollbar-track').backgroundColor,
           getComputedStyle(element, '::-webkit-scrollbar-button').display];
-      }), ['14px', '12px', 'rgba(121, 121, 121, 0.4)', '0px', 'rgba(0, 0, 0, 0)', 'none'], selector);
+      }), ['10px', '12px', 'rgba(0, 0, 0, 0)', '0px', 'rgba(0, 0, 0, 0)', 'none'], selector);
     }
+    const reveal = await page.locator('.markdown-preview pre').evaluate(async (element) => {
+      element.scrollLeft = 40;
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      return { scrolling: element.hasAttribute('data-scrolling'), thumb: getComputedStyle(element, '::-webkit-scrollbar-thumb').backgroundColor };
+    });
+    assert.equal(reveal.scrolling, true, 'scrolling marks the panel as scrolling');
+    assert.equal(reveal.thumb, 'rgba(121, 121, 121, 0.4)', 'a scrolling panel shows its scrollbar');
+    await page.waitForFunction(() => !document.querySelector('.markdown-preview pre').hasAttribute('data-scrolling'));
     assert.equal(await page.locator('.markdown-preview pre').evaluate(element => element.scrollWidth > element.clientWidth), true);
     const fileTabs = page.getByRole('tablist', { name: '侧栏标签页' });
     await fileTabs.getByRole('tab', { name: 'sample.ts', exact: true }).click();
