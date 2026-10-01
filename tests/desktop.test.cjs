@@ -35,6 +35,19 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
     await page.waitForFunction(() => [...document.querySelectorAll('.terminal-pane.active .xterm-rows > div')].some((element) => element.textContent.length > 60 && /^X+$/.test(element.textContent)));
     const overhang = await page.evaluate(() => Math.max(...[...document.querySelectorAll('.terminal-pane.active .xterm-rows > div')].map((element) => (element.lastElementChild?.getBoundingClientRect().right ?? 0) - element.getBoundingClientRect().right)));
     assert.ok(overhang <= 0.5, `terminal rows clip their last column by ${overhang.toFixed(2)}px`);
+    const terminal = await page.evaluate(() => {
+      const surface = document.querySelector('.terminal-pane.active .terminal-surface');
+      const bar = surface.querySelector('.xterm-scrollable-element > .scrollbar.vertical');
+      const ruler = surface.querySelector('.xterm-decoration-overview-ruler');
+      return {
+        bar: [getComputedStyle(bar).width, getComputedStyle(bar.querySelector('.slider')).width],
+        overlap: surface.querySelector('.xterm-screen').offsetWidth - surface.querySelector('.xterm-viewport').clientWidth,
+        outline: [...ruler.getContext('2d').getImageData(0, 0, 1, 1).data],
+      };
+    });
+    assert.deepEqual(terminal.bar, ['10px', '10px'], 'the terminal scrollbar is 10px wide');
+    assert.ok(terminal.overlap <= 0, `the terminal grid runs ${terminal.overlap}px under the viewport scrollbar`);
+    assert.deepEqual(terminal.outline, [17, 21, 27, 255], 'the overview ruler outline hides in the terminal background');
     const workspaces = (await page.evaluate(() => window.wangcai.request('workspace', 'config'))).workspaces;
     assert.equal(workspaces.length, 1);
     assert.equal(await localTabs.getByRole('tab').count(), 1);

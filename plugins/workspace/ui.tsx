@@ -26,8 +26,10 @@ function TerminalPane({ machineId, session, active, connected, generation, profi
     const term = new Terminal({
       cursorBlink: true, fontSize: profile.font.terminal.size, lineHeight: profile.font.terminal.lineHeight,
       fontFamily: profile.font.terminal.family,
+      // xterm takes its scrollbar width from the overview ruler, which also paints the ruler outline.
+      overviewRuler: { width: 10 },
       scrollback: 10_000, cols: session.cols, rows: session.rows,
-      theme: { ...profile.theme, selectionBackground: profile.theme.selection },
+      theme: { ...profile.theme, overviewRulerBorder: profile.theme.background, selectionBackground: profile.theme.selection },
     });
     const addon = new FitAddon();
     term.loadAddon(addon);

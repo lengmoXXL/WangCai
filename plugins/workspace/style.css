@@ -35,6 +35,8 @@
 .wangcai-workspace .terminal-surface { flex: 1; min-height: 0; }
 /* xterm rounds each row width but lays the glyphs out on the unrounded grid, so size rows to their content. */
 .wangcai-workspace .terminal-surface .xterm-rows > div { width: max-content !important; }
+/* xterm draws its own scrollbar; the viewport's native one only steals the width the grid is sized for. */
+.wangcai-workspace .terminal-surface .xterm-viewport::-webkit-scrollbar { display: none; }
 .wangcai-workspace .terminal-message { flex-shrink: 0; display: flex; align-items: center; gap: 8px; color: var(--wc-muted); font-size: 11px; padding: 6px 0; }
 .wangcai-workspace .error-banner { display: flex; gap: 12px; justify-content: space-between; padding: 8px 12px; font-size: 11px; background: var(--wc-overlay); color: var(--wc-yellow); max-height: 100px; overflow: auto; white-space: pre-wrap; }
 .wangcai-workspace .error-banner button { padding: 0 5px; align-self: flex-start; }
