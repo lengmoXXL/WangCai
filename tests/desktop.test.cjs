@@ -30,6 +30,11 @@ test('Electron: local terminal, reconnect, machine settings and relaunch', { tim
     await page.keyboard.type("printf 'DESKTOP_%s\\n' success");
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => document.querySelector('.terminal-pane.active .xterm-rows')?.textContent.includes('DESKTOP_success'));
+    await page.keyboard.type("printf 'X%.0s' {1..400}; echo");
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => [...document.querySelectorAll('.terminal-pane.active .xterm-rows > div')].some((element) => element.textContent.length > 60 && /^X+$/.test(element.textContent)));
+    const overhang = await page.evaluate(() => Math.max(...[...document.querySelectorAll('.terminal-pane.active .xterm-rows > div')].map((element) => (element.lastElementChild?.getBoundingClientRect().right ?? 0) - element.getBoundingClientRect().right)));
+    assert.ok(overhang <= 0.5, `terminal rows clip their last column by ${overhang.toFixed(2)}px`);
     const workspaces = (await page.evaluate(() => window.wangcai.request('workspace', 'config'))).workspaces;
     assert.equal(workspaces.length, 1);
     assert.equal(await localTabs.getByRole('tab').count(), 1);

@@ -33,6 +33,8 @@
 .wangcai-workspace .terminal-pane { display: none; height: 100%; padding: 10px 8px 6px 12px; flex-direction: column; }
 .wangcai-workspace .terminal-pane.active { display: flex; }
 .wangcai-workspace .terminal-surface { flex: 1; min-height: 0; }
+/* xterm rounds each row width but lays the glyphs out on the unrounded grid, so size rows to their content. */
+.wangcai-workspace .terminal-surface .xterm-rows > div { width: max-content !important; }
 .wangcai-workspace .terminal-message { flex-shrink: 0; display: flex; align-items: center; gap: 8px; color: var(--wc-muted); font-size: 11px; padding: 6px 0; }
 .wangcai-workspace .error-banner { display: flex; gap: 12px; justify-content: space-between; padding: 8px 12px; font-size: 11px; background: var(--wc-overlay); color: var(--wc-yellow); max-height: 100px; overflow: auto; white-space: pre-wrap; }
 .wangcai-workspace .error-banner button { padding: 0 5px; align-self: flex-start; }
