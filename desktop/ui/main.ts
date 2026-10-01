@@ -15,6 +15,11 @@ window.addEventListener('beforeunload', () => {
 
 async function start() {
   const plugins = await window.wangcai.plugins();
+  const profile = await window.wangcai.config();
+  for (const [token, color] of Object.entries(profile.theme)) document.documentElement.style.setProperty(`--wc-${token}`, color);
+  document.documentElement.style.setProperty('--wc-font', profile.font.ui.family);
+  const [r, g, b] = getComputedStyle(document.body).backgroundColor.match(/\d+/g)!.map(Number);
+  document.documentElement.style.colorScheme = r * 299 + g * 587 + b * 114 > 128_000 ? 'light' : 'dark';
   if (!plugins.length) root.textContent = '未安装插件';
   const left = document.createElement('aside');
   left.className = 'desktop-sidebar sidebar-left';
@@ -292,6 +297,7 @@ async function start() {
           subscribe: denied('host', 'subscribe'),
           request: (async (topic: string, params?: unknown) => {
             if (topic === 'sidebar') return sidebarSlot();
+            if (topic === 'config') return profile;
             if (topic === 'tabs') return openTab(params as TabOptions);
             throw new Error(`Unsupported host topic: ${topic}`);
           }) as Channel['request'],

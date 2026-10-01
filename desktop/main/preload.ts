@@ -9,6 +9,7 @@ const api: PluginBridge = {
     return () => { ipcRenderer.removeListener('wangcai:channel', listener); };
   },
   plugins: () => ipcRenderer.invoke('wangcai:plugins'),
+  config: () => ipcRenderer.invoke('wangcai:config'),
   request: (id, method, params) => ipcRenderer.invoke('wangcai:request', id, method, params),
   on: (callback) => {
     const listener = (_: unknown, id: string, event: string, data: unknown) => callback(id, event, data);

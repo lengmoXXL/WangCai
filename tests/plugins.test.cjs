@@ -27,6 +27,7 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
         import { join } from 'node:path';
         export async function activate(context) {
           writeFileSync(join(await context.host.request('logDirectory'), 'plugin.log'), '${name}');
+          writeFileSync(join(await context.host.request('logDirectory'), 'config.log'), (await context.host.request('config')).theme.background);
           const received = [];
           const off = context.global.subscribe('onclick', data => received.push(data));
           context.ui.handle('received', () => received);
@@ -84,6 +85,7 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
     for (const name of ['alpha', 'beta']) {
       assert.equal(readFileSync(join(home, '.local/shared/wangcai/data', name, 'cleaned'), 'utf8'), 'yes');
       assert.equal(readFileSync(join(home, '.local/shared/wangcai/logs', name, 'plugin.log'), 'utf8'), name);
+      assert.equal(readFileSync(join(home, '.local/shared/wangcai/logs', name, 'config.log'), 'utf8'), '#11151b');
     }
     const source = join(home, '.local/shared/wangcai/plugins/alpha/ui.tsx');
     writeFileSync(source, readFileSync(source, 'utf8').replace('alpha v1', 'alpha v2'));

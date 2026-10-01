@@ -2,10 +2,11 @@ import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
+import type { Profile } from '@wangcai/sdk';
 import type { Channel, Context } from '@wangcai/sdk/channel';
 import { denied, type Dispose, type PluginInfo } from '../shared';
 
-export async function loadPlugins(sdkPath: string, resourcesDirectory: string, emit: (id: string, event: string, data: unknown) => void, broadcast: (event: string, data: unknown) => void) {
+export async function loadPlugins(sdkPath: string, resourcesDirectory: string, profile: Profile, emit: (id: string, event: string, data: unknown) => void, broadcast: (event: string, data: unknown) => void) {
   const { build } = await import('esbuild');
   const directory = join(homedir(), '.local/shared/wangcai/plugins');
   const cache = join(homedir(), '.cache/wangcai/plugins');
@@ -88,6 +89,7 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, e
             if (topic === 'dataDirectory') return dataDirectory;
             if (topic === 'logDirectory') return logDirectory;
             if (topic === 'resourcesDirectory') return resourcesDirectory;
+            if (topic === 'config') return profile;
             throw new Error(`Unsupported host topic: ${topic}`);
           }) as Channel['request'],
           handle: denied('host', 'handle'),

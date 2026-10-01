@@ -8,13 +8,14 @@ import type { WorkspaceApi } from './main';
 import type { Config, MachineState, Session, WangcaiAPI, Workspace } from './shared';
 import '@xterm/xterm/css/xterm.css';
 import './style.css';
+import type { Profile } from '@wangcai/sdk';
 import type { Context } from '@wangcai/sdk/channel';
 
 let api: WangcaiAPI;
 let sidebar: HTMLElement;
 
-function TerminalPane({ machineId, session, active, connected, generation }: {
-  machineId: string; session: Session; active: boolean; connected: boolean; generation: number;
+function TerminalPane({ machineId, session, active, connected, generation, profile }: {
+  machineId: string; session: Session; active: boolean; connected: boolean; generation: number; profile: Profile;
 }) {
   const element = useRef<HTMLDivElement>(null);
   const terminal = useRef<Terminal>(null);
@@ -23,10 +24,10 @@ function TerminalPane({ machineId, session, active, connected, generation }: {
 
   useEffect(() => {
     const term = new Terminal({
-      cursorBlink: true, fontSize: 13, lineHeight: 1.25,
-      fontFamily: '"SFMono-Regular", Menlo, Monaco, monospace',
+      cursorBlink: true, fontSize: profile.font.terminal.size, lineHeight: profile.font.terminal.lineHeight,
+      fontFamily: profile.font.terminal.family,
       scrollback: 10_000, cols: session.cols, rows: session.rows,
-      theme: { background: '#11151b', foreground: '#d9e0e9', cursor: '#9bc7bc', selectionBackground: '#35534e', black: '#26303a', blue: '#86a9de', green: '#9bc7bc', red: '#e68c8c', yellow: '#e4c590' },
+      theme: { ...profile.theme, selectionBackground: profile.theme.selection },
     });
     const addon = new FitAddon();
     term.loadAddon(addon);
@@ -85,7 +86,7 @@ function TerminalPane({ machineId, session, active, connected, generation }: {
       links.dispose(); term.dispose(); terminal.current = null;
       if (connected) void api.pty(machineId, 'detach', { session_id: session.id }).catch(() => {});
     };
-  }, [machineId, session.id, connected, generation]);
+  }, [machineId, session.id, connected, generation, profile]);
 
   useEffect(() => {
     if (active) requestAnimationFrame(() => { fit.current?.fit(); terminal.current?.focus(); });
@@ -130,7 +131,7 @@ function Settings({ config, onUpdate, onClose }: { config: Config; onUpdate: (co
   </div>;
 }
 
-function App({ context }: { context: Context }) {
+function App({ context, profile }: { context: Context; profile: Profile }) {
   const [config, setConfig] = useState<Config>();
   const [states, setStates] = useState<Record<string, MachineState>>({});
   const [selectedWorkspaces, setSelectedWorkspaces] = useState<Record<string, string>>({});
@@ -253,7 +254,7 @@ function App({ context }: { context: Context }) {
       <div className="terminal-area">
         {workspaces.map((workspace) => {
           const session = sessionFor(workspace);
-          return session ? <TerminalPane key={`${workspace.id}:${session.id}`} machineId={selected!} session={session} active={workspace.id === activeWorkspace?.id} connected={connected} generation={generation} /> : null;
+          return session ? <TerminalPane key={`${workspace.id}:${session.id}`} machineId={selected!} session={session} active={workspace.id === activeWorkspace?.id} connected={connected} generation={generation} profile={profile} /> : null;
         })}
         {activeWorkspace && !activeSession && <div className="terminal-message">
           {!activeWorkspaceSession && '终端未运行'}
@@ -293,7 +294,8 @@ export async function mount(container: HTMLElement, context: Context) {
     onState: (callback) => context.ui.subscribe('state', callback),
     onTerminal: (callback) => context.ui.subscribe('terminal', callback),
   };
+  const profile = await context.host.request<Profile>('config');
   const root = createRoot(container);
-  root.render(<App context={context} />);
+  root.render(<App context={context} profile={profile} />);
   return () => root.unmount();
 }

@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { loadPlugins } from './plugins';
+import { loadProfile } from './config';
 import type { TabRecord } from '../shared';
 
 app.setName('旺财');
@@ -28,8 +29,10 @@ else {
         renameSync(staging, target);
       } finally { rmSync(staging, { recursive: true, force: true }); }
     }
+    const profile = await loadProfile();
     const plugins = await loadPlugins(require.resolve('@wangcai/sdk'),
       app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug'),
+      profile,
       (id, event, data) => { if (window && !window.isDestroyed()) window.webContents.send('wangcai:event', id, event, data); },
       (event, data) => { if (window && !window.isDestroyed()) window.webContents.send('wangcai:channel', event, data); });
     protocol.handle('wangcai-plugin', async (request) => {
@@ -45,6 +48,7 @@ else {
     ipcMain.handle('wangcai:publish', (_, event: string, data: unknown) => plugins.publish(event, data));
     ipcMain.handle('wangcai:plugins', () => plugins.plugins);
     ipcMain.handle('wangcai:request', (_, id: string, method: string, params: unknown) => plugins.request(id, method, params));
+    ipcMain.handle('wangcai:config', () => profile);
     const tabsPath = join(app.getPath('userData'), 'tabs.json');
     ipcMain.handle('wangcai:tabs', () => existsSync(tabsPath) ? JSON.parse(readFileSync(tabsPath, 'utf8')) as TabRecord[] : []);
     ipcMain.handle('wangcai:save-tabs', (_: unknown, tabs: TabRecord[]) => {
@@ -60,7 +64,7 @@ else {
     const { maximized, ...bounds } = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : { width: 1180, height: 780 };
     const win = new BrowserWindow({
       ...bounds, minWidth: 740, minHeight: 460,
-      backgroundColor: '#11151b', title: '旺财', titleBarStyle: 'hiddenInset',
+      backgroundColor: profile.theme.background, title: '旺财', titleBarStyle: 'hiddenInset',
       webPreferences: { preload: join(__dirname, '../preload/preload.js') },
     });
     window = win;

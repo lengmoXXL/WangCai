@@ -14,3 +14,38 @@ export type TerminalEvent = ({ event: 'snapshot' } & Snapshot | { event: 'output
 export interface DirectoryEntry { name: string; isDirectory: boolean }
 export interface ExecOptions { cwd: string; env?: Record<string, string> }
 export interface ExecResult { stdout: Uint8Array; stderr: Uint8Array; code: number }
+export interface Theme {
+  background: string;
+  foreground: string;
+  cursor: string;
+  selection: string;
+  surface: string;
+  overlay: string;
+  border: string;
+  muted: string;
+  accent: string;
+  black: string;
+  red: string;
+  green: string;
+  yellow: string;
+  blue: string;
+  magenta: string;
+  cyan: string;
+  white: string;
+  brightBlack: string;
+  brightRed: string;
+  brightGreen: string;
+  brightYellow: string;
+  brightBlue: string;
+  brightMagenta: string;
+  brightCyan: string;
+  brightWhite: string;
+}
+
+export interface Profile {
+  font: {
+    ui: { family: string };
+    terminal: { family: string; size: number; lineHeight: number };
+  };
+  theme: Theme;
+}
