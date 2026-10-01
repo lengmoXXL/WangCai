@@ -3,7 +3,7 @@ import { denied, type Dispose, type TabRecord } from '../shared';
 import './style.css';
 
 type TabContent = { dispose: Dispose; onSelect?(): void };
-type TabOptions = { id: string; title: string; tooltip?: string; workspaceId?: string; mount(container: HTMLElement): TabContent };
+type TabOptions = { id: string; title: string; tooltip?: string; workspaceId?: string; onClose?(): void; mount(container: HTMLElement): TabContent };
 
 const root = document.getElementById('root')!;
 const disposers: Dispose[] = [];
@@ -104,7 +104,7 @@ async function start() {
     };
     paint();
   }
-  type Tab = { key: string; element: HTMLElement; button: HTMLButtonElement; panel: HTMLElement; content: TabContent; workspaceId?: string };
+  type Tab = { key: string; element: HTMLElement; button: HTMLButtonElement; panel: HTMLElement; content: TabContent; workspaceId?: string; onClose?(): void };
   const group = (workspaceId?: string) => workspaceId ?? '';
   let activeWorkspaceId: string | undefined;
   let current = '';
@@ -136,6 +136,7 @@ async function start() {
   };
   const removeTab = (key: string) => {
     const tab = tabs.get(key)!;
+    tab.onClose?.();
     void tab.content.dispose();
     tab.element.remove();
     tab.panel.remove();
@@ -266,7 +267,7 @@ async function start() {
         panel.dataset.plugin = plugin.id;
         panel.setAttribute('role', 'tabpanel');
         panel.setAttribute('aria-label', options.title);
-        const tab: Tab = { key, element, button, panel, workspaceId, content: options.mount(panel) };
+        const tab: Tab = { key, element, button, panel, workspaceId, onClose: options.onClose, content: options.mount(panel) };
         button.onclick = () => select(tab.key);
         close.onclick = () => {
           const siblings = [...tabs].filter(([, item]) => group(item.workspaceId) === group(tab.workspaceId)).map(([itemKey]) => itemKey);

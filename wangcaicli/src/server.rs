@@ -187,7 +187,7 @@ impl Node {
             .context("Terminal no longer exists")
     }
 
-    fn create(&self, rows: u16, cols: u16) -> Result<Value> {
+    fn create(&self, rows: u16, cols: u16, cwd: Option<&str>) -> Result<Value> {
         let pty = native_pty_system().openpty(PtySize {
             rows,
             cols,
@@ -196,7 +196,16 @@ impl Node {
         })?;
         let mut command = CommandBuilder::new_default_prog();
         let shell = command.get_shell();
-        command.cwd(std::env::var("HOME").context("HOME is not set")?);
+        command.cwd(match cwd {
+            Some(cwd) => {
+                let path = std::path::PathBuf::from(cwd);
+                if !path.is_dir() {
+                    bail!("Not a directory: {}", path.display());
+                }
+                path
+            }
+            None => std::env::var("HOME").context("HOME is not set")?.into(),
+        });
         command.env("TERM", "xterm-256color");
         command.env("COLORTERM", "truecolor");
         command.env("TERM_PROGRAM", "Wangcai");
@@ -375,7 +384,7 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                             Ok(json!(sessions))
                         }
                         "cwd" => Ok(json!(node.session(id)?.lock().unwrap().cwd()?)),
-                        "create" => { let (rows, cols) = dimensions(&request)?; node.create(rows, cols) }
+                        "create" => { let (rows, cols) = dimensions(&request)?; node.create(rows, cols, request["cwd"].as_str()) }
                         "attach" => {
                             let session = node.session(id)?;
                             let mut terminal = session.lock().unwrap();

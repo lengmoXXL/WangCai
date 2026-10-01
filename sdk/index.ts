@@ -1,6 +1,6 @@
 import { MachineConnection } from './connection';
 import type { ConnectionOptions } from './types';
-export type { ConnectionOptions, MachineState, Session, Size, Output, Snapshot, DirectoryEntry, ExecOptions, ExecResult, Profile, Theme } from './types';
+export type { ConnectionOptions, MachineState, Session, Size, Output, Snapshot, TerminalEvent, DirectoryEntry, ExecOptions, ExecResult, Profile, Theme } from './types';
 export type { MachineConnection } from './connection';
 export type { Pty } from './pty';
 

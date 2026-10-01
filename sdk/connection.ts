@@ -69,7 +69,7 @@ export class MachineConnection {
   pty = {
     list: () => this.request('list') as Promise<Session[]>,
     cwd: (id: string) => this.request('cwd', { session_id: id }) as Promise<string>,
-    create: (size: Size = { rows: 24, cols: 80 }) => this.request('create', { ...size }) as Promise<Session>,
+    create: (size: Size = { rows: 24, cols: 80 }, cwd?: string) => this.request('create', { ...size, cwd }) as Promise<Session>,
     attach: async (id: string) => {
       const existing = this.terminals.get(id);
       if (existing) return existing;
