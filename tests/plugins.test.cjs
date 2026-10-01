@@ -85,7 +85,7 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
     for (const name of ['alpha', 'beta']) {
       assert.equal(readFileSync(join(home, '.local/shared/wangcai/data', name, 'cleaned'), 'utf8'), 'yes');
       assert.equal(readFileSync(join(home, '.local/shared/wangcai/logs', name, 'plugin.log'), 'utf8'), name);
-      assert.equal(readFileSync(join(home, '.local/shared/wangcai/logs', name, 'config.log'), 'utf8'), '#11151b');
+      assert.equal(readFileSync(join(home, '.local/shared/wangcai/logs', name, 'config.log'), 'utf8'), '#0b0e13');
     }
     const source = join(home, '.local/shared/wangcai/plugins/alpha/ui.tsx');
     writeFileSync(source, readFileSync(source, 'utf8').replace('alpha v1', 'alpha v2'));

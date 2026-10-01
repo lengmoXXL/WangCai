@@ -1,11 +1,13 @@
 html, body, #root { margin: 0; width: 100%; height: 100%; }
 body { background: var(--wc-background); color: var(--wc-foreground); font-family: var(--wc-font); }
 #root { display: flex; overflow: hidden; }
+.desktop-main, .sidebar-left, .sidebar-right { border: 1px solid var(--wc-border); border-radius: 8px; overflow: hidden; }
 .desktop-main { display: flex; flex: 1; min-width: 240px; }
 .plugin { flex: 1; min-width: 0; height: 100%; }
 .plugin-error { padding: 48px 16px 16px; white-space: pre-wrap; overflow: auto; color: var(--wc-red); }
 .desktop-sidebar { flex-shrink: 0; min-width: 0; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; }
 .sidebar-left { padding-top: 36px; background: var(--wc-surface); -webkit-app-region: drag; }
+html[data-fullscreen] .sidebar-left { padding-top: 0; }
 .sidebar-slot { flex: 1; min-height: 0; -webkit-app-region: no-drag; }
 .sidebar-right ::-webkit-scrollbar { width: 10px; height: 12px; }
 .sidebar-right ::-webkit-scrollbar-track, .sidebar-right ::-webkit-scrollbar-corner { background: transparent; }
@@ -15,16 +17,23 @@ body { background: var(--wc-background); color: var(--wc-foreground); font-famil
 .sidebar-right ::-webkit-scrollbar-thumb:hover { background: #646464b3; }
 .sidebar-right ::-webkit-scrollbar-thumb:active { background: #bfbfbf66; }
 .sidebar-right ::-webkit-scrollbar-button { display: none; }
-.sidebar-divider { flex: 0 0 4px; cursor: col-resize; background: var(--wc-border); touch-action: none; }
-.sidebar-divider:hover, .sidebar-divider:focus-visible { background: var(--wc-accent); outline: none; }
-.sidebar-tabs { display: flex; flex-shrink: 0; min-height: 36px; margin-right: 40px; overflow-x: auto; border-bottom: 1px solid var(--wc-border); font-size: 12px; }
-.sidebar-tab { display: flex; align-items: center; flex-shrink: 0; max-width: 220px; border-right: 1px solid var(--wc-border); }
-.sidebar-tab:has([aria-selected=true]) { background: var(--wc-overlay); }
-.sidebar-tab button { border: 0; background: transparent; color: var(--wc-muted); cursor: pointer; }
+.sidebar-divider { flex: 0 0 4px; display: flex; justify-content: center; cursor: col-resize; touch-action: none; }
+/* Only the hover highlight is painted; the gap itself is the divider. */
+.sidebar-divider::before { content: ''; align-self: stretch; width: 2px; margin: 12px 0; border-radius: 2px; }
+.sidebar-divider:hover::before, .sidebar-divider:focus-visible::before { background: var(--wc-accent); }
+.sidebar-divider:focus-visible { outline: none; }
+.sidebar-tabs { display: flex; flex-shrink: 0; min-height: 36px; padding-right: 40px; overflow-x: auto; background: var(--wc-surface); font-size: 12px; }
+.sidebar-tab { position: relative; display: flex; align-items: center; flex-shrink: 0; max-width: 220px; }
+.sidebar-tab:has([aria-selected=true]) { background: var(--wc-background); border-radius: 8px 8px 0 0; }
+/* The active tab shares the panel colour, so the junction is painted as a concave corner in the tab strip's colour. */
+.sidebar-tab:has([aria-selected=true])::before, .sidebar-tab:has([aria-selected=true])::after { content: ''; position: absolute; bottom: 0; width: 8px; height: 8px; }
+.sidebar-tab:has([aria-selected=true])::before { left: 0; background: radial-gradient(circle 8px at 0 100%, transparent 8px, var(--wc-surface) 8px); }
+.sidebar-tab:has([aria-selected=true])::after { right: 0; background: radial-gradient(circle 8px at 100% 100%, transparent 8px, var(--wc-surface) 8px); }
+.sidebar-tab button { border: 0; background: transparent; color: oklch(from color-mix(in srgb, var(--wc-muted) 60%, var(--wc-background)) l calc(c * 0.32) h); cursor: pointer; }
 .sidebar-tab:has([aria-selected=true]) button { color: var(--wc-foreground); }
 .sidebar-tab [role=tab] { padding: 9px 6px 9px 12px; font: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sidebar-tab .close-tab { flex-shrink: 0; width: 24px; height: 24px; padding: 0; margin-right: 4px; font-size: 16px; }
-.sidebar-tab button:hover { background: var(--wc-overlay); }
+.sidebar-tab .close-tab { flex-shrink: 0; width: 18px; height: 18px; padding: 0; margin-right: 4px; border-radius: 4px; font-size: 15px; }
+.sidebar-tab .close-tab:hover { background: var(--wc-overlay); }
 .sidebar-tab button:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: -2px; }
 .sidebar-content { flex: 1; min-height: 0; }
 .sidebar-panel { height: 100%; min-width: 0; overflow: hidden; }

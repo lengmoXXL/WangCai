@@ -79,6 +79,8 @@ else {
       webPreferences: { preload: join(__dirname, '../preload/preload.js') },
     });
     window = win;
+    win.on('enter-full-screen', () => win.webContents.send('wangcai:channel', 'fullscreen', true));
+    win.on('leave-full-screen', () => win.webContents.send('wangcai:channel', 'fullscreen', false));
     if (maximized) win.maximize();
     win.on('close', () => {
       writeFileSync(`${statePath}.tmp`, JSON.stringify({ ...win.getNormalBounds(), maximized: win.isMaximized() }));

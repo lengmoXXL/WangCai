@@ -1,4 +1,4 @@
-.git-page { height: 100%; display: flex; flex-direction: column; min-width: 0; color: var(--wc-foreground); background: var(--wc-background); font-size: 12px; }
+.git-page { height: 100%; display: flex; flex-direction: column; min-width: 0; color: var(--wc-foreground); font-size: 12px; }
 .git-page, .git-page * { box-sizing: border-box; }
 .git-page button { font: inherit; color: inherit; background: transparent; border: 0; cursor: pointer; }
 .git-page button:hover { background: var(--wc-overlay); }
@@ -11,8 +11,10 @@
 .git-toolbar button[aria-pressed=true] { color: var(--wc-accent); background: var(--wc-selection); }
 .git-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
 .git-rail { flex-shrink: 0; overflow: auto; }
-.git-divider { flex: 0 0 4px; cursor: col-resize; background: var(--wc-border); touch-action: none; }
-.git-divider:hover, .git-divider:focus-visible { background: var(--wc-accent); outline: none; }
+.git-divider { flex: 0 0 4px; display: flex; justify-content: center; cursor: col-resize; touch-action: none; }
+.git-divider::before { content: ''; align-self: stretch; width: 2px; margin: 12px 0; border-radius: 2px; }
+.git-divider:hover::before, .git-divider:focus-visible::before { background: var(--wc-accent); }
+.git-divider:focus-visible { outline: none; }
 .git-root { padding: 8px; color: var(--wc-muted); overflow-wrap: anywhere; }
 .git-page summary { padding: 7px 8px; cursor: pointer; background: var(--wc-overlay); }
 .git-page summary small { color: var(--wc-muted); }

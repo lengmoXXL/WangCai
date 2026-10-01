@@ -10,7 +10,7 @@ const DEFAULT_PROFILE: Profile = {
     terminal: { family: '"SFMono-Regular", Menlo, Monaco, monospace', size: 13, lineHeight: 1 },
   },
   theme: {
-    background: '#11151b',
+    background: '#0b0e13',
     foreground: '#dce3eb',
     cursor: '#9bc7bc',
     selection: '#35534e',

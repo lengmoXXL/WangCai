@@ -24,6 +24,7 @@ document.addEventListener('scroll', (event) => {
 }, true);
 
 async function start() {
+  window.wangcai.subscribe('fullscreen', (value) => document.documentElement.toggleAttribute('data-fullscreen', value === true));
   const plugins = await window.wangcai.plugins();
   const profile = await window.wangcai.config();
   for (const [token, color] of Object.entries(profile.theme)) document.documentElement.style.setProperty(`--wc-${token}`, color);

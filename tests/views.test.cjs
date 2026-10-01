@@ -181,3 +181,31 @@ test('view menu switches plugins and handles empty, disconnected and closed term
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('full screen reclaims the window chrome space above the workspaces', { timeout: 90000 }, async () => {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-full-screen-')));
+  const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
+  delete env.ELECTRON_RUN_AS_NODE;
+  let desktop;
+  try {
+    desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
+    const page = await desktop.firstWindow();
+    const left = page.locator('.sidebar-left');
+    const header = page.locator('.wangcai-workspace .sidebar-header');
+    await page.locator('.machine.connected').waitFor();
+    const padding = () => left.evaluate((element) => getComputedStyle(element).paddingTop);
+    const headerTop = () => header.evaluate((element) => Math.round(element.getBoundingClientRect().top));
+    assert.equal(await padding(), '36px');
+    assert.equal(await headerTop(), 37);
+    await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].setFullScreen(true); });
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('.sidebar-left')).paddingTop === '0px');
+    assert.equal(await headerTop(), 1);
+    await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].setFullScreen(false); });
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('.sidebar-left')).paddingTop === '36px');
+    assert.equal(await headerTop(), 37);
+  } finally {
+    await desktop?.close();
+    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
+    rmSync(home, { recursive: true, force: true });
+  }
+});

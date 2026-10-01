@@ -48,7 +48,7 @@ test('Electron: local terminal, reconnect, machine add/remove and relaunch', { t
     });
     assert.deepEqual(terminal.bar, ['10px', '10px'], 'the terminal scrollbar is 10px wide');
     assert.ok(terminal.overlap <= 0, `the terminal grid runs ${terminal.overlap}px under the viewport scrollbar`);
-    assert.deepEqual(terminal.outline, [17, 21, 27, 255], 'the overview ruler outline hides in the terminal background');
+    assert.deepEqual(terminal.outline, [11, 14, 19, 255], 'the overview ruler outline hides in the terminal background');
     const workspaces = (await page.evaluate(() => window.wangcai.request('workspace', 'config'))).workspaces;
     assert.equal(workspaces.length, 1);
     assert.equal(await localTabs.getByRole('tab').count(), 1);

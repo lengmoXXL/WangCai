@@ -68,8 +68,8 @@ test('Git tab follows terminal cwd and displays two read-only diffs', { timeout:
     await page.mouse.up();
     assert.equal(Math.round(await railWidth()), Math.round(body.width * 0.7));
     await page.locator('.git-divider').hover();
-    assert.equal(await page.locator('.git-divider').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(155, 199, 188)');
-    assert.deepEqual(await page.locator('.git-editor .monaco-editor').first().evaluate((element) => ['--vscode-editor-background', '--vscode-diffEditor-insertedTextBackground', '--vscode-diffEditor-removedTextBackground'].map((name) => getComputedStyle(element).getPropertyValue(name))), ['#11151b', 'rgba(155, 199, 188, 0.2)', 'rgba(230, 140, 140, 0.2)']);
+    assert.equal(await page.locator('.git-divider').evaluate((element) => getComputedStyle(element, '::before').backgroundColor), 'rgb(155, 199, 188)');
+    assert.deepEqual(await page.locator('.git-editor .monaco-editor').first().evaluate((element) => ['--vscode-editor-background', '--vscode-diffEditor-insertedTextBackground', '--vscode-diffEditor-removedTextBackground'].map((name) => getComputedStyle(element).getPropertyValue(name))), ['#0b0e13', 'rgba(155, 199, 188, 0.2)', 'rgba(230, 140, 140, 0.2)']);
     const workerReady = page.waitForEvent('worker');
     await page.evaluate(() => window.MonacoEnvironment.getWorker('', 'editorWorkerService'));
     const worker = await workerReady;

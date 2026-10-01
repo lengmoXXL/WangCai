@@ -65,7 +65,7 @@ test('view picker browses current terminal directory; file links preview code, M
     await page.getByRole('button', { name: '切换右侧栏' }).click();
     await clickLink(`${code}:2:3`);
     await page.getByLabel('文件预览', { exact: true }).waitFor();
-    assert.equal(await page.locator('.file-preview .monaco-editor').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(17, 21, 27)');
+    assert.equal(await page.locator('.file-preview .monaco-editor').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(11, 14, 19)');
     await page.locator('.monaco-editor .view-lines').filter({ hasText: 'CODE_PREVIEW' }).waitFor();
     const workerReady = page.waitForEvent('worker');
     await page.evaluate(() => { window.MonacoEnvironment.getWorker('', 'editorWorkerService'); });
