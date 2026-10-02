@@ -31,6 +31,7 @@ export interface WangcaiAPI {
   disconnect(id: string): Promise<void>;
   openWorkspace(machineId: string, workspaceId?: string): Promise<{ config: Config; workspaceId: string }>;
   closeWorkspace(id: string): Promise<Config>;
+  moveWorkspace(id: string, before?: string): Promise<Config>;
   pty(machineId: string, op: string, params?: Record<string, unknown>): Promise<unknown>;
   onConfig(callback: (config: Config) => void): () => void;
   onState(callback: (state: MachineState) => void): () => void;

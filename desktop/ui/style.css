@@ -32,6 +32,8 @@ html[data-fullscreen] .sidebar-left { padding-top: 0; }
 .sidebar-tab button { border: 0; background: transparent; color: oklch(from color-mix(in srgb, var(--wc-muted) 60%, var(--wc-background)) l calc(c * 0.32) h); cursor: pointer; }
 .sidebar-tab:has([aria-selected=true]) button { color: var(--wc-foreground); }
 .sidebar-tab [role=tab] { padding: 9px 6px 9px 12px; font: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-tab[data-drop=before] { box-shadow: inset 2px 0 0 var(--wc-accent); }
+.sidebar-tab[data-drop=after] { box-shadow: inset -2px 0 0 var(--wc-accent); }
 .sidebar-tab .close-tab { flex-shrink: 0; width: 18px; height: 18px; padding: 0; margin-right: 4px; border-radius: 4px; font-size: 15px; }
 .sidebar-tab .close-tab:hover { background: var(--wc-overlay); }
 .sidebar-tab button:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: -2px; }

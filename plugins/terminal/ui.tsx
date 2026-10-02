@@ -88,7 +88,7 @@ function TerminalPane({ context, machine, sessionId, activation }: { context: Co
 }
 
 function openTab(context: Context, tab: TerminalRef & { workspaceId?: string }) {
-  void context.host.request('tabs', {
+  return context.host.request('tabs', {
     id: tab.sessionId, title: tab.label, tooltip: `${tab.machine.name}: ${tab.label}`, workspaceId: tab.workspaceId,
     onClose: () => { void context.ui.request('close', tab.sessionId).catch(() => {}); },
     mount(container: HTMLElement) {
@@ -104,7 +104,7 @@ function openTab(context: Context, tab: TerminalRef & { workspaceId?: string }) 
 }
 
 function showMessage(context: Context, id: string, message: string, workspaceId?: string) {
-  void context.host.request('tabs', {
+  return context.host.request('tabs', {
     id, title: '终端', tooltip: message, workspaceId,
     mount(container: HTMLElement) {
       container.classList.add('wangcai-terminal');
@@ -120,24 +120,22 @@ function showMessage(context: Context, id: string, message: string, workspaceId?
 export function open(context: Context) {
   const terminal = activeTerminal;
   if (!terminal) {
-    showMessage(context, 'message', '请先打开一个工作区终端');
+    void showMessage(context, 'message', '请先打开一个工作区终端');
     return;
   }
   void context.ui.request<TerminalRef>('open', terminal).then((tab) => {
-    openTab(context, { ...tab, workspaceId: terminal.workspaceId });
+    void openTab(context, { ...tab, workspaceId: terminal.workspaceId });
   }).catch((error: Error) => showMessage(context, 'message', error.message, terminal.workspaceId));
 }
 
-export function restore(context: Context, records: { id: string; workspaceId?: string }[]) {
-  for (const record of records) {
-    if (record.id === 'message') {
-      showMessage(context, 'message', '请先打开一个工作区终端', record.workspaceId);
-      continue;
-    }
-    void context.ui.request<TerminalRef>('describe', record.id).then((tab) => {
-      openTab(context, { ...tab, workspaceId: record.workspaceId });
-    }).catch((error: Error) => showMessage(context, record.id, error.message, record.workspaceId));
+export async function restore(context: Context, record: { id: string; workspaceId?: string }) {
+  if (record.id === 'message') {
+    await showMessage(context, 'message', '请先打开一个工作区终端', record.workspaceId);
+    return;
   }
+  await context.ui.request<TerminalRef>('describe', record.id)
+    .then((tab) => openTab(context, { ...tab, workspaceId: record.workspaceId }))
+    .catch((error: Error) => showMessage(context, record.id, error.message, record.workspaceId));
 }
 
 export async function mount(_container: HTMLElement, context: Context) {

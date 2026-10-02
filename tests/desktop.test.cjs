@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { _electron: electron } = require('playwright');
-const { mkdtempSync, realpathSync, rmSync, readFileSync, existsSync } = require('node:fs');
+const { mkdtempSync, mkdirSync, realpathSync, rmSync, readFileSync, existsSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
@@ -112,6 +112,57 @@ test('Electron: local terminal, reconnect, machine add/remove and relaunch', { t
   } finally {
     if (desktop) await desktop.close().catch(() => {});
     await devServer?.close();
+    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('workspaces can be dragged into a new order', { timeout: 90000 }, async () => {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-workspace-order-')));
+  const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
+  delete env.ELECTRON_RUN_AS_NODE;
+  let desktop;
+  let page;
+  const open = async () => {
+    desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
+    page = await desktop.firstWindow();
+    await page.locator('.machine.connected').waitFor();
+  };
+  const WORKSPACE_NAMES = '[aria-label="本机 工作区"] [role=tab] .name';
+  const settled = (expected) => page.waitForFunction(([selector, want]) => [...document.querySelectorAll(selector)].map((node) => node.textContent).join() === want, [WORKSPACE_NAMES, expected.join()]);
+  const cd = async (index, directory) => {
+    const sessionId = (await page.evaluate(() => window.wangcai.request('workspace', 'config'))).workspaces[index].sessionId;
+    await page.evaluate(({ sessionId, directory }) => window.wangcai.request('workspace', 'pty', { id: 'local', op: 'input', params: { session_id: sessionId, data: `cd ${directory}\r` } }), { sessionId, directory });
+  };
+  try {
+    for (const name of ['alpha', 'beta', 'gamma']) mkdirSync(join(home, name));
+    await open();
+    await page.locator('.machine.connected').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: /新建工作区/ }).click();
+    await settled(['~']);
+    await cd(0, 'alpha');
+    await settled(['alpha']);
+    await page.locator('.machine.connected').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: /新建工作区/ }).click();
+    await settled(['alpha', '~']);
+    await cd(1, 'beta');
+    await settled(['alpha', 'beta']);
+    await page.locator('.machine.connected').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: /新建工作区/ }).click();
+    await settled(['alpha', 'beta', '~']);
+    await cd(2, 'gamma');
+    await settled(['alpha', 'beta', 'gamma']);
+    await page.getByRole('tab', { name: 'beta' }).dragTo(page.getByRole('tab', { name: 'alpha' }), { targetPosition: { x: 40, y: 4 } });
+    await settled(['beta', 'alpha', 'gamma']);
+    // dropping a row below the row in front of it must leave it where it is
+    await page.getByRole('tab', { name: 'alpha' }).dragTo(page.getByRole('tab', { name: 'beta' }), { targetPosition: { x: 40, y: 20 } });
+    await page.waitForTimeout(500);
+    assert.deepEqual(await page.locator(WORKSPACE_NAMES).allTextContents(), ['beta', 'alpha', 'gamma']);
+    await desktop.close(); desktop = undefined;
+    await open();
+    await settled(['beta', 'alpha', 'gamma']);
+  } finally {
+    await desktop?.close();
     try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
     rmSync(home, { recursive: true, force: true });
   }

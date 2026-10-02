@@ -157,15 +157,15 @@ function FileView({ context, file }: { context: Context; file: FileClick }) {
 }
 
 export function open(context: Context) {
-  openTab(context, activeWorkspaceId);
+  void openTab(context, activeWorkspaceId);
 }
 
-export function restore(context: Context, tabs: { id: string; workspaceId?: string }[]) {
-  for (const tab of tabs) if (tab.id === 'directory') openTab(context, tab.workspaceId);
+export async function restore(context: Context, record: { id: string; workspaceId?: string }) {
+  if (record.id === 'directory') await openTab(context, record.workspaceId);
 }
 
 function openTab(context: Context, workspaceId?: string) {
-  void context.host.request('tabs', { id: 'directory', title: '文件', workspaceId, mount(container: HTMLElement) {
+  return context.host.request('tabs', { id: 'directory', title: '文件', workspaceId, mount(container: HTMLElement) {
     const root = createRoot(container);
     let revision = 0;
     return {

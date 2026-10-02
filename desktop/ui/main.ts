@@ -113,13 +113,27 @@ async function start() {
   const tabKey = (plugin: string, id: string, workspaceId?: string) => JSON.stringify([plugin, group(workspaceId), id]);
   const tabs = new Map<string, Tab>();
   const records = new Map<string, TabRecord>();
+  let dragging: string | undefined;
+  const reorder = <T>(map: Map<string, T>, key: string, before: string | undefined) => {
+    if (key === before) return;
+    const value = map.get(key)!;
+    map.delete(key);
+    if (before === undefined) { map.set(key, value); return; }
+    const entries = [...map];
+    map.clear();
+    for (const [item, entry] of entries) {
+      if (item === before) map.set(key, value);
+      map.set(item, entry);
+    }
+  };
+  const visibleTab = (tab: Tab) => tab.workspaceId === undefined || tab.workspaceId === activeWorkspaceId;
   const persist = () => { void window.wangcai.saveTabs([...records.values()]); };
   for (const record of await window.wangcai.loadTabs()) records.set(tabKey(record.plugin, record.id, record.workspaceId), record);
   const show = () => {
     right.hidden = !tabs.size;
     toggle.setAttribute('aria-expanded', String(!right.hidden));
     for (const [key, tab] of tabs) {
-      const visible = tab.workspaceId === undefined || tab.workspaceId === activeWorkspaceId;
+      const visible = visibleTab(tab);
       const isCurrent = key === current;
       tab.element.hidden = !visible;
       tab.button.setAttribute('aria-selected', String(isCurrent));
@@ -207,6 +221,7 @@ async function start() {
     menu.hidePopover();
   };
   root.append(toggle, menu);
+  const restores = new Map<string, (record: TabRecord) => Promise<void>>();
   for (const plugin of plugins) {
     if (!plugin.error && !plugin.ui) continue;
     const container = document.createElement('section');
@@ -216,6 +231,14 @@ async function start() {
     const subscriptions = new Set<() => void>();
     let stylesheet: HTMLLinkElement | undefined;
     let dispose: Dispose | undefined;
+    const fail = async (error: unknown) => {
+      for (const off of subscriptions) off();
+      await dispose?.();
+      stylesheet?.remove();
+      container.hidden = false;
+      container.className = 'plugin-error';
+      container.textContent = `${plugin.id}: ${error instanceof Error ? error.message : String(error)}`;
+    };
     try {
       if (plugin.error) throw new Error(plugin.error);
       if (plugin.css) {
@@ -278,6 +301,34 @@ async function start() {
           if (current === tab.key) select(siblings[index - 1] ?? siblings[index + 1] ?? '');
         };
         element.append(button, close);
+        element.draggable = true;
+        element.ondragstart = (event) => {
+          dragging = tab.key;
+          event.dataTransfer!.effectAllowed = 'move';
+        };
+        // A drag cancelled with Escape never reaches dragleave or drop, so the target keeps its marker.
+        element.ondragend = () => {
+          dragging = undefined;
+          for (const node of header.querySelectorAll<HTMLElement>('.sidebar-tab[data-drop]')) delete node.dataset.drop;
+        };
+        element.ondragover = (event) => {
+          if (dragging === undefined || dragging === tab.key) return;
+          event.preventDefault();
+          const box = element.getBoundingClientRect();
+          element.dataset.drop = event.clientX < box.left + box.width / 2 ? 'before' : 'after';
+        };
+        element.ondragleave = () => { delete element.dataset.drop; };
+        element.ondrop = (event) => {
+          event.preventDefault();
+          const source = dragging!;
+          const after = element.dataset.drop === 'after';
+          const visible = [...tabs].filter(([, item]) => visibleTab(item));
+          const before = after ? visible[visible.findIndex(([item]) => item === tab.key) + 1]?.[0] : tab.key;
+          reorder(tabs, source, before);
+          reorder(records, source, before);
+          header.insertBefore(tabs.get(source)!.element, before === undefined ? picker : tabs.get(before)!.element);
+          persist();
+        };
         header.insertBefore(element, picker);
         content.append(panel);
         tabs.set(key, tab);
@@ -320,8 +371,9 @@ async function start() {
       const module = await import(/* @vite-ignore */ plugin.ui!);
       if (module.open) container.hidden = true;
       dispose = await module.mount(container, context);
-      const pluginRecords = [...records.values()].filter((record) => record.plugin === plugin.id);
-      if (module.restore && pluginRecords.length) await module.restore(context, pluginRecords);
+      if (module.restore) restores.set(plugin.id, async (record) => {
+        try { await module.restore!(context, record); } catch (error) { await fail(error); }
+      });
       if (module.open) {
         const item = document.createElement('button');
         item.textContent = module.title ?? plugin.id;
@@ -337,14 +389,10 @@ async function start() {
       };
       if (closing) await cleanup(); else disposers.push(cleanup);
     } catch (error) {
-      for (const off of subscriptions) off();
-      await dispose?.();
-      stylesheet?.remove();
-      container.hidden = false;
-      container.className = 'plugin-error';
-      container.textContent = `${plugin.id}: ${error instanceof Error ? error.message : String(error)}`;
+      await fail(error);
     }
   }
+  for (const record of records.values()) await restores.get(record.plugin)?.(record);
   disposers.push(() => { for (const tab of tabs.values()) void tab.content.dispose(); tabs.clear(); });
 }
 void start().catch((error) => { root.textContent = String(error); });

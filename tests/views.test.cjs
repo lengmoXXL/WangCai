@@ -197,12 +197,74 @@ test('full screen reclaims the window chrome space above the workspaces', { time
     const headerTop = () => header.evaluate((element) => Math.round(element.getBoundingClientRect().top));
     assert.equal(await padding(), '36px');
     assert.equal(await headerTop(), 37);
-    await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].setFullScreen(true); });
+    // a real setFullScreen(true) does not enter full screen in this environment, so drive the event the main process forwards
+    await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].emit('enter-full-screen'); });
     await page.waitForFunction(() => getComputedStyle(document.querySelector('.sidebar-left')).paddingTop === '0px');
     assert.equal(await headerTop(), 1);
-    await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].setFullScreen(false); });
+    await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].emit('leave-full-screen'); });
     await page.waitForFunction(() => getComputedStyle(document.querySelector('.sidebar-left')).paddingTop === '36px');
     assert.equal(await headerTop(), 37);
+  } finally {
+    await desktop?.close();
+    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('sidebar tabs can be dragged into a new order', { timeout: 90000 }, async () => {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-tab-order-')));
+  const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
+  delete env.ELECTRON_RUN_AS_NODE;
+  let desktop;
+  let page;
+  const errors = [];
+  const open = async () => {
+    desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
+    page = await desktop.firstWindow();
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+    await page.getByRole('button', { name: '切换右侧栏' }).click();
+  };
+  try {
+    await open();
+    for (const name of ['文件', 'Git', '终端']) {
+      await page.getByRole('button', { name: '新建侧栏标签页' }).click();
+      await page.locator('#view-menu').getByRole('button', { name, exact: true }).click();
+      await page.getByRole('tab', { name, exact: true }).waitFor();
+    }
+    const TAB_ORDER = '.sidebar-tab:not([hidden]) [role=tab]';
+    const DROPPED = '.sidebar-tab[data-drop]';
+    const tab = (name) => page.locator('.sidebar-tab').filter({ has: page.getByRole('tab', { name, exact: true }) });
+    const order = () => page.locator(TAB_ORDER).allTextContents();
+    const settled = (expected) => page.waitForFunction(([selector, want]) => [...document.querySelectorAll(selector)].map((node) => node.textContent).join() === want, [TAB_ORDER, expected.join()]);
+    assert.deepEqual(await order(), ['文件', 'Git', '终端']);
+    const source = await tab('文件').boundingBox();
+    const target = await tab('Git').boundingBox();
+    await page.mouse.move(source.x + 20, source.y + 18);
+    await page.mouse.down();
+    await page.mouse.move(target.x + 20, target.y + 18, { steps: 6 });
+    await page.waitForFunction((selector) => document.querySelectorAll(selector).length === 1, DROPPED);
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+    await page.waitForFunction((selector) => document.querySelectorAll(selector).length === 0, DROPPED);
+    await tab('Git').dragTo(tab('文件'), { targetPosition: { x: 4, y: 18 } });
+    await settled(['Git', '文件', '终端']);
+    // dropping a tab after the tab in front of it must leave it where it is
+    await tab('文件').dragTo(tab('Git'), { targetPosition: { x: 45, y: 18 } });
+    await page.waitForTimeout(500);
+    assert.deepEqual(await order(), ['Git', '文件', '终端']);
+    await tab('终端').dragTo(tab('Git'), { targetPosition: { x: 4, y: 18 } });
+    await settled(['终端', 'Git', '文件']);
+    // opening a workspace rebinds these tabs to it, which rewrites their keys
+    await page.locator('.machine.connected').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: /新建工作区/ }).click();
+    await page.getByRole('tab', { name: '~' }).waitFor();
+    await tab('文件').dragTo(tab('终端'), { targetPosition: { x: 4, y: 18 } });
+    await settled(['文件', '终端', 'Git']);
+    await desktop.close(); desktop = undefined;
+    await open();
+    await settled(['文件', '终端', 'Git']);
+    assert.deepEqual(errors, []);
   } finally {
     await desktop?.close();
     try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}

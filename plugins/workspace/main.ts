@@ -15,6 +15,7 @@ export type WorkspaceApi = {
   disconnect(id: string): void;
   'open-workspace'(params: { machineId: string; workspaceId?: string }): Promise<{ config: Config; workspaceId: string }>;
   'close-workspace'(id: string): Promise<Config>;
+  'move-workspace'(params: { id: string; before?: string }): Config;
   pty(params: { id: string; op: string; params: Record<string, unknown> }): Promise<unknown>;
 };
 
@@ -160,6 +161,16 @@ export async function activate(context: Context) {
       await connections.get(workspace.machineId)?.pty.close(workspace.sessionId).catch(() => {});
     }
     config.workspaces = config.workspaces.filter((item) => item.id !== id);
+    save();
+    return config;
+  }));
+  handlers.push(context.ui.handle('move-workspace', ({ id, before }: { id: string; before?: string }) => {
+    if (id === before) return config;
+    const index = config.workspaces.findIndex((workspace) => workspace.id === id);
+    if (index < 0) return config;
+    const [workspace] = config.workspaces.splice(index, 1);
+    const target = config.workspaces.findIndex((item) => item.id === before);
+    config.workspaces.splice(target < 0 ? config.workspaces.length : target, 0, workspace);
     save();
     return config;
   }));

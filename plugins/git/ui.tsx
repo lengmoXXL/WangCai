@@ -238,15 +238,15 @@ function GitView({ context, activation, workspaceId }: { context: Context; activ
 }
 
 export function open(context: Context) {
-  openTab(context, activeWorkspaceId);
+  void openTab(context, activeWorkspaceId);
 }
 
-export function restore(context: Context, tabs: { id: string; workspaceId?: string }[]) {
-  for (const tab of tabs) if (tab.id === 'history') openTab(context, tab.workspaceId);
+export async function restore(context: Context, record: { workspaceId?: string }) {
+  await openTab(context, record.workspaceId);
 }
 
 function openTab(context: Context, workspaceId?: string) {
-  void context.host.request('tabs', { id: 'history', title: 'Git', workspaceId, mount(container: HTMLElement) {
+  return context.host.request('tabs', { id: 'history', title: 'Git', workspaceId, mount(container: HTMLElement) {
     const root = createRoot(container);
     let activation = 0;
     return { onSelect: () => root.render(<GitView context={context} activation={++activation} workspaceId={workspaceId} />), dispose: () => root.unmount() };

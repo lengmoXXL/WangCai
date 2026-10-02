@@ -133,6 +133,8 @@ function App({ context, profile }: { context: Context; profile: Profile }) {
   const [menu, setMenu] = useState<Menu>();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [drop, setDrop] = useState<{ id: string; after: boolean }>();
+  const dragged = useRef<{ id: string; machineId: string }>(undefined);
   useEffect(() => {
     const off = api.onState((state) => setStates((states) => ({ ...states, [state.machineId]: state })));
     const offConfig = api.onConfig(setConfig);
@@ -249,16 +251,33 @@ function App({ context, profile }: { context: Context; profile: Profile }) {
       <nav aria-label="工作区">{config.machines.map((item) => {
         const itemStatus = states[item.id]?.status ?? 'disconnected';
         const itemSelected = selected === item.id;
+        const machineWorkspaces = config.workspaces.filter((workspace) => workspace.machineId === item.id);
         return <section className="machine-group" key={item.id}>
           <button title={item.host ?? '本机'} aria-current={itemSelected ? 'page' : undefined} className={`machine ${itemStatus} ${itemSelected ? 'current' : ''}`} onClick={() => selectMachine(item.id)} onContextMenu={(event) => openMenu(event, { kind: 'machine', label: item.name, machineId: item.id })}>
             <svg className="glyph" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2.2 2.4h11.6v4.5H2.2zM2.2 9.1h11.6v4.5H2.2z" /><path d="M4.8 4.6h4.4M4.8 11.3h4.4" /></svg>
             <span className="machine-name">{item.name}</span>
           </button>
           <div role="tablist" aria-label={`${item.name} 工作区`} aria-orientation="vertical" className={`workspaces ${itemStatus === 'connected' ? '' : 'offline'}`}>
-            {config.workspaces.filter((workspace) => workspace.machineId === item.id).map((workspace, index) => {
+            {machineWorkspaces.map((workspace, index) => {
               const current = itemSelected && activeWorkspace?.id === workspace.id;
               const label = workspace.name ?? `工作区 ${index + 1}`;
-              return <div role="tab" aria-selected={current} tabIndex={0} key={workspace.id} className={`workspace ${current ? 'selected' : ''} ${liveSession(sessionFor(workspace)) ? 'running' : ''}`} onClick={() => {
+              const dropHere = drop?.id === workspace.id ? `drop-${drop.after ? 'after' : 'before'}` : '';
+              return <div role="tab" aria-selected={current} tabIndex={0} key={workspace.id} draggable className={`workspace ${current ? 'selected' : ''} ${liveSession(sessionFor(workspace)) ? 'running' : ''} ${dropHere}`} onDragStart={(event) => {
+                dragged.current = { id: workspace.id, machineId: item.id };
+                event.dataTransfer.effectAllowed = 'move';
+              }} onDragEnd={() => { dragged.current = undefined; setDrop(undefined); }} onDragLeave={() => setDrop(undefined)} onDragOver={(event) => {
+                const moving = dragged.current;
+                if (!moving || moving.id === workspace.id || moving.machineId !== item.id) return;
+                event.preventDefault();
+                const box = event.currentTarget.getBoundingClientRect();
+                setDrop({ id: workspace.id, after: event.clientY > box.top + box.height / 2 });
+              }} onDrop={(event) => {
+                const moving = dragged.current!;
+                event.preventDefault();
+                const after = drop?.id === workspace.id && drop.after;
+                const before = after ? machineWorkspaces[index + 1]?.id : workspace.id;
+                void api.moveWorkspace(moving.id, before).then(setConfig).catch((error: Error) => setError(error.message));
+              }} onClick={() => {
                 selectMachine(item.id);
                 selectWorkspace(item.id, workspace.id);
               }} onContextMenu={(event) => openMenu(event, { kind: 'workspace', label, workspaceId: workspace.id })} onKeyDown={(event) => {
@@ -314,6 +333,7 @@ export async function mount(container: HTMLElement, context: Context) {
     disconnect: (id) => call('disconnect', id),
     openWorkspace: (machineId, workspaceId) => call('open-workspace', { machineId, workspaceId }),
     closeWorkspace: (id) => call('close-workspace', id),
+    moveWorkspace: (id, before) => call('move-workspace', { id, before }),
     pty: (id, op, params = {}) => call('pty', { id, op, params }),
     onConfig: (callback) => context.ui.subscribe('config', callback),
     onState: (callback) => context.ui.subscribe('state', callback),
