@@ -20,7 +20,7 @@ export interface Overview extends History {
   truncated: boolean;
 }
 export interface Comparison extends GitFile { source: Stage | 'commit'; rev?: string }
-export interface Diff { oldText: string; newText: string; oldLabel: string; newLabel: string; notice?: string }
+export interface Diff { oldText: string; newText: string; notice?: string }
 export interface GitRequest {
   terminal: ActiveTerminal;
   root?: string;

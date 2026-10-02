@@ -88,26 +88,21 @@ export async function readGit(method: string, cwd: string, query: GitRequest, ru
   const oldPath = comparison.oldPath ?? comparison.path;
   let oldBytes: Uint8Array;
   let newBytes: Uint8Array;
-  let oldLabel: string;
-  let newLabel: string;
   if (comparison.source === 'commit') {
     const sha = revision(comparison.rev!);
     const parents = (await git(['rev-list', '--parents', '-n', '1', sha, '--'])).toString().trim().split(' ');
     oldBytes = await blob(parents[1] ?? '', oldPath);
     newBytes = await blob(sha, comparison.path);
-    oldLabel = parents[1]?.slice(0, 8) ?? '(empty)'; newLabel = sha.slice(0, 8);
   } else if (comparison.source === 'staged') {
     const head = await run(cwd, ['rev-parse', '--verify', '--quiet', 'HEAD']);
     if (head.code !== 0 && head.code !== 1) throw new Error(head.stderr || 'Cannot resolve HEAD');
     oldBytes = await blob(head.code === 0 ? head.stdout.toString().trim() : '', oldPath);
     newBytes = await blob(undefined, comparison.path);
-    oldLabel = 'HEAD'; newLabel = 'Index';
   } else {
     oldBytes = comparison.source === 'untracked' ? Buffer.alloc(0) : await blob(undefined, comparison.path, comparison.source === 'conflicted' ? '2' : '0');
     newBytes = comparison.status === 'D' ? Buffer.alloc(0) : await readFile(posix.join(cwd, comparison.path));
-    oldLabel = comparison.source === 'conflicted' ? 'Ours' : 'Index'; newLabel = 'Working tree';
   }
-  const result: Diff = { oldText: '', newText: '', oldLabel, newLabel };
+  const result: Diff = { oldText: '', newText: '' };
   if (oldBytes.length > 2 * 1024 * 1024 || newBytes.length > 2 * 1024 * 1024) return { ...result, notice: 'File exceeds the 2 MiB diff limit' };
   if (oldBytes.includes(0) || newBytes.includes(0)) return { ...result, notice: 'Binary files cannot be compared as text' };
   try {
