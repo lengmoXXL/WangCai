@@ -65,6 +65,8 @@ test('view menu switches plugins and handles empty, disconnected and closed term
     await page.getByRole('menuitem', { name: /新建工作区/ }).click();
     const directory = page.getByRole('navigation', { name: '当前目录文件' });
     await directory.getByRole('button', { name: '.hidden.md', exact: true }).waitFor();
+    assert.equal(await page.locator('.workspace.selected').evaluate((element) => getComputedStyle(element).backgroundColor),
+      await page.locator('.sidebar-tab:has([aria-selected=true])').first().evaluate((element) => getComputedStyle(element).backgroundColor));
     assert.equal(await directory.getByRole('button', { name: '.hidden.md', exact: true }).locator('svg[data-kind=file]').count(), 1);
     assert.equal(await directory.getByRole('button', { name: '子目录 with spaces/', exact: true }).locator('svg[data-kind=folder]').count(), 1);
     for (const [side, label, delta, minimum, shrink] of [
