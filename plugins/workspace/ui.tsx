@@ -285,7 +285,7 @@ function App({ context, profile }: { context: Context; profile: Profile }) {
                 event.preventDefault();
                 event.currentTarget.click();
               }}>
-                <svg className="glyph" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M1.6 3.2c0-.6.5-1.1 1.1-1.1h3l1.1 1.4h5.5c.6 0 1.1.5 1.1 1.1v6.2c0 .6-.5 1.1-1.1 1.1H2.7c-.6 0-1.1-.5-1.1-1.1z" /></svg>
+                <svg className="glyph" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M1.6 3.2c0-.6.5-1.1 1.1-1.1h3l1.1 1.4h5.5c.6 0 1.1.5 1.1 1.1v6.2c0 .6-.5 1.1-1.1 1.1H2.7c-.6 0-1.1-.5-1.1-1.1z" /></svg>
                 <span className="name">{label}</span>
               </div>;
             })}

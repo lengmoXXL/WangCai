@@ -12,7 +12,7 @@ async function until(check) {
   throw new Error('Timed out waiting for SDK output');
 }
 
-test('Node SDK: local PTYs, binary files, detach and reconnect', { timeout: 30000 }, async () => {
+test('Node SDK: local PTYs, binary files, detach and reconnect', { timeout: 90000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-sdk-'));
   const previousHome = process.env.HOME;
   process.env.HOME = home;

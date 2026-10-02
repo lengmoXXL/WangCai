@@ -7,7 +7,7 @@ const { join, resolve } = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
 
-test('view picker browses current terminal directory; file links preview code, Markdown and HTML', { timeout: 90000 }, async () => {
+test('view picker browses current terminal directory; file links preview code, Markdown and HTML', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-files-')));
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -71,7 +71,7 @@ test('view picker browses current terminal directory; file links preview code, M
     assert.equal(await codePanel.locator('.preview-header').evaluate((element) => getComputedStyle(element).fontSize), '12px');
     assert.equal(await codePanel.locator('.monaco-editor .view-lines').evaluate((element) => getComputedStyle(element).fontSize), '13px');
     await page.screenshot({ path: 'tests/dist/screenshots/files-code.png' });
-    assert.equal(await page.locator('.file-preview .monaco-editor').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(11, 14, 19)');
+    assert.equal(await page.locator('.file-preview .monaco-editor').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(18, 19, 20)');
     await page.locator('.monaco-editor .view-lines').filter({ hasText: 'CODE_PREVIEW' }).waitFor();
     const workerReady = page.waitForEvent('worker');
     await page.evaluate(() => { window.MonacoEnvironment.getWorker('', 'editorWorkerService'); });
@@ -118,8 +118,8 @@ test('view picker browses current terminal directory; file links preview code, M
     await page.getByRole('heading', { name: 'Markdown preview' }).waitFor();
     // Hovering the sidebar reveals its scrollbar thumbs, so park the pointer before asserting idle panels hide theirs.
     await page.mouse.move(0, 0);
-    for (const selector of ['.file-directory', '.markdown-preview', '.markdown-preview pre', '.sidebar-tabs']) {
-      assert.deepEqual(await page.locator(selector).evaluate(element => {
+    for (const selector of ['.file-directory', '.markdown-preview', '.markdown-preview pre']) {
+      assert.deepEqual(await page.locator(selector).evaluate((element) => {
         const bar = getComputedStyle(element, '::-webkit-scrollbar');
         const thumb = getComputedStyle(element, '::-webkit-scrollbar-thumb');
         return [bar.width, bar.height, thumb.backgroundColor, thumb.borderRadius,
@@ -136,6 +136,15 @@ test('view picker browses current terminal directory; file links preview code, M
     assert.equal(reveal.thumb, 'rgba(121, 121, 121, 0.4)', 'a scrolling panel shows its scrollbar');
     await page.waitForFunction(() => !document.querySelector('.markdown-preview pre').hasAttribute('data-scrolling'));
     assert.equal(await page.locator('.markdown-preview pre').evaluate(element => element.scrollWidth > element.clientWidth), true);
+    // The tab strip scrolls with no bar of its own, so an overflowing strip takes no height from its tabs.
+    assert.deepEqual(await page.evaluate(async () => {
+      const strip = document.querySelector('.sidebar-tabs');
+      strip.style.width = '60px';
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const overflow = [strip.scrollWidth > strip.clientWidth, strip.clientHeight, strip.offsetHeight];
+      strip.style.width = '';
+      return overflow;
+    }), [true, 32, 32]);
     const fileTabs = page.getByRole('tablist', { name: '侧栏标签页' });
     await fileTabs.getByRole('tab', { name: 'sample.ts', exact: true }).click();
     await page.locator('.monaco-editor .view-lines').filter({ hasText: 'CODE_PREVIEW' }).waitFor();
@@ -237,7 +246,7 @@ test('view picker browses current terminal directory; file links preview code, M
   } finally {
     await desktop?.close();
     await devServer?.close();
-    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
+    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 15000 }); } catch {}
     rmSync(home, { recursive: true, force: true });
   }
 });

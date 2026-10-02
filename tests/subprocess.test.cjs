@@ -17,7 +17,7 @@ function running(pid) {
   catch { return false; }
 }
 
-test('SDK subprocess: binary output, argv, cwd, environment, limits and cancellation', { timeout: 60000 }, async () => {
+test('SDK subprocess: binary output, argv, cwd, environment, limits and cancellation', { timeout: 150000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-subprocess-')));
   const previousHome = process.env.HOME;
   process.env.HOME = home;

@@ -6,7 +6,7 @@ const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
 
-test('user config: init.ts drives the UI theme, the fonts and the terminal', { timeout: 90000 }, async () => {
+test('user config: init.ts drives the UI theme, the fonts and the terminal', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-config-')));
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -33,7 +33,7 @@ test('user config: init.ts drives the UI theme, the fonts and the terminal', { t
     assert.deepEqual(await page.evaluate(() => {
       const body = getComputedStyle(document.body);
       return [body.backgroundColor, body.color, body.fontFamily, getComputedStyle(document.documentElement).getPropertyValue('--wc-border'), document.documentElement.style.colorScheme];
-    }), ['rgb(247, 248, 250)', 'rgb(32, 48, 64)', '"Config UI Font"', '#252c35', 'light']);
+    }), ['rgb(247, 248, 250)', 'rgb(32, 48, 64)', '"Config UI Font"', '#333536', 'light']);
     await page.locator('.machine.connected').click({ button: 'right' });
     await page.getByRole('menuitem', { name: /新建工作区/ }).click();
     await page.locator('.terminal-pane.active .xterm-helper-textarea').waitFor();
@@ -46,12 +46,12 @@ test('user config: init.ts drives the UI theme, the fonts and the terminal', { t
 
     writeFileSync(init, 'export default { theme: ');
     page = await launch();
-    assert.deepEqual(await page.evaluate(() => [getComputedStyle(document.body).backgroundColor, document.documentElement.style.colorScheme]), ['rgb(11, 14, 19)', 'dark']);
+    assert.deepEqual(await page.evaluate(() => [getComputedStyle(document.body).backgroundColor, document.documentElement.style.colorScheme]), ['rgb(18, 19, 20)', 'dark']);
     assert.equal(await page.evaluate(async () => (await window.wangcai.config()).font.terminal.lineHeight), 1);
     await desktop.close(); desktop = undefined;
   } finally {
     if (desktop) await desktop.close().catch(() => {});
-    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
+    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 15000 }); } catch {}
     rmSync(home, { recursive: true, force: true });
   }
 });

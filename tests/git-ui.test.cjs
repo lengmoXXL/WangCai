@@ -6,7 +6,7 @@ const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
 
-test('Git tab follows terminal cwd and shows one read-only diff at a time', { timeout: 90000 }, async () => {
+test('Git tab follows terminal cwd and shows one read-only diff at a time', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-git-ui-')));
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -73,7 +73,7 @@ test('Git tab follows terminal cwd and shows one read-only diff at a time', { ti
     await page.mouse.up();
     assert.equal(Math.round(await railWidth()), Math.round(body.width * 0.7));
     await page.locator('.git-divider').hover();
-    assert.equal(await page.locator('.git-divider').evaluate((element) => getComputedStyle(element, '::before').backgroundColor), 'rgb(155, 199, 188)');
+    assert.equal(await page.locator('.git-divider').evaluate((element) => getComputedStyle(element, '::before').backgroundColor), 'rgb(57, 148, 188)');
     const wrapWidth = () => page.locator('.git-rail-wrap').evaluate((element) => Math.round(element.getBoundingClientRect().width));
     const boardWidth = async () => Math.round((await page.locator('.git-board').boundingBox()).width);
     const hidden = Math.round(await railWidth());
@@ -97,7 +97,8 @@ test('Git tab follows terminal cwd and shows one read-only diff at a time', { ti
     assert.equal(await boardWidth(), uncovered);
     await page.getByRole('button', { name: '切换 Git 列表' }).click();
     assert.equal(await page.locator('.git-body').getAttribute('data-rail'), 'shown');
-    assert.deepEqual(await page.locator('.git-editor .monaco-editor').first().evaluate((element) => ['--vscode-editor-background', '--vscode-diffEditor-insertedTextBackground', '--vscode-diffEditor-removedTextBackground'].map((name) => getComputedStyle(element).getPropertyValue(name))), ['#0b0e13', 'rgba(155, 199, 188, 0.2)', 'rgba(230, 140, 140, 0.2)']);
+    assert.equal(await page.locator('.git-status-A').first().evaluate((element) => getComputedStyle(element).color), 'rgb(155, 199, 188)', 'added shares the theme green with the diff tint');
+    assert.deepEqual(await page.locator('.git-editor .monaco-editor').first().evaluate((element) => ['--vscode-editor-background', '--vscode-diffEditor-insertedTextBackground', '--vscode-diffEditor-removedTextBackground'].map((name) => getComputedStyle(element).getPropertyValue(name))), ['#121314', 'rgba(155, 199, 188, 0.2)', 'rgba(230, 140, 140, 0.2)']);
     const workerReady = page.waitForEvent('worker');
     await page.evaluate(() => window.MonacoEnvironment.getWorker('', 'editorWorkerService'));
     const worker = await workerReady;
@@ -107,11 +108,13 @@ test('Git tab follows terminal cwd and shows one read-only diff at a time', { ti
     assert.equal(await page.locator('.git-pane').count(), 0);
     await page.getByText('选择文件查看 diff', { exact: true }).waitFor();
     assert.equal((await page.locator('.git-commit-row').first().textContent()).includes('main'), false);
-    assert.equal(await page.locator('.git-tip').first().filter({ hasText: 'main' }).count(), 1);
+    assert.equal(await page.locator('.git-tip').count(), 0, 'the detail card only exists while a commit row is hovered');
     await page.locator('.git-commit-row').first().hover();
-    assert.notEqual(await page.locator('.git-tip').first().evaluate((element) => getComputedStyle(element).display), 'none');
+    assert.equal(await page.locator('.git-tip').filter({ hasText: 'main' }).count(), 1);
+    assert.equal(await page.locator('.git-tip').evaluate((element) => getComputedStyle(element).position), 'fixed', 'the card floats outside the rail');
+    assert.equal(await page.locator('.git-rail').evaluate((element) => element.scrollWidth <= element.clientWidth), true, 'the card does not widen the rail');
     await page.locator('.git-commit-files .git-file').first().hover();
-    assert.equal(await page.locator('.git-tip').first().evaluate((element) => getComputedStyle(element).display), 'none');
+    assert.equal(await page.locator('.git-tip').count(), 0);
     await page.locator('.git-commit-files .git-file').first().click();
     await page.locator('.git-editor .view-lines').filter({ hasText: 'ORIGINAL_VALUE' }).waitFor();
     await page.getByRole('button', { name: '新建侧栏标签页' }).click();

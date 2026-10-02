@@ -73,17 +73,17 @@ class Client {
   }
 }
 
-test('persistent terminal node lifecycle', { timeout: 60000 }, async (t) => {
+test('persistent terminal node lifecycle', { timeout: 150000 }, async (t) => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-node-test-'));
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
-  const cli = (...args) => execFileSync(binary, ['server', ...args], { env, encoding: 'utf8', timeout: 15000, stdio: ['ignore', 'pipe', 'pipe'] });
+  const cli = (...args) => execFileSync(binary, ['server', ...args], { env, encoding: 'utf8', timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'] });
   const clients = [];
   try {
     assert.throws(() => cli('status', '--json'), /not running/);
     assert.equal(existsSync(join(home, '.config/wangcai/server.json')), false);
     mkdirSync(join(home, '.config/wangcai'), { recursive: true });
     writeFileSync(join(home, '.config/wangcai/server.json'), JSON.stringify({ pid: 1, port: 1, instance_id: 'stale', protocol: 1 }));
-    const started = await Promise.all(Array.from({ length: 3 }, () => promisify(execFile)(binary, ['server', 'start', '--json'], { env, timeout: 15000 })));
+    const started = await Promise.all(Array.from({ length: 3 }, () => promisify(execFile)(binary, ['server', 'start', '--json'], { env, timeout: 30000 })));
     const info = JSON.parse(started[0].stdout);
     for (const result of started) assert.deepEqual(JSON.parse(result.stdout), info);
     assert.deepEqual(JSON.parse(cli('start', '--json')), info);

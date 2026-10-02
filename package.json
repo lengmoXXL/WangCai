@@ -10,12 +10,12 @@
     "dev": "cargo build && npm run build:sdk && npm run dev --workspace wangcai-desktop",
     "build": "cargo build && npm run build:sdk && npm run typecheck:app && npm run build --workspace wangcai-desktop",
     "start": "npm run start --workspace wangcai-desktop",
-    "test": "npm run build && node --test tests/*.test.cjs",
+    "test": "npm run build && node --test tests/*.test.cjs; status=$?; node tests/reap.cjs; exit $status",
     "package": "cargo build --release && npm run build:sdk && npm run typecheck:app && npm run package --workspace wangcai-desktop",
     "build:sdk": "npm run build --workspace @wangcai/sdk",
     "typecheck": "npm run typecheck --workspace @wangcai/sdk && npm run typecheck:app",
     "typecheck:app": "npm run typecheck --workspace wangcai-desktop && npm run typecheck --prefix plugins/workspace && npm run typecheck --prefix plugins/files && npm run typecheck --prefix plugins/git && npm run typecheck --prefix plugins/terminal",
-    "test:package": "npm run package && node --test tests/package.cjs"
+    "test:package": "npm run package && node --test tests/package.cjs; status=$?; node tests/reap.cjs; exit $status"
   },
   "devDependencies": {
     "@xterm/headless": "^6.0.0",

@@ -5,6 +5,7 @@ const { connect } = require('@wangcai/sdk');
 const { mkdtempSync, mkdirSync, readFileSync, rmSync, realpathSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
+const { execFileSync } = require('node:child_process');
 
 test('the terminal view opens its own shell in the sidebar, reattaches it and kills it when closed', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-terminal-')));
@@ -101,6 +102,8 @@ test('the terminal view opens its own shell in the sidebar, reattaches it and ki
   } finally {
     await desktop?.close();
     process.env.HOME = previousHome;
+    // The app leaves its node running when it quits, and the store that names it goes with the home below.
+    try { execFileSync(binary, ['server', 'stop'], { env, stdio: 'ignore', timeout: 15000 }); } catch {}
     rmSync(home, { recursive: true, force: true });
   }
 });

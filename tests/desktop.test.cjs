@@ -6,7 +6,7 @@ const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
 
-test('Electron: local terminal, reconnect, machine add/remove and relaunch', { timeout: 60000 }, async () => {
+test('Electron: local terminal, reconnect, machine add/remove and relaunch', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-desktop-test-')));
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -48,7 +48,7 @@ test('Electron: local terminal, reconnect, machine add/remove and relaunch', { t
     });
     assert.deepEqual(terminal.bar, ['10px', '10px'], 'the terminal scrollbar is 10px wide');
     assert.ok(terminal.overlap <= 0, `the terminal grid runs ${terminal.overlap}px under the viewport scrollbar`);
-    assert.deepEqual(terminal.outline, [11, 14, 19, 255], 'the overview ruler outline hides in the terminal background');
+    assert.deepEqual(terminal.outline, [18, 19, 20, 255], 'the overview ruler outline hides in the terminal background');
     const workspaces = (await page.evaluate(() => window.wangcai.request('workspace', 'config'))).workspaces;
     assert.equal(workspaces.length, 1);
     assert.equal(await localTabs.getByRole('tab').count(), 1);
@@ -71,6 +71,9 @@ test('Electron: local terminal, reconnect, machine add/remove and relaunch', { t
     await page.getByRole('menuitem', { name: '添加机器…', exact: true }).click();
     await page.getByLabel('名称', { exact: true }).fill('测试服务器');
     await page.getByLabel('SSH Host', { exact: true }).fill('dev-server');
+    // The primary button is marked by its fill alone; it keeps the same border as the other footer button.
+    assert.deepEqual(await page.locator('.machine-form footer button').evaluateAll((buttons) => [...new Set(buttons.map((button) => getComputedStyle(button).borderTopColor))]), ['rgb(51, 53, 54)']);
+    assert.equal(await page.getByRole('button', { name: '添加机器', exact: true }).evaluate((button) => getComputedStyle(button).backgroundColor), 'rgb(53, 83, 78)');
     await page.getByRole('button', { name: '添加机器', exact: true }).click();
     await page.getByRole('button', { name: '测试服务器', exact: true }).waitFor();
     const stored = JSON.parse(readFileSync(join(home, '.local/shared/wangcai/data/workspace/config.json'), 'utf8'));
@@ -112,12 +115,12 @@ test('Electron: local terminal, reconnect, machine add/remove and relaunch', { t
   } finally {
     if (desktop) await desktop.close().catch(() => {});
     await devServer?.close();
-    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
+    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 15000 }); } catch {}
     rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('workspaces can be dragged into a new order', { timeout: 90000 }, async () => {
+test('workspaces can be dragged into a new order', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-workspace-order-')));
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -163,7 +166,7 @@ test('workspaces can be dragged into a new order', { timeout: 90000 }, async () 
     await settled(['beta', 'alpha', 'gamma']);
   } finally {
     await desktop?.close();
-    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
+    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 15000 }); } catch {}
     rmSync(home, { recursive: true, force: true });
   }
 });

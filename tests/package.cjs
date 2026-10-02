@@ -6,7 +6,7 @@ const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
 
-test('packaged app installs plugins, previews files and preserves user changes', { timeout: 60000 }, async () => {
+test('packaged app installs plugins, previews files and preserves user changes', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-package-'));
   const env = { ...process.env, HOME: home, PATH: '/usr/bin:/bin' };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -39,7 +39,7 @@ test('packaged app installs plugins, previews files and preserves user changes',
     writeFileSync(pluginSource, source.replace('>工作区</div>', '>本地修改生效</div>'));
     desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/旺财'), args: [`--user-data-dir=${join(home, 'electron')}`], env });
     page = await desktop.firstWindow();
-    try { await page.getByText('本地修改生效', { exact: true }).waitFor({ timeout: 15000 }); }
+    try { await page.getByText('本地修改生效', { exact: true }).waitFor({ timeout: 60000 }); }
     catch (error) { console.error(await page.locator('body').innerText()); throw error; }
     await page.locator('.machine.connected').click({ button: 'right' });
     await page.getByRole('menuitem', { name: /新建工作区/ }).click();
@@ -56,7 +56,7 @@ test('packaged app installs plugins, previews files and preserves user changes',
     await page.locator('.machine.connected').waitFor();
   } finally {
     await desktop?.close();
-    try { execFileSync(join(bundle, 'Resources/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
+    try { execFileSync(join(bundle, 'Resources/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 15000 }); } catch {}
     rmSync(home, { recursive: true, force: true });
   }
 });

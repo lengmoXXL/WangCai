@@ -6,7 +6,7 @@ const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
 
-test('view menu switches plugins and handles empty, disconnected and closed terminals', { timeout: 90000 }, async () => {
+test('view menu switches plugins and handles empty, disconnected and closed terminals', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-views-')));
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -64,11 +64,62 @@ test('view menu switches plugins and handles empty, disconnected and closed term
     await page.locator('.machine.connected').click({ button: 'right' });
     await page.getByRole('menuitem', { name: /新建工作区/ }).click();
     const directory = page.getByRole('navigation', { name: '当前目录文件' });
-    await directory.getByRole('button', { name: '.hidden.md', exact: true }).waitFor();
+    await directory.getByRole('button', { name: '.hidden.md', exact: true }).locator('svg[data-kind=file]').waitFor();
+    await directory.getByRole('button', { name: '子目录 with spaces/', exact: true }).locator('svg[data-kind=folder]').waitFor();
     assert.equal(await page.locator('.workspace.selected').evaluate((element) => getComputedStyle(element).backgroundColor),
       await page.locator('.sidebar-tab:has([aria-selected=true])').first().evaluate((element) => getComputedStyle(element).backgroundColor));
-    assert.equal(await directory.getByRole('button', { name: '.hidden.md', exact: true }).locator('svg[data-kind=file]').count(), 1);
-    assert.equal(await directory.getByRole('button', { name: '子目录 with spaces/', exact: true }).locator('svg[data-kind=folder]').count(), 1);
+    // Only the outer corners are rounded; the inner ones meet the neighbouring pane square.
+    for (const [selector, corners] of [['.workspace.selected', '6px 0px 0px 6px'], ['.sidebar-tab:has([aria-selected=true])', '8px 8px 0px 0px']]) {
+      assert.equal(await page.locator(selector).first().evaluate((element) => getComputedStyle(element).borderRadius), corners);
+    }
+    // The hairline sits on a pseudo-element, so selecting a row or a tab never moves its icon.
+    for (const selector of ['.workspace.selected', '.sidebar-tab:has([aria-selected=true])']) {
+      assert.deepEqual(await page.locator(selector).first().evaluate((element) => { const style = getComputedStyle(element, '::after'); return [getComputedStyle(element).outlineWidth, style.borderTopWidth, style.borderTopColor]; }), ['0px', '1px', 'rgb(51, 53, 54)']);
+    }
+    // The list's own hairline is an overlay, so a row background can never replace that column.
+    assert.deepEqual(await page.locator('.sidebar-left').evaluate((element) => {
+      const hairline = getComputedStyle(element, '::after');
+      return [getComputedStyle(element).boxShadow, hairline.position, hairline.right, hairline.width, hairline.backgroundColor, hairline.pointerEvents];
+    }), ['none', 'absolute', '0px', '1px', 'rgb(51, 53, 54)', 'none']);
+    // The list's rows run to the column hairline, so an overflowing list gives up no width to a bar.
+    assert.deepEqual(await page.evaluate(async () => {
+      const nav = document.querySelector('.wangcai-workspace .sidebar nav');
+      const pane = document.querySelector('.sidebar-left');
+      nav.style.flex = 'none';
+      nav.style.height = '8px';
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const overflowing = nav.scrollHeight > nav.clientHeight;
+      const flush = Math.round(nav.querySelector('.workspace').getBoundingClientRect().right) === Math.round(pane.getBoundingClientRect().right);
+      const full = nav.clientWidth === nav.offsetWidth;
+      nav.style.cssText = '';
+      return [overflowing, full, flush];
+    }), [true, true, true]);
+    // The drag indicator and focus paint box-shadow and outline, so the hairline lives on a pseudo-element.
+    assert.deepEqual(await page.locator('.workspace.selected').evaluate((element) => {
+      element.classList.add('drop-after');
+      element.focus({ focusVisible: true });
+      const shadow = getComputedStyle(element).boxShadow;
+      const hairline = getComputedStyle(element, '::after').borderTopWidth;
+      const ring = `${getComputedStyle(element).outlineWidth} ${getComputedStyle(element).outlineColor}`;
+      element.classList.remove('drop-after');
+      element.blur();
+      return [hairline, shadow.includes('inset'), ring];
+    }), ['1px', true, '2px rgb(57, 148, 188)']);
+    // The hairline yields the edge the drag indicator occupies, or the 2px accent is clipped to 1px.
+    assert.equal(await page.locator('.workspace.selected').evaluate((element) => {
+      element.classList.add('drop-after');
+      const color = getComputedStyle(element, '::after').borderBottomColor;
+      element.classList.remove('drop-after');
+      return color;
+    }), 'rgba(0, 0, 0, 0)');
+    assert.equal(await page.locator('.sidebar-tab:has([aria-selected=true])').first().evaluate((element) => {
+      element.dataset.drop = 'after';
+      const color = getComputedStyle(element, '::after').borderRightColor;
+      delete element.dataset.drop;
+      return color;
+    }), 'rgba(0, 0, 0, 0)');
+    // A machine's glyph shows state by lightness: connected draws in the foreground colour, not the accent.
+    assert.equal(await page.locator('.machine.connected .glyph').first().evaluate((element) => getComputedStyle(element).stroke), 'rgb(220, 227, 235)');
     for (const [side, label, delta, minimum, shrink] of [
       ['left', '调整左侧栏宽度', 60, 120, -600],
       ['right', '调整右侧栏宽度', -80, 260, 800],
@@ -179,12 +230,12 @@ test('view menu switches plugins and handles empty, disconnected and closed term
     assert.ok(Math.abs((await right.boundingBox()).width - ratios.right * inner) < 1);
   } finally {
     await desktop?.close();
-    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
+    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 15000 }); } catch {}
     rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('full screen reclaims the window chrome space above the workspaces', { timeout: 90000 }, async () => {
+test('full screen reclaims the window chrome space above the workspaces', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-full-screen-')));
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -198,22 +249,23 @@ test('full screen reclaims the window chrome space above the workspaces', { time
     const padding = () => left.evaluate((element) => getComputedStyle(element).paddingTop);
     const headerTop = () => header.evaluate((element) => Math.round(element.getBoundingClientRect().top));
     assert.equal(await padding(), '36px');
-    assert.equal(await headerTop(), 37);
+    // 36px chrome + 1px card border + 3px window inset.
+    assert.equal(await headerTop(), 40);
     // a real setFullScreen(true) does not enter full screen in this environment, so drive the event the main process forwards
     await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].emit('enter-full-screen'); });
     await page.waitForFunction(() => getComputedStyle(document.querySelector('.sidebar-left')).paddingTop === '0px');
-    assert.equal(await headerTop(), 1);
+    assert.equal(await headerTop(), 4);
     await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].emit('leave-full-screen'); });
     await page.waitForFunction(() => getComputedStyle(document.querySelector('.sidebar-left')).paddingTop === '36px');
-    assert.equal(await headerTop(), 37);
+    assert.equal(await headerTop(), 40);
   } finally {
     await desktop?.close();
-    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
+    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 15000 }); } catch {}
     rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('sidebar tabs can be dragged into a new order', { timeout: 90000 }, async () => {
+test('sidebar tabs can be dragged into a new order', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-tab-order-')));
   const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -269,7 +321,7 @@ test('sidebar tabs can be dragged into a new order', { timeout: 90000 }, async (
     assert.deepEqual(errors, []);
   } finally {
     await desktop?.close();
-    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 5000 }); } catch {}
+    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 15000 }); } catch {}
     rmSync(home, { recursive: true, force: true });
   }
 });

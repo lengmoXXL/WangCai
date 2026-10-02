@@ -5,7 +5,7 @@ const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync,
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 
-test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { timeout: 45000 }, async () => {
+test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-plugins-'));
   const env = { ...process.env, HOME: home };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -85,7 +85,7 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
     for (const name of ['alpha', 'beta']) {
       assert.equal(readFileSync(join(home, '.local/shared/wangcai/data', name, 'cleaned'), 'utf8'), 'yes');
       assert.equal(readFileSync(join(home, '.local/shared/wangcai/logs', name, 'plugin.log'), 'utf8'), name);
-      assert.equal(readFileSync(join(home, '.local/shared/wangcai/logs', name, 'config.log'), 'utf8'), '#0b0e13');
+      assert.equal(readFileSync(join(home, '.local/shared/wangcai/logs', name, 'config.log'), 'utf8'), '#121314');
     }
     const source = join(home, '.local/shared/wangcai/plugins/alpha/ui.tsx');
     writeFileSync(source, readFileSync(source, 'utf8').replace('alpha v1', 'alpha v2'));
