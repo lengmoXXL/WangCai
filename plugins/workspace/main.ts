@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { connect, type MachineConnection, type Pty } from '@wangcai/sdk';
+import { connect, type AgentInfo, type MachineConnection, type Pty } from '@wangcai/sdk';
 import type { Context } from '@wangcai/sdk/channel';
 import type { Config, FileClick, Machine, MachineState, Workspace } from './shared';
 
@@ -73,7 +73,7 @@ export async function activate(context: Context) {
     const result = (async () => {
       try {
         const node = await connect(machine.host
-          ? { type: 'ssh', host: machine.host, signal: controller.signal }
+          ? { type: 'ssh', host: machine.host, agent: await context.host.request<AgentInfo>('agent'), signal: controller.signal }
           : { type: 'local', binary: join(await context.host.request('resourcesDirectory'), 'wangcai'), signal: controller.signal });
         if (controller.signal.aborted) { node.disconnect(); throw new Error('Connection cancelled'); }
         connections.set(id, node);

@@ -4,6 +4,7 @@ import { promisify } from 'node:util';
 import WebSocket from 'ws';
 import type { ConnectionOptions, MachineState, Session, Size, DirectoryEntry, ExecOptions, ExecResult } from './types';
 import { Pty } from './pty';
+import { ensureAgent } from './agent';
 
 const exec = promisify(execFile);
 interface Info { pid: number; port: number; instance_id: string; protocol: number }
@@ -145,6 +146,7 @@ export class MachineConnection {
         info = JSON.parse(stdout);
         port = info.port;
       } else {
+        if (this.options.agent) await ensureAgent(this.options.host, { ...this.options.agent, signal: this.options.signal });
         const { stdout } = await exec('ssh', [
           '-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', this.options.host,
           'export PATH="$HOME/.local/bin:$PATH"; wangcai server start --json',

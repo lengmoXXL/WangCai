@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { connect, type MachineConnection } from '@wangcai/sdk';
+import { connect, type AgentInfo, type MachineConnection } from '@wangcai/sdk';
 import type { Context } from '@wangcai/sdk/channel';
 import { readGit, type RunGit } from './git';
 import type { GitRequest } from './shared';
@@ -14,7 +14,7 @@ export function activate(context: Context) {
     try {
       const { machine, sessionId } = query.terminal;
       connection = await connect(machine.host
-        ? { type: 'ssh', host: machine.host, signal: controller.signal }
+        ? { type: 'ssh', host: machine.host, agent: await context.host.request<AgentInfo>('agent'), signal: controller.signal }
         : { type: 'local', binary: join(await context.host.request('resourcesDirectory'), 'wangcai'), signal: controller.signal });
       controller.signal.throwIfAborted();
       connections.add(connection);

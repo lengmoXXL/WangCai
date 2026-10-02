@@ -42,6 +42,7 @@ else {
     const profile = await loadProfile();
     const plugins = await loadPlugins(require.resolve('@wangcai/sdk'),
       app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug'),
+      { version: app.getVersion(), prefix: profile.agent.downloadPrefix },
       profile,
       (id, event, data) => { if (window && !window.isDestroyed()) window.webContents.send('wangcai:event', id, event, data); },
       (event, data) => { if (window && !window.isDestroyed()) window.webContents.send('wangcai:channel', event, data); });

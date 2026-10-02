@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { connect, type MachineConnection, type Pty } from '@wangcai/sdk';
+import { connect, type AgentInfo, type MachineConnection, type Pty } from '@wangcai/sdk';
 import type { Context } from '@wangcai/sdk/channel';
 import type { ActiveTerminal, Machine, TerminalRef } from './shared';
 
@@ -22,7 +22,7 @@ export async function activate(context: Context) {
     const existing = connections.get(key(machine));
     if (existing) return existing;
     const node = await connect(machine.host
-      ? { type: 'ssh', host: machine.host }
+      ? { type: 'ssh', host: machine.host, agent: await context.host.request<AgentInfo>('agent') }
       : { type: 'local', binary: join(await context.host.request<string>('resourcesDirectory'), 'wangcai') });
     connections.set(key(machine), node);
     return node;

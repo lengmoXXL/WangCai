@@ -1,4 +1,5 @@
-export type ConnectionOptions = { type: 'local'; binary?: string; signal?: AbortSignal } | { type: 'ssh'; host: string; signal?: AbortSignal };
+export interface AgentInfo { version: string; prefix: string }
+export type ConnectionOptions = { type: 'local'; binary?: string; signal?: AbortSignal } | { type: 'ssh'; host: string; agent?: AgentInfo; signal?: AbortSignal };
 export interface Size { rows: number; cols: number }
 export interface Session extends Size { id: string; title: string; pid: number; exit_code: number | null }
 export interface MachineState {
@@ -48,4 +49,5 @@ export interface Profile {
     terminal: { family: string; size: number; lineHeight: number };
   };
   theme: Theme;
+  agent: { downloadPrefix: string };
 }

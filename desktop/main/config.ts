@@ -36,11 +36,13 @@ const DEFAULT_PROFILE: Profile = {
     brightCyan: '#a9dbe0',
     brightWhite: '#eef3f8',
   },
+  agent: { downloadPrefix: 'https://github.com/lengmoXXL/WangCai/releases/download' },
 };
 
 type ProfileInput = {
   font?: { ui?: { family?: unknown }; terminal?: { family?: unknown; size?: unknown; lineHeight?: unknown } };
   theme?: Record<string, unknown>;
+  agent?: { downloadPrefix?: unknown };
 };
 
 const text = (value: unknown, fallback: string) => typeof value === 'string' && value.trim() ? value : fallback;
@@ -60,6 +62,7 @@ function mergeProfile(input: ProfileInput): Profile {
       },
     },
     theme,
+    agent: { downloadPrefix: text(input.agent?.downloadPrefix, DEFAULT_PROFILE.agent.downloadPrefix) },
   };
 }
 
