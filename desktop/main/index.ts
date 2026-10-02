@@ -15,8 +15,10 @@ protocol.registerSchemesAsPrivileged([
 // A previewed page is made of inline scripts and remote assets, which the renderer's CSP forbids; serving it
 // from its own scheme gives it a policy of its own, and the sandboxed frame keeps the page off the app.
 const PREVIEW_CSP = "default-src 'none'; script-src 'unsafe-inline' http: https:; style-src 'unsafe-inline' http: https: data:; img-src http: https: data: blob:; font-src http: https: data:; connect-src http: https: data:; media-src http: https: data: blob:; frame-src http: https: data: blob:; base-uri 'none'";
-// Writing the page into this document, rather than setting innerHTML, is what runs its scripts.
-const PREVIEW_DOCUMENT = `<!doctype html><meta charset="utf-8"><script>parent.postMessage('${previewMessage}', '*'); addEventListener('message', (event) => { document.open(); document.write(event.data); document.close(); });</script>`;
+// Writing the page into this document, rather than setting innerHTML, is what runs its scripts. The base font
+// keeps an unstyled page readable next to the editor that the same file shows in source form; document.open()
+// discards the document, so the style goes in afterwards and sits first, where the page's own rules override it.
+const previewDocument = (family: string) => `<!doctype html><meta charset="utf-8"><script>parent.postMessage('${previewMessage}', '*'); addEventListener('message', (event) => { document.open(); document.write(event.data); document.close(); const base = document.createElement('style'); base.textContent = ${JSON.stringify(`html { font-family: ${family}; font-size: 13px; line-height: 1.6; }`)}; document.head.prepend(base); });</script>`;
 let window: BrowserWindow | undefined;
 
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -54,7 +56,7 @@ else {
       return new Response(response.body, { status: response.status, headers });
     });
     protocol.handle(previewScheme, (request) => request.url === previewUrl
-      ? new Response(PREVIEW_DOCUMENT, { headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': PREVIEW_CSP } })
+      ? new Response(previewDocument(profile.font.ui.family), { headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': PREVIEW_CSP } })
       : new Response('Not found', { status: 404 }));
     ipcMain.handle('wangcai:publish', (_, event: string, data: unknown) => plugins.publish(event, data));
     ipcMain.handle('wangcai:plugins', () => plugins.plugins);

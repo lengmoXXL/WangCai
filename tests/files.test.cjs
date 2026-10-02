@@ -65,6 +65,12 @@ test('view picker browses current terminal directory; file links preview code, M
     await page.getByRole('button', { name: '切换右侧栏' }).click();
     await clickLink(`${code}:2:3`);
     await page.getByLabel('文件预览', { exact: true }).waitFor();
+    const codePanel = page.getByRole('tabpanel', { name: 'sample.ts' });
+    assert.equal(await codePanel.locator('.preview-path').innerText(), code);
+    assert.equal(await codePanel.locator('.preview-mode').count(), 0);
+    assert.equal(await codePanel.locator('.preview-header').evaluate((element) => getComputedStyle(element).fontSize), '12px');
+    assert.equal(await codePanel.locator('.monaco-editor .view-lines').evaluate((element) => getComputedStyle(element).fontSize), '13px');
+    await page.screenshot({ path: 'tests/dist/screenshots/files-code.png' });
     assert.equal(await page.locator('.file-preview .monaco-editor').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(11, 14, 19)');
     await page.locator('.monaco-editor .view-lines').filter({ hasText: 'CODE_PREVIEW' }).waitFor();
     const workerReady = page.waitForEvent('worker');
@@ -94,6 +100,22 @@ test('view picker browses current terminal directory; file links preview code, M
     assert.equal(await page.locator('.markdown-preview strong').innerText(), 'Rendered content');
     assert.equal(await page.locator('.markdown-preview table').count(), 1);
     assert.equal(await page.evaluate(() => window.previewScriptRan), undefined);
+    const markdownPanel = page.getByRole('tabpanel', { name: '说明 file.md' });
+    assert.equal(await markdownPanel.locator('.preview-path').innerText(), markdown);
+    await markdownPanel.getByRole('button', { name: 'Markdown 预览', exact: true }).click();
+    assert.deepEqual(await markdownPanel.getByRole('menu', { name: '预览方式' }).getByRole('menuitem').allInnerTexts(), ['文本', 'Markdown 预览']);
+    await page.screenshot({ path: 'tests/dist/screenshots/files-modes.png' });
+    await page.locator('.menu-backdrop').click();
+    assert.equal(await markdownPanel.getByRole('menu', { name: '预览方式' }).count(), 0);
+    assert.equal(await markdownPanel.locator('.preview-mode').evaluate((element) => getComputedStyle(element).fontSize), '12px');
+    assert.equal(await markdownPanel.locator('.markdown-preview').evaluate((element) => getComputedStyle(element).fontSize), '13px');
+    await markdownPanel.getByRole('button', { name: 'Markdown 预览', exact: true }).click();
+    await markdownPanel.getByRole('menuitem', { name: '文本', exact: true }).click();
+    assert.equal(await markdownPanel.locator('.monaco-editor .view-lines').evaluate((element) => getComputedStyle(element).fontSize), '13px');
+    await markdownPanel.locator('.monaco-editor .view-lines').filter({ hasText: '# Markdown preview' }).waitFor();
+    await markdownPanel.getByRole('button', { name: '文本', exact: true }).click();
+    await markdownPanel.getByRole('menuitem', { name: 'Markdown 预览', exact: true }).click();
+    await page.getByRole('heading', { name: 'Markdown preview' }).waitFor();
     // Hovering the sidebar reveals its scrollbar thumbs, so park the pointer before asserting idle panels hide theirs.
     await page.mouse.move(0, 0);
     for (const selector of ['.file-directory', '.markdown-preview', '.markdown-preview pre', '.sidebar-tabs']) {
@@ -130,9 +152,16 @@ test('view picker browses current terminal directory; file links preview code, M
     await htmlFrame.locator('#heading[data-scripted=yes]').waitFor();
     assert.equal(await htmlFrame.locator('#heading').innerText(), 'Rendered page');
     assert.equal(await page.locator('.html-frame').getAttribute('sandbox'), 'allow-scripts');
-    await page.getByRole('button', { name: '源码', exact: true }).click();
-    await page.locator('.monaco-editor .view-lines').filter({ hasText: 'HTML_SOURCE' }).waitFor();
-    await page.getByRole('button', { name: '预览', exact: true }).click();
+    assert.equal(await htmlFrame.locator('body').evaluate((element) => getComputedStyle(element).fontSize), '13px');
+    assert.match(await htmlFrame.locator('body').evaluate((element) => getComputedStyle(element).fontFamily), /Segoe UI/);
+    const htmlPanel = page.getByRole('tabpanel', { name: 'page.html' });
+    assert.equal(await htmlPanel.locator('.preview-path').innerText(), html);
+    await htmlPanel.getByRole('button', { name: 'HTML 预览', exact: true }).click();
+    assert.deepEqual(await htmlPanel.getByRole('menu', { name: '预览方式' }).getByRole('menuitem').allInnerTexts(), ['文本', 'HTML 预览']);
+    await htmlPanel.getByRole('menuitem', { name: '文本', exact: true }).click();
+    await htmlPanel.locator('.monaco-editor .view-lines').filter({ hasText: 'HTML_SOURCE' }).waitFor();
+    await htmlPanel.getByRole('button', { name: '文本', exact: true }).click();
+    await htmlPanel.getByRole('menuitem', { name: 'HTML 预览', exact: true }).click();
     await htmlFrame.getByRole('heading', { name: 'Rendered page' }).waitFor();
     await clickLink(pathToFileURL(json).href, 'JSON_LINK');
     await page.locator('.monaco-editor .view-lines').filter({ hasText: 'ready' }).waitFor();
