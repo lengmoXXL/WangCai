@@ -1,3 +1,8 @@
 [workspace]
 members = ["wangcaicli"]
 resolver = "3"
+
+# 0.16.2 panics when a resize leaves a wide glyph clipped at the right edge, or on screens with a
+# single row or column (doy/vt100-rust#41); drop this pin once that fix is released.
+[patch.crates-io]
+vt100 = { git = "https://github.com/doy/vt100-rust", rev = "3be0074145fef826a8f384d7ed2c146f973b7c89" }
