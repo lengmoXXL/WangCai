@@ -6,6 +6,7 @@ const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
+const { writeInit } = require('./init.cjs');
 
 test('view picker browses current terminal directory; file links preview code, Markdown and HTML', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-files-')));
@@ -14,6 +15,7 @@ test('view picker browses current terminal directory; file links preview code, M
   let desktop;
   let devServer;
   try {
+    writeInit(home);
     const code = join(home, 'sample.ts');
     const markdown = join(home, '说明 file.md');
     const binary = join(home, 'binary.bin');

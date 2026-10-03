@@ -5,6 +5,7 @@ const { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, realpathSyn
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
+const { writeInit } = require('./init.cjs');
 
 test('view menu switches plugins and handles empty, disconnected and closed terminals', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-views-')));
@@ -12,10 +13,11 @@ test('view menu switches plugins and handles empty, disconnected and closed term
   delete env.ELECTRON_RUN_AS_NODE;
   let desktop;
   try {
-    const other = join(home, '.local/shared/wangcai/plugins/other');
+    writeInit(home, ['workspace', 'files', 'other']);
+    const other = join(home, '.config/wangcai/plugins/other');
     mkdirSync(other, { recursive: true });
-    writeFileSync(join(other, 'main.ts'), 'export function activate() {}');
-    writeFileSync(join(other, 'ui.tsx'), `
+    writeFileSync(join(other, 'main.cjs'), 'exports.activate = () => {};');
+    writeFileSync(join(other, 'ui.js'), `
       export const title = '测试视图';
       export function mount() {}
       export function open(context) { void context.host.request('tabs', { id: 'other', title: '测试视图', mount(container) {
@@ -241,6 +243,7 @@ test('full screen reclaims the window chrome space above the workspaces', { time
   delete env.ELECTRON_RUN_AS_NODE;
   let desktop;
   try {
+    writeInit(home);
     desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
     const page = await desktop.firstWindow();
     const left = page.locator('.sidebar-left');
@@ -280,6 +283,7 @@ test('sidebar tabs can be dragged into a new order', { timeout: 180000 }, async 
     await page.getByRole('button', { name: '切换右侧栏' }).click();
   };
   try {
+    writeInit(home);
     await open();
     for (const name of ['文件', 'Git', '终端']) {
       await page.getByRole('button', { name: '新建侧栏标签页' }).click();

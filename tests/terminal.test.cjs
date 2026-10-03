@@ -6,6 +6,7 @@ const { mkdtempSync, mkdirSync, readFileSync, rmSync, realpathSync } = require('
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { execFileSync } = require('node:child_process');
+const { writeInit } = require('./init.cjs');
 
 test('the terminal view opens its own shell in the sidebar, reattaches it and kills it when closed', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-terminal-')));
@@ -46,6 +47,7 @@ test('the terminal view opens its own shell in the sidebar, reattaches it and ki
     assert.ok(await observed(), `the shell never answered: ${command}`);
   };
   try {
+    writeInit(home);
     mkdirSync(directory);
     let page = await launch();
     await openView(page, '终端');

@@ -5,8 +5,7 @@
   "description": "旺财 — persistent terminals, local and remote",
   "main": "dist/main/index.js",
   "dependencies": {
-    "@wangcai/sdk": "file:../sdk",
-    "esbuild": "^0.25.0"
+    "@wangcai/sdk": "file:../sdk"
   },
   "build": {
     "appId": "dev.wangcai.desktop",
@@ -31,17 +30,13 @@
       "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools"
     },
-    "asarUnpack": [
-      "node_modules/esbuild/**/*",
-      "node_modules/@esbuild/**/*"
-    ],
     "directories": {
       "output": "dist/package"
     }
   },
   "scripts": {
-    "dev": "node tools/prepare-plugins.mjs && electron-vite dev",
-    "build": "node tools/prepare-plugins.mjs && electron-vite build",
+    "dev": "node tools/build-plugins.mjs && electron-vite dev",
+    "build": "node tools/build-plugins.mjs && electron-vite build",
     "start": "electron .",
     "package": "npm run build && electron-builder --mac dir",
     "typecheck": "tsc"
@@ -51,6 +46,7 @@
     "electron": "41.10.7",
     "electron-builder": "^26.0.0",
     "electron-vite": "^5.0.0",
+    "esbuild": "^0.25.0",
     "typescript": "^5.9.0",
     "vite": "^7.0.0"
   }

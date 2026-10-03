@@ -1,10 +1,9 @@
 import { app, BrowserWindow, ipcMain, Menu, net, protocol } from 'electron';
 import { join, resolve, relative, isAbsolute, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { loadPlugins } from './plugins';
-import { loadProfile } from './config';
+import { loadConfig } from './config';
 import { previewMessage, previewScheme, previewUrl, type TabRecord } from '../shared';
 
 app.setName('旺财');
@@ -26,36 +25,24 @@ else {
   app.on('second-instance', () => { window?.show(); window?.focus(); });
   void app.whenReady().then(async () => {
     if (!app.isPackaged) app.dock?.setIcon(join(app.getAppPath(), 'build/icon.png'));
-    if (app.isPackaged) process.env.ESBUILD_BINARY_PATH = join(process.resourcesPath, `app.asar.unpacked/node_modules/@esbuild/darwin-${process.arch}/bin/esbuild`);
-    const directory = join(homedir(), '.local/shared/wangcai/plugins');
     const bundled = app.isPackaged ? join(process.resourcesPath, 'plugins') : join(app.getAppPath(), 'dist/plugins');
-    for (const id of ['workspace', 'files', 'git', 'terminal']) {
-      const target = join(directory, id);
-      if (existsSync(target)) continue;
-      mkdirSync(directory, { recursive: true });
-      const staging = mkdtempSync(join(directory, `../.${id}-`));
-      try {
-        const source = join(bundled, id);
-        cpSync(source, staging, { recursive: true, filter: (path) => path !== join(source, 'node_modules') && path !== join(source, '.compiled') });
-        renameSync(staging, target);
-      } finally { rmSync(staging, { recursive: true, force: true }); }
-    }
-    const profile = await loadProfile();
+    const { profile, plugins: specs } = await loadConfig();
     const plugins = await loadPlugins(require.resolve('@wangcai/sdk'),
       app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug'),
       bundled,
       { version: app.getVersion(), prefix: profile.agent.downloadPrefix },
       profile,
+      specs,
       (id, event, data) => { if (window && !window.isDestroyed()) window.webContents.send('wangcai:event', id, event, data); },
       (event, data) => { if (window && !window.isDestroyed()) window.webContents.send('wangcai:channel', event, data); });
     protocol.handle('wangcai-plugin', async (request) => {
       const url = new URL(request.url);
       if (url.host !== 'plugins') return new Response('Not found', { status: 404 });
       const [, id, ...parts] = decodeURIComponent(url.pathname).split('/');
-      const output = plugins.outputs.get(id);
-      if (!output) return new Response('Not found', { status: 404 });
-      const path = resolve(output, parts.join('/'));
-      const local = relative(output, path);
+      const directory = plugins.directories.get(id);
+      if (!directory) return new Response('Not found', { status: 404 });
+      const path = resolve(directory, parts.join('/'));
+      const local = relative(directory, path);
       if (!local || local === '..' || local.startsWith(`..${sep}`) || isAbsolute(local)) return new Response('Not found', { status: 404 });
       const response = await net.fetch(pathToFileURL(path).toString());
       const headers = new Headers(response.headers);

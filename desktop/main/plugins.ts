@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
@@ -6,13 +6,12 @@ import { compileFunction } from 'node:vm';
 import type { AgentInfo, Profile } from '@wangcai/sdk';
 import type { Channel, Context } from '@wangcai/sdk/channel';
 import { denied, type Dispose, type PluginInfo } from '../shared';
-import { buildPlugin, isPluginBuildCurrent } from './plugin-build.mjs';
+import { configDirectory, type PluginSpec } from './config';
 
-export async function loadPlugins(sdkPath: string, resourcesDirectory: string, bundled: string, agent: AgentInfo, profile: Profile, emit: (id: string, event: string, data: unknown) => void, broadcast: (event: string, data: unknown) => void) {
-  const directory = join(homedir(), '.local/shared/wangcai/plugins');
-  const cache = join(homedir(), '.cache/wangcai/plugins');
+export async function loadPlugins(sdkPath: string, resourcesDirectory: string, bundled: string, agent: AgentInfo, profile: Profile, specs: PluginSpec[], emit: (id: string, event: string, data: unknown) => void, broadcast: (event: string, data: unknown) => void) {
+  const userPlugins = join(configDirectory, 'plugins');
   const plugins: PluginInfo[] = [];
-  const outputs = new Map<string, string>();
+  const directories = new Map<string, string>();
   const handlers = new Map<string, Map<string, (params: any) => unknown>>();
   const disposers: Dispose[] = [];
   const channels = new Set<Map<string, Set<(data: any) => void | Promise<void>>>>();
@@ -23,12 +22,10 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, b
     })));
   }
   const requirePlugin = createRequire(__filename);
-  mkdirSync(directory, { recursive: true });
-  for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
-    const id = entry.name;
-    const source = join(directory, id);
-    let output = join(cache, id);
+  // Plugins mount in id order, not in the order init.ts lists them: a plugin publishes events as it
+  // mounts, so what one plugin observes must not depend on the config file.
+  for (const spec of [...specs].sort((a, b) => a.id.localeCompare(b.id))) {
+    const id = spec.id;
     const info: PluginInfo = { id };
     plugins.push(info);
     const methods = new Map<string, (params: any) => unknown>();
@@ -36,13 +33,11 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, b
     const subscriptions = new Map<string, Set<(data: any) => void | Promise<void>>>();
     channels.add(subscriptions);
     try {
-      const dependencies = join(bundled, id, 'node_modules');
-      const prebuilt = join(bundled, id, '.compiled');
-      if (isPluginBuildCurrent(source, prebuilt, agent.version, dependencies)) output = prebuilt;
-      else if (!isPluginBuildCurrent(source, output, agent.version, dependencies)) await buildPlugin(source, output, agent.version, dependencies);
-      if (existsSync(join(output, 'ui.js'))) {
+      const directory = spec.directory ?? (existsSync(join(userPlugins, id)) ? join(userPlugins, id) : join(bundled, id));
+      if (!existsSync(join(directory, 'main.cjs'))) throw new Error('Plugin is not installed');
+      if (existsSync(join(directory, 'ui.js'))) {
         info.ui = `wangcai-plugin://plugins/${encodeURIComponent(id)}/ui.js`;
-        if (existsSync(join(output, 'ui.css'))) info.css = `wangcai-plugin://plugins/${encodeURIComponent(id)}/ui.css`;
+        if (existsSync(join(directory, 'ui.css'))) info.css = `wangcai-plugin://plugins/${encodeURIComponent(id)}/ui.css`;
       }
       const dataDirectory = join(homedir(), '.local/shared/wangcai/data', id);
       const logDirectory = join(homedir(), '.local/shared/wangcai/logs', id);
@@ -85,7 +80,7 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, b
           handle: denied('host', 'handle'),
         },
       };
-      const filename = join(output, 'main.cjs');
+      const filename = join(directory, 'main.cjs');
       const localRequire = createRequire(filename);
       // Prebuilt plugins use the host SDK so its connection pool stays shared across plugins.
       const pluginRequire = Object.assign((name: string) => name === '@wangcai/sdk' ? requirePlugin(sdkPath) : localRequire(name), localRequire);
@@ -94,7 +89,7 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, b
         .call(module.exports, pluginRequire, module, module.exports, filename, dirname(filename));
       const dispose = await module.exports.activate(context);
       if (dispose) disposers.push(dispose);
-      outputs.set(id, output);
+      directories.set(id, directory);
     } catch (error) {
       info.error = error instanceof Error ? error.message : String(error);
       info.ui = undefined;
@@ -105,7 +100,7 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, b
     }
   }
   return {
-    plugins, outputs, publish,
+    plugins, directories, publish,
     request(id: string, method: string, params: unknown) {
       const handler = handlers.get(id)?.get(method);
       if (!handler) throw new Error(`Unknown plugin method: ${id}/${method}`);

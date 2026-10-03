@@ -5,6 +5,7 @@ const { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync } = require(
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
+const { writeInit } = require('./init.cjs');
 
 test('Git tab follows terminal cwd and shows one read-only diff at a time', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-git-ui-')));
@@ -12,6 +13,7 @@ test('Git tab follows terminal cwd and shows one read-only diff at a time', { ti
   delete env.ELECTRON_RUN_AS_NODE;
   let desktop;
   try {
+    writeInit(home);
     const repo = join(home, "repo with 'quote");
     mkdirSync(repo);
     const git = (...args) => execFileSync('git', ['-C', repo, ...args], { env, encoding: 'utf8' });

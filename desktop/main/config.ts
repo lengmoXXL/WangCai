@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { createRequire } from 'node:module';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { Profile, Theme } from '@wangcai/sdk';
 
 const DEFAULT_PROFILE: Profile = {
@@ -39,10 +39,15 @@ const DEFAULT_PROFILE: Profile = {
   agent: { downloadPrefix: 'https://github.com/lengmoXXL/WangCai/releases/download' },
 };
 
+export const configDirectory = join(homedir(), '.config/wangcai');
+
+export type PluginSpec = { id: string; directory?: string };
+
 type ProfileInput = {
   font?: { ui?: { family?: unknown }; terminal?: { family?: unknown; size?: unknown; lineHeight?: unknown } };
   theme?: Record<string, unknown>;
   agent?: { downloadPrefix?: unknown };
+  plugins?: unknown;
 };
 
 const text = (value: unknown, fallback: string) => typeof value === 'string' && value.trim() ? value : fallback;
@@ -66,20 +71,53 @@ function mergeProfile(input: ProfileInput): Profile {
   };
 }
 
-// The user's init.ts may define several profiles and export the selected one.
-export async function loadProfile(): Promise<Profile> {
-  const source = join(homedir(), '.config/wangcai/init.ts');
-  if (!existsSync(source)) return DEFAULT_PROFILE;
-  const cache = join(homedir(), '.cache/wangcai');
-  const output = join(cache, 'init.cjs');
+// A relative directory is taken from the config directory. The first entry for an id wins.
+function mergePlugins(input: unknown): PluginSpec[] {
+  if (!Array.isArray(input)) return [];
+  const specs = new Map<string, PluginSpec>();
+  for (const entry of input) {
+    const { id, directory } = (entry ?? {}) as { id?: unknown; directory?: unknown };
+    if (typeof id !== 'string' || !id.trim() || specs.has(id)) continue;
+    specs.set(id, {
+      id,
+      directory: typeof directory === 'string' && directory.trim() ? resolve(configDirectory, directory) : undefined,
+    });
+  }
+  return [...specs.values()];
+}
+
+// The plugins the app ships, and what a fresh install starts with.
+const DEFAULT_PLUGINS = ['workspace', 'files', 'git', 'terminal'];
+
+// Written once, when init.ts is missing; from then on the file belongs to the user.
+const PRESET = `// 旺财的启动入口：只放配置与插件注册，启动时由 app 直接加载（不编译，也不扫目录）。
+// 插件就是一个目录，里面是编译好的 main.cjs（主进程）和可选的 ui.js / ui.css（界面文件）。
+// { id } 指向 ~/.config/wangcai/plugins/<id>/，找不到就用 app 自带的那份；directory 可另指他处（相对路径相对本文件）。
+// 没列出来的插件不会被加载；删掉本文件会重新生成这份默认配置。
+export default {
+  // font: { ui: { family: '界面字体' }, terminal: { family: '"等宽字体", monospace', size: 13, lineHeight: 1 } },
+  // theme: { background: '#121314', accent: '#3994bc' },
+  plugins: [${DEFAULT_PLUGINS.map((id) => `{ id: '${id}' }`).join(', ')}],
+};
+`;
+
+// init.ts is loaded as it stands: this process strips its types, so a config change needs no build step.
+export async function loadConfig(): Promise<{ profile: Profile; plugins: PluginSpec[] }> {
+  const source = join(configDirectory, 'init.ts');
+  if (!existsSync(source)) {
+    try {
+      mkdirSync(configDirectory, { recursive: true });
+      writeFileSync(source, PRESET);
+    } catch (error) {
+      console.error('User config:', error);
+      return { profile: DEFAULT_PROFILE, plugins: DEFAULT_PLUGINS.map((id) => ({ id })) };
+    }
+  }
   try {
-    const { build } = await import('esbuild');
-    mkdirSync(cache, { recursive: true });
-    await build({ entryPoints: [source], outfile: output, bundle: true, platform: 'node', target: 'node22' });
-    const input = createRequire(__filename)(output).default as ProfileInput | undefined;
-    return mergeProfile(input ?? {});
+    const { default: input } = await import(pathToFileURL(source).href) as { default?: ProfileInput };
+    return { profile: mergeProfile(input ?? {}), plugins: mergePlugins(input?.plugins) };
   } catch (error) {
     console.error('User config:', error);
-    return DEFAULT_PROFILE;
+    return { profile: DEFAULT_PROFILE, plugins: [] };
   }
 }

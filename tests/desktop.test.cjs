@@ -5,6 +5,7 @@ const { mkdtempSync, mkdirSync, realpathSync, rmSync, readFileSync, existsSync }
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
+const { writeInit } = require('./init.cjs');
 
 test('Electron: local terminal, reconnect, machine add/remove and relaunch', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-desktop-test-')));
@@ -22,6 +23,7 @@ test('Electron: local terminal, reconnect, machine add/remove and relaunch', { t
     return page;
   };
   try {
+    writeInit(home);
     let page = await launch();
     const localTabs = page.getByRole('tablist', { name: '本机 工作区', exact: true });
     await page.locator('.machine.connected').click({ button: 'right' });
@@ -138,6 +140,7 @@ test('workspaces can be dragged into a new order', { timeout: 180000 }, async ()
     await page.evaluate(({ sessionId, directory }) => window.wangcai.request('workspace', 'pty', { id: 'local', op: 'input', params: { session_id: sessionId, data: `cd ${directory}\r` } }), { sessionId, directory });
   };
   try {
+    writeInit(home);
     for (const name of ['alpha', 'beta', 'gamma']) mkdirSync(join(home, name));
     await open();
     await page.locator('.machine.connected').click({ button: 'right' });
