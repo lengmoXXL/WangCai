@@ -53,7 +53,7 @@
 .git-board { flex: 1; min-width: 0; display: flex; padding: 8px; overflow-x: auto; }
 .git-pane { flex: 1; min-width: 320px; display: flex; flex-direction: column; border: 1px solid var(--wc-border); border-radius: 8px; overflow: hidden; }
 .git-editor { flex: 1; min-height: 0; }
-.git-menu { position: fixed; z-index: 5; min-width: 132px; padding: 4px; border: 1px solid var(--wc-border); border-radius: 6px; background: var(--wc-overlay); box-shadow: 0 12px 28px #0007; }
+.git-menu { position: fixed; z-index: 5; min-width: 132px; padding: 4px; border: 1px solid var(--wc-border); border-radius: 6px; background: var(--wc-background); box-shadow: 0 12px 28px #0007; }
 .git-menu button { display: block; width: 100%; height: 24px; padding: 0 8px; border-radius: 4px; text-align: left; }
 .git-menu button:hover { background: var(--wc-selection); }
 .git-note { padding: 12px; color: var(--wc-muted); white-space: pre-wrap; overflow-wrap: anywhere; }

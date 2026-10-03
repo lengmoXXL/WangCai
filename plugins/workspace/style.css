@@ -33,7 +33,7 @@
 .wangcai-workspace .workspace.drop-before::after { border-top-color: transparent; }
 .wangcai-workspace .workspace.drop-after::after { border-bottom-color: transparent; }
 .wangcai-workspace .menu-backdrop { position: fixed; inset: 0; z-index: 5; -webkit-app-region: no-drag; }
-.wangcai-workspace .context-menu { position: fixed; width: 168px; padding: 4px; background: var(--wc-overlay); border: 1px solid var(--wc-border); border-radius: 5px; box-shadow: 0 10px 28px #0006; }
+.wangcai-workspace .context-menu { position: fixed; width: 168px; padding: 4px; background: var(--wc-background); border: 1px solid var(--wc-border); border-radius: 5px; box-shadow: 0 10px 28px #0006; }
 .wangcai-workspace .context-menu strong { display: block; padding: 5px 8px 6px; color: var(--wc-muted); font-size: 10.5px; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wangcai-workspace .context-menu button { display: flex; gap: 12px; width: 100%; padding: 6px 8px; border: 0; border-radius: 3px; text-align: left; font-size: 12px; }
 .wangcai-workspace .context-menu button span { margin-left: auto; color: var(--wc-muted); font-size: 11px; }
