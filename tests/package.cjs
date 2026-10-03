@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { _electron: electron } = require('playwright');
-const { mkdtempSync, readFileSync, writeFileSync, rmSync } = require('node:fs');
+const { existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
@@ -17,6 +17,10 @@ test('packaged app installs plugins, previews files and preserves user changes',
     desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/旺财'), args: [`--user-data-dir=${join(home, 'electron')}`], env });
     let page = await desktop.firstWindow();
     await page.locator('.machine.connected').waitFor();
+    for (const id of ['workspace', 'files', 'git', 'terminal']) {
+      assert.equal(existsSync(join(home, '.local/shared/wangcai/plugins', id, 'node_modules')), false);
+      assert.equal(existsSync(join(home, '.cache/wangcai/plugins', id, 'main.cjs')), false);
+    }
     const code = join(home, 'packaged.ts');
     writeFileSync(code, 'const packaged = "PACKAGED_PREVIEW";\n');
     await page.evaluate(path => window.wangcai.publish('onclick', { type: 'file', machine: { id: 'local', name: '本机' }, path }), code);
@@ -41,6 +45,7 @@ test('packaged app installs plugins, previews files and preserves user changes',
     page = await desktop.firstWindow();
     try { await page.getByText('本地修改生效', { exact: true }).waitFor({ timeout: 60000 }); }
     catch (error) { console.error(await page.locator('body').innerText()); throw error; }
+    assert.equal(existsSync(join(home, '.cache/wangcai/plugins/workspace/main.cjs')), true);
     await page.locator('.machine.connected').click({ button: 'right' });
     await page.getByRole('menuitem', { name: /新建工作区/ }).click();
     await page.getByRole('tablist', { name: '本机 工作区' }).getByRole('tab').waitFor();

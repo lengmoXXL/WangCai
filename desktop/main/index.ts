@@ -35,22 +35,28 @@ else {
       mkdirSync(directory, { recursive: true });
       const staging = mkdtempSync(join(directory, `../.${id}-`));
       try {
-        cpSync(join(bundled, id), staging, { recursive: true });
+        const source = join(bundled, id);
+        cpSync(source, staging, { recursive: true, filter: (path) => path !== join(source, 'node_modules') && path !== join(source, '.compiled') });
         renameSync(staging, target);
       } finally { rmSync(staging, { recursive: true, force: true }); }
     }
     const profile = await loadProfile();
     const plugins = await loadPlugins(require.resolve('@wangcai/sdk'),
       app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug'),
+      bundled,
       { version: app.getVersion(), prefix: profile.agent.downloadPrefix },
       profile,
       (id, event, data) => { if (window && !window.isDestroyed()) window.webContents.send('wangcai:event', id, event, data); },
       (event, data) => { if (window && !window.isDestroyed()) window.webContents.send('wangcai:channel', event, data); });
     protocol.handle('wangcai-plugin', async (request) => {
       const url = new URL(request.url);
-      const path = resolve(plugins.cache, `.${decodeURIComponent(url.pathname)}`);
-      const local = relative(plugins.cache, path);
-      if (url.host !== 'plugins' || !local || local === '..' || local.startsWith(`..${sep}`) || isAbsolute(local)) return new Response('Not found', { status: 404 });
+      if (url.host !== 'plugins') return new Response('Not found', { status: 404 });
+      const [, id, ...parts] = decodeURIComponent(url.pathname).split('/');
+      const output = plugins.outputs.get(id);
+      if (!output) return new Response('Not found', { status: 404 });
+      const path = resolve(output, parts.join('/'));
+      const local = relative(output, path);
+      if (!local || local === '..' || local.startsWith(`..${sep}`) || isAbsolute(local)) return new Response('Not found', { status: 404 });
       const response = await net.fetch(pathToFileURL(path).toString());
       const headers = new Headers(response.headers);
       headers.set('Access-Control-Allow-Origin', '*');

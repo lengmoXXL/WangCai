@@ -1,16 +1,18 @@
-import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
+import { compileFunction } from 'node:vm';
 import type { AgentInfo, Profile } from '@wangcai/sdk';
 import type { Channel, Context } from '@wangcai/sdk/channel';
 import { denied, type Dispose, type PluginInfo } from '../shared';
+import { buildPlugin, isPluginBuildCurrent } from './plugin-build.mjs';
 
-export async function loadPlugins(sdkPath: string, resourcesDirectory: string, agent: AgentInfo, profile: Profile, emit: (id: string, event: string, data: unknown) => void, broadcast: (event: string, data: unknown) => void) {
-  const { build } = await import('esbuild');
+export async function loadPlugins(sdkPath: string, resourcesDirectory: string, bundled: string, agent: AgentInfo, profile: Profile, emit: (id: string, event: string, data: unknown) => void, broadcast: (event: string, data: unknown) => void) {
   const directory = join(homedir(), '.local/shared/wangcai/plugins');
   const cache = join(homedir(), '.cache/wangcai/plugins');
   const plugins: PluginInfo[] = [];
+  const outputs = new Map<string, string>();
   const handlers = new Map<string, Map<string, (params: any) => unknown>>();
   const disposers: Dispose[] = [];
   const channels = new Set<Map<string, Set<(data: any) => void | Promise<void>>>>();
@@ -26,7 +28,7 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, a
     if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
     const id = entry.name;
     const source = join(directory, id);
-    const output = join(cache, id);
+    let output = join(cache, id);
     const info: PluginInfo = { id };
     plugins.push(info);
     const methods = new Map<string, (params: any) => unknown>();
@@ -34,24 +36,11 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, a
     const subscriptions = new Map<string, Set<(data: any) => void | Promise<void>>>();
     channels.add(subscriptions);
     try {
-      rmSync(output, { recursive: true, force: true });
-      await build({
-        entryPoints: [join(source, 'main.ts')], outfile: join(output, 'main.cjs'),
-        bundle: true, platform: 'node', target: 'node22', sourcemap: 'inline',
-        plugins: [{ name: 'wangcai-sdk', setup(builder) {
-          builder.onResolve({ filter: /^@wangcai\/sdk$/ }, () => ({ path: sdkPath, external: true }));
-        } }],
-      });
-      if (existsSync(join(source, 'ui.tsx'))) {
-        await build({
-          entryPoints: [join(source, 'ui.tsx'), ...(existsSync(join(source, 'ui.worker.ts')) ? [join(source, 'ui.worker.ts')] : [])], outdir: output,
-          loader: { '.ttf': 'file' },
-          bundle: true, format: 'esm', target: 'chrome140', jsx: 'automatic',
-          define: { 'process.env.NODE_ENV': '"production"' }, sourcemap: 'inline',
-          plugins: [{ name: 'node-sdk-boundary', setup(builder) {
-            builder.onResolve({ filter: /^@wangcai\/sdk$/ }, () => ({ errors: [{ text: '@wangcai/sdk is only available in main.ts' }] }));
-          } }],
-        });
+      const dependencies = join(bundled, id, 'node_modules');
+      const prebuilt = join(bundled, id, '.compiled');
+      if (isPluginBuildCurrent(source, prebuilt, agent.version, dependencies)) output = prebuilt;
+      else if (!isPluginBuildCurrent(source, output, agent.version, dependencies)) await buildPlugin(source, output, agent.version, dependencies);
+      if (existsSync(join(output, 'ui.js'))) {
         info.ui = `wangcai-plugin://plugins/${encodeURIComponent(id)}/ui.js`;
         if (existsSync(join(output, 'ui.css'))) info.css = `wangcai-plugin://plugins/${encodeURIComponent(id)}/ui.css`;
       }
@@ -96,8 +85,16 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, a
           handle: denied('host', 'handle'),
         },
       };
-      const dispose = await requirePlugin(join(output, 'main.cjs')).activate(context);
+      const filename = join(output, 'main.cjs');
+      const localRequire = createRequire(filename);
+      // Prebuilt plugins use the host SDK so its connection pool stays shared across plugins.
+      const pluginRequire = Object.assign((name: string) => name === '@wangcai/sdk' ? requirePlugin(sdkPath) : localRequire(name), localRequire);
+      const module = { exports: {} as { activate(context: Context): void | Dispose | Promise<void | Dispose> } };
+      compileFunction(readFileSync(filename, 'utf8'), ['require', 'module', 'exports', '__filename', '__dirname'], { filename })
+        .call(module.exports, pluginRequire, module, module.exports, filename, dirname(filename));
+      const dispose = await module.exports.activate(context);
       if (dispose) disposers.push(dispose);
+      outputs.set(id, output);
     } catch (error) {
       info.error = error instanceof Error ? error.message : String(error);
       info.ui = undefined;
@@ -108,7 +105,7 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, a
     }
   }
   return {
-    plugins, cache, publish,
+    plugins, outputs, publish,
     request(id: string, method: string, params: unknown) {
       const handler = handlers.get(id)?.get(method);
       if (!handler) throw new Error(`Unknown plugin method: ${id}/${method}`);

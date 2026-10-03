@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { _electron: electron } = require('playwright');
-const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, symlinkSync } = require('node:fs');
+const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, statSync, symlinkSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 
@@ -25,7 +25,10 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
       writeFileSync(join(path, 'main.ts'), `
         import { writeFileSync } from 'node:fs';
         import { join } from 'node:path';
+        import { connect } from '@wangcai/sdk';
         export async function activate(context) {
+          globalThis.fixtureConnect ??= connect;
+          context.ui.handle('sharedSDK', async () => globalThis.fixtureConnect === (await import('@wangcai/sdk')).connect);
           writeFileSync(join(await context.host.request('logDirectory'), 'plugin.log'), '${name}');
           writeFileSync(join(await context.host.request('logDirectory'), 'config.log'), (await context.host.request('config')).theme.background);
           const received = [];
@@ -60,6 +63,8 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
     writeFileSync(join(failedUI, 'main.ts'), 'export function activate() {}');
     writeFileSync(join(failedUI, 'ui.tsx'), `export function mount(container, context) { container.hidden = true; context.global.subscribe('onclick', () => document.body.dataset.leaked = 'yes'); throw new Error('UI failure'); }`);
     let page = await launch();
+    assert.equal(await page.evaluate(() => window.wangcai.request('alpha', 'sharedSDK')), true);
+    assert.equal(await page.evaluate(() => window.wangcai.request('beta', 'sharedSDK')), true);
     await page.getByText('alpha v1', { exact: true }).click();
     await page.waitForFunction(() => document.querySelector('[data-plugin=alpha]')?.getAttribute('data-reply') === 'alpha:hello');
     assert.equal(await page.locator('[data-plugin=beta]').getAttribute('data-event'), null);
@@ -90,9 +95,11 @@ test('local plugin loader: TSX, IPC isolation, cleanup and source reload', { tim
     const source = join(home, '.local/shared/wangcai/plugins/alpha/ui.tsx');
     writeFileSync(source, readFileSync(source, 'utf8').replace('alpha v1', 'alpha v2'));
     writeFileSync(join(broken, 'main.ts'), 'export function activate( {');
+    const betaBuildTime = statSync(join(home, '.cache/wangcai/plugins/beta/main.cjs')).mtimeMs;
     page = await launch();
     await page.getByText('alpha v2', { exact: true }).waitFor();
     await page.getByText('beta v1', { exact: true }).waitFor();
+    assert.equal(statSync(join(home, '.cache/wangcai/plugins/beta/main.cjs')).mtimeMs, betaBuildTime);
     await page.locator('[data-plugin=broken]').filter({ hasText: 'Build failed' }).waitFor();
     assert.equal(await page.getByText('alpha v1', { exact: true }).count(), 0);
     assert.equal(existsSync(join(home, '.config/wangcai/server.json')), false);
