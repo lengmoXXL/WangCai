@@ -73,13 +73,14 @@ test('user config: init.ts drives the plugins, the UI theme, their own config an
     await desktop.close(); desktop = undefined;
     rmSync(init);
     page = await launchReady();
-    // A missing init.ts is written once, listing the plugins the app ships.
-    assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)), ['files', 'git', 'terminal', 'workspace']);
+    // A missing init.ts is written once, listing the plugins the app ships, and each of them loads.
+    assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)), ['files', 'terminal', 'workspace']);
+    assert.equal(await page.locator('.plugin-error').count(), 0);
     const preset = readFileSync(init, 'utf8');
-    assert.match(preset, /plugins: \[\n    \{ id: 'workspace' \},\n    \{ id: 'files' \},\n    \{ id: 'git' \},\n    \{ id: 'terminal' \},\n  \],/);
+    assert.match(preset, /plugins: \[\n    \{ id: 'workspace' \},\n    \{ id: 'files' \},\n    \{ id: 'terminal' \},\n  \],/);
     // The preset never mentions a font: a plugin's schema and its entry's config decide those alone.
     assert.doesNotMatch(preset, /font/);
-    assert.match(preset, /plugins \[\{ id, directory, config \}\]/);
+    assert.match(preset, /plugins \[\{ id, repo, commit, directory, config \}\]/);
     // The reference the preset carries names every theme token the app defaults to.
     for (const token of Object.keys(await page.evaluate(async () => (await window.wangcai.config()).theme))) assert.match(preset, new RegExp(token));
     await desktop.close(); desktop = undefined;

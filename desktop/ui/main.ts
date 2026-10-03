@@ -1,5 +1,5 @@
 import type { Channel, Context } from '@wangcai/sdk/channel';
-import { denied, previewMessage, previewUrl, uiFont, type Dispose, type TabRecord } from '../shared';
+import { denied, previewMessage, previewUrl, uiFont, type Dispose, type InstallStage, type InstallStatus, type TabRecord } from '../shared';
 import './style.css';
 
 type TabContent = { dispose: Dispose; onSelect?(): void };
@@ -23,14 +23,63 @@ document.addEventListener('scroll', (event) => {
   idleTimers.set(target, window.setTimeout(() => delete target.dataset.scrolling, SCROLLBAR_IDLE));
 }, true);
 
+const stageNames: Record<InstallStage, string> = { cloning: '克隆中', installing: '安装依赖', building: '构建中', ready: '就绪', failed: '失败' };
+
+/** The plugin page: what each plugin init.ts lists is doing, and why one failed. */
+function installsPage() {
+  const element = document.createElement('section');
+  element.className = 'installs';
+  element.hidden = true;
+  element.setAttribute('aria-label', '插件');
+  const heading = document.createElement('h1');
+  heading.textContent = '插件';
+  const list = document.createElement('ul');
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.textContent = '关闭';
+  close.onclick = () => { element.hidden = true; };
+  element.append(heading, list, close);
+  // A plugin with something left to do opens the page; it stays until it is closed, so a failure is read.
+  const update = (statuses: InstallStatus[]) => {
+    list.replaceChildren(...statuses.map(({ id, stage, message }) => {
+      const row = document.createElement('li');
+      row.dataset.stage = stage;
+      const name = document.createElement('span');
+      name.className = 'install-id';
+      name.textContent = id;
+      const state = document.createElement('span');
+      state.className = 'install-stage';
+      state.textContent = stageNames[stage];
+      row.append(name, state);
+      if (message) {
+        const detail = document.createElement('p');
+        detail.className = 'install-message';
+        detail.textContent = message;
+        row.append(detail);
+      }
+      return row;
+    }));
+    if (statuses.some(({ stage }) => stage !== 'ready')) element.hidden = false;
+  };
+  return { element, update };
+}
+
 async function start() {
-  window.wangcai.subscribe('fullscreen', (value) => document.documentElement.toggleAttribute('data-fullscreen', value === true));
-  const plugins = await window.wangcai.plugins();
+  // The shell's own theme comes from the app, not from a plugin, so it is set before anything is drawn:
+  // the plugin page is styled from its first moment even when a plugin still has to be cloned and built.
   const profile = await window.wangcai.config();
   for (const [token, color] of Object.entries(profile.theme)) document.documentElement.style.setProperty(`--wc-${token}`, color);
   document.documentElement.style.setProperty('--wc-font', uiFont);
   const [r, g, b] = getComputedStyle(document.body).backgroundColor.match(/\d+/g)!.map(Number);
   document.documentElement.style.colorScheme = r * 299 + g * 587 + b * 114 > 128_000 ? 'light' : 'dark';
+  window.wangcai.subscribe('fullscreen', (value) => document.documentElement.toggleAttribute('data-fullscreen', value === true));
+  const installs = installsPage();
+  window.wangcai.subscribe('installs', () => { installs.element.hidden = false; });
+  window.wangcai.onInstall((statuses) => installs.update(statuses));
+  installs.update(await window.wangcai.installs());
+  root.append(installs.element);
+  // This resolves once every repository has been installed and every plugin has loaded.
+  const plugins = await window.wangcai.plugins();
   if (!plugins.length) root.textContent = '未安装插件';
   const left = document.createElement('aside');
   left.className = 'desktop-sidebar sidebar-left';

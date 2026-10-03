@@ -9,6 +9,10 @@ export const previewUrl = `${previewScheme}://preview/`;
 export const previewMessage = 'wangcai-preview';
 
 export interface PluginInfo { id: string; config: Record<string, unknown>; ui?: string; css?: string; error?: string }
+
+// What a plugin init.ts lists is doing, as the manager page reports it.
+export type InstallStage = 'cloning' | 'installing' | 'building' | 'ready' | 'failed';
+export interface InstallStatus { id: string; stage: InstallStage; message?: string }
 export interface TabRecord { plugin: string; workspaceId?: string; id: string }
 export type Dispose = () => void | Promise<void>;
 export const denied = (scope: string, member: string) => () => { throw new Error(`${member} is not available on the ${scope} channel`); };
@@ -19,6 +23,8 @@ export interface PluginBridge {
   config(): Promise<Profile>;
   request<T = any>(id: string, method: string, params?: unknown): Promise<T>;
   on(callback: (id: string, event: string, data: unknown) => void): () => void;
+  installs(): Promise<InstallStatus[]>;
+  onInstall(callback: (statuses: InstallStatus[]) => void): () => void;
   loadTabs(): Promise<TabRecord[]>;
   saveTabs(tabs: TabRecord[]): Promise<void>;
 }

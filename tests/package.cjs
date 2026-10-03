@@ -19,25 +19,26 @@ test('packaged app carries its plugins, previews files and prefers plugins from 
     return desktop.firstWindow();
   };
   try {
-    writeInit(home);
+    writeInit(home, [{ id: 'workspace' }, { id: 'files' }, { id: 'terminal' }]);
     assert.equal(execFileSync('plutil', ['-extract', 'CFBundleName', 'raw', join(bundle, 'Info.plist')], { encoding: 'utf8' }).trim(), '旺财');
     page = await launch();
     await page.locator('.machine.connected').waitFor();
     const baseSpacing = await page.locator('.wangcai-workspace .sidebar-header').evaluate((element) => getComputedStyle(element).letterSpacing);
     // The app carries prebuilt plugins and never installs or compiles them into the user's home.
     assert.equal(existsSync(join(home, '.local/shared/wangcai/plugins')), false);
-    for (const id of ['workspace', 'files', 'git', 'terminal']) {
+    for (const id of ['workspace', 'files', 'terminal']) {
       assert.equal(existsSync(join(bundle, 'Resources/plugins', id, 'main.cjs')), true);
       assert.equal(existsSync(join(bundle, 'Resources/plugins', id, 'ui.js')), true);
     }
+    // Repository plugins build with the node and npm the app carries.
+    assert.equal(existsSync(join(bundle, 'Resources/node/bin/node')), true);
+    assert.equal(existsSync(join(bundle, 'Resources/node/lib/node_modules/npm/bin/npm-cli.js')), true);
     const code = join(home, 'packaged.ts');
     writeFileSync(code, 'const packaged = "PACKAGED_PREVIEW";\n');
     await page.evaluate(path => window.wangcai.publish('onclick', { type: 'file', machine: { id: 'local', name: '本机' }, path }), code);
     await page.locator('.monaco-editor .view-lines').filter({ hasText: 'PACKAGED_PREVIEW' }).waitFor();
     await page.getByRole('button', { name: '新建侧栏标签页' }).click();
-    await page.locator('#view-menu').getByRole('button', { name: 'Git', exact: true }).click();
-    await page.getByText('请选择一个已连接的终端', { exact: true }).waitFor();
-    assert.match(readFileSync(join(bundle, 'Resources/plugins/git/main.cjs'), 'utf8'), /readGit/);
+    await page.locator('#view-menu').getByRole('button', { name: '文件', exact: true }).click();
     const workerReady = page.waitForEvent('worker');
     await page.evaluate(() => { window.MonacoEnvironment.getWorker('', 'editorWorkerService'); });
     const worker = await workerReady;
@@ -73,7 +74,8 @@ test('packaged app carries its plugins, previews files and prefers plugins from 
     page = await launch();
     await page.locator('.machine.connected').waitFor();
     assert.match(readFileSync(join(home, '.config/wangcai/init.ts'), 'utf8'), /plugins: \[\n    \{ id: 'workspace' \}/);
-    assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)), ['files', 'git', 'terminal', 'workspace']);
+    assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)), ['files', 'terminal', 'workspace']);
+    assert.equal(await page.locator('.plugin-error').count(), 0);
   } finally {
     await desktop?.close();
     try { execFileSync(join(bundle, 'Resources/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 15000 }); } catch {}

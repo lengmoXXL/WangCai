@@ -4,7 +4,8 @@ import { pathToFileURL } from 'node:url';
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { loadPlugins } from './plugins';
 import { loadConfig } from './config';
-import { previewMessage, previewScheme, previewUrl, uiFont, type TabRecord } from '../shared';
+import { installPlugin } from './install';
+import { previewMessage, previewScheme, previewUrl, uiFont, type InstallStatus, type TabRecord } from '../shared';
 
 app.setName('旺财');
 protocol.registerSchemesAsPrivileged([
@@ -27,19 +28,44 @@ else {
     if (!app.isPackaged) app.dock?.setIcon(join(app.getAppPath(), 'build/icon.png'));
     const bundled = app.isPackaged ? join(process.resourcesPath, 'plugins') : join(app.getAppPath(), 'dist/plugins');
     const { profile, plugins: specs } = await loadConfig();
-    const plugins = await loadPlugins(require.resolve('@wangcai/sdk'),
-      app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug'),
-      bundled,
-      { version: app.getVersion(), prefix: profile.agent.downloadPrefix },
-      profile,
-      specs,
-      (id, event, data) => { if (window && !window.isDestroyed()) window.webContents.send('wangcai:event', id, event, data); },
-      (event, data) => { if (window && !window.isDestroyed()) window.webContents.send('wangcai:channel', event, data); });
+    // The window opens before the plugins do: a plugin may have to be cloned and built first, and the
+    // manager page reports each stage while it happens.
+    const installsPath = join(app.getPath('userData'), 'installs.json');
+    const node = app.isPackaged ? join(process.resourcesPath, 'node/bin/node') : join(app.getAppPath(), 'node/bin/node');
+    const statuses: InstallStatus[] = specs.map(({ id }) => ({ id, stage: 'ready' }));
+    const announce = (status: InstallStatus) => {
+      statuses[statuses.findIndex((entry) => entry.id === status.id)] = status;
+      if (window && !window.isDestroyed()) window.webContents.send('wangcai:install', statuses);
+    };
+    // Everything that needs a plugin waits for this.
+    const loading = (async () => {
+      const failed = new Set<string>();
+      for (const spec of specs) {
+        if (!spec.repo) continue;
+        try {
+          await installPlugin(spec, node, installsPath, (stage, message) => announce({ id: spec.id, stage, message }));
+        } catch (error) {
+          // A plugin that did not install is left out rather than activated from half a checkout: the rest
+          // of the app runs without it, and the page says what went wrong.
+          failed.add(spec.id);
+          announce({ id: spec.id, stage: 'failed', message: error instanceof Error ? error.message : String(error) });
+        }
+      }
+      return loadPlugins(require.resolve('@wangcai/sdk'),
+        app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug'),
+        bundled,
+        { version: app.getVersion(), prefix: profile.agent.downloadPrefix },
+        profile,
+        specs.filter((spec) => !failed.has(spec.id)),
+        (id, event, data) => { if (window && !window.isDestroyed()) window.webContents.send('wangcai:event', id, event, data); },
+        (event, data) => { if (window && !window.isDestroyed()) window.webContents.send('wangcai:channel', event, data); });
+    })();
+    // Serves a loaded plugin's files to the renderer; the directories exist once loading is done.
     protocol.handle('wangcai-plugin', async (request) => {
       const url = new URL(request.url);
       if (url.host !== 'plugins') return new Response('Not found', { status: 404 });
       const [, id, ...parts] = decodeURIComponent(url.pathname).split('/');
-      const directory = plugins.directories.get(id);
+      const directory = (await loading).directories.get(id);
       if (!directory) return new Response('Not found', { status: 404 });
       const path = resolve(directory, parts.join('/'));
       const local = relative(directory, path);
@@ -52,10 +78,11 @@ else {
     protocol.handle(previewScheme, (request) => request.url === previewUrl
       ? new Response(previewDocument(), { headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': PREVIEW_CSP } })
       : new Response('Not found', { status: 404 }));
-    ipcMain.handle('wangcai:publish', (_, event: string, data: unknown) => plugins.publish(event, data));
-    ipcMain.handle('wangcai:plugins', () => plugins.plugins);
-    ipcMain.handle('wangcai:request', (_, id: string, method: string, params: unknown) => plugins.request(id, method, params));
+    ipcMain.handle('wangcai:publish', async (_, event: string, data: unknown) => (await loading).publish(event, data));
+    ipcMain.handle('wangcai:plugins', async () => (await loading).plugins);
+    ipcMain.handle('wangcai:request', async (_, id: string, method: string, params: unknown) => (await loading).request(id, method, params));
     ipcMain.handle('wangcai:config', () => profile);
+    ipcMain.handle('wangcai:installs', () => statuses);
     const tabsPath = join(app.getPath('userData'), 'tabs.json');
     ipcMain.handle('wangcai:tabs', () => existsSync(tabsPath) ? JSON.parse(readFileSync(tabsPath, 'utf8')) as TabRecord[] : []);
     ipcMain.handle('wangcai:save-tabs', (_: unknown, tabs: TabRecord[]) => {
@@ -65,7 +92,8 @@ else {
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { label: '旺财', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'quit' }] },
       { label: 'Edit', submenu: [{ role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
-      { label: 'View', submenu: [{ role: 'toggleDevTools' }, { role: 'togglefullscreen' }] },
+      { label: 'View', submenu: [{ role: 'toggleDevTools' }, { role: 'togglefullscreen' }, { type: 'separator' },
+        { label: '插件', click: () => window?.webContents.send('wangcai:channel', 'installs', true) }] },
     ]));
     const statePath = join(app.getPath('userData'), 'window-state.json');
     const { maximized, ...bounds } = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : { width: 1180, height: 780 };
@@ -90,7 +118,7 @@ else {
     app.on('before-quit', (event) => {
       if (cleaned) return;
       event.preventDefault();
-      cleanup ??= plugins.dispose().finally(() => { cleaned = true; app.quit(); });
+      cleanup ??= loading.then((plugins) => plugins.dispose(), () => undefined).finally(() => { cleaned = true; app.quit(); });
     });
     if (process.env.ELECTRON_RENDERER_URL) await win.loadURL(process.env.ELECTRON_RENDERER_URL);
     else await win.loadFile(join(__dirname, '../ui/index.html'));

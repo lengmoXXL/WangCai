@@ -16,6 +16,12 @@ const api: PluginBridge = {
     ipcRenderer.on('wangcai:event', listener);
     return () => { ipcRenderer.removeListener('wangcai:event', listener); };
   },
+  installs: () => ipcRenderer.invoke('wangcai:installs'),
+  onInstall: (callback) => {
+    const listener = (_: unknown, statuses: Parameters<typeof callback>[0]) => callback(statuses);
+    ipcRenderer.on('wangcai:install', listener);
+    return () => { ipcRenderer.removeListener('wangcai:install', listener); };
+  },
   loadTabs: () => ipcRenderer.invoke('wangcai:tabs'),
   saveTabs: (tabs) => ipcRenderer.invoke('wangcai:save-tabs', tabs),
 };

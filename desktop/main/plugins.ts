@@ -6,7 +6,7 @@ import { compileFunction } from 'node:vm';
 import type { AgentInfo, Profile } from '@wangcai/sdk';
 import type { Channel, Context } from '@wangcai/sdk/channel';
 import { denied, type Dispose, type PluginInfo } from '../shared';
-import { configDirectory, type PluginSpec } from './config';
+import { pluginDirectory, type PluginSpec } from './config';
 
 // A schema is an object of leaves, each naming the type it takes and the default to use without one.
 // Only keys the schema lists survive, so a plugin decides for itself which config it accepts.
@@ -29,7 +29,6 @@ function resolveConfig(schema: unknown, values: unknown): Record<string, unknown
 }
 
 export async function loadPlugins(sdkPath: string, resourcesDirectory: string, bundled: string, agent: AgentInfo, profile: Profile, specs: PluginSpec[], emit: (id: string, event: string, data: unknown) => void, broadcast: (event: string, data: unknown) => void) {
-  const userPlugins = join(configDirectory, 'plugins');
   const plugins: PluginInfo[] = [];
   const directories = new Map<string, string>();
   const handlers = new Map<string, Map<string, (params: any) => unknown>>();
@@ -53,7 +52,9 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, b
     const subscriptions = new Map<string, Set<(data: any) => void | Promise<void>>>();
     channels.add(subscriptions);
     try {
-      const directory = spec.directory ?? (existsSync(join(userPlugins, id)) ? join(userPlugins, id) : join(bundled, id));
+      // A wrong path must surface as a missing plugin, so an explicit directory is used as it is.
+      const configured = pluginDirectory(spec);
+      const directory = spec.directory ?? (existsSync(configured) ? configured : join(bundled, id));
       const filename = join(directory, 'main.cjs');
       if (!existsSync(filename)) throw new Error('Plugin is not installed');
       if (existsSync(join(directory, 'ui.js'))) {

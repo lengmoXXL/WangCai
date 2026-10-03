@@ -283,9 +283,9 @@ test('sidebar tabs can be dragged into a new order', { timeout: 180000 }, async 
     await page.getByRole('button', { name: '切换右侧栏' }).click();
   };
   try {
-    writeInit(home);
+    writeInit(home, [{ id: 'workspace' }, { id: 'files' }, { id: 'terminal' }]);
     await open();
-    for (const name of ['文件', 'Git', '终端']) {
+    for (const name of ['文件', '终端']) {
       await page.getByRole('button', { name: '新建侧栏标签页' }).click();
       await page.locator('#view-menu').getByRole('button', { name, exact: true }).click();
       await page.getByRole('tab', { name, exact: true }).waitFor();
@@ -295,9 +295,9 @@ test('sidebar tabs can be dragged into a new order', { timeout: 180000 }, async 
     const tab = (name) => page.locator('.sidebar-tab').filter({ has: page.getByRole('tab', { name, exact: true }) });
     const order = () => page.locator(TAB_ORDER).allTextContents();
     const settled = (expected) => page.waitForFunction(([selector, want]) => [...document.querySelectorAll(selector)].map((node) => node.textContent).join() === want, [TAB_ORDER, expected.join()]);
-    assert.deepEqual(await order(), ['文件', 'Git', '终端']);
+    assert.deepEqual(await order(), ['文件', '终端']);
     const source = await tab('文件').boundingBox();
-    const target = await tab('Git').boundingBox();
+    const target = await tab('终端').boundingBox();
     await page.mouse.move(source.x + 20, source.y + 18);
     await page.mouse.down();
     await page.mouse.move(target.x + 20, target.y + 18, { steps: 6 });
@@ -305,23 +305,21 @@ test('sidebar tabs can be dragged into a new order', { timeout: 180000 }, async 
     await page.keyboard.press('Escape');
     await page.mouse.up();
     await page.waitForFunction((selector) => document.querySelectorAll(selector).length === 0, DROPPED);
-    await tab('Git').dragTo(tab('文件'), { targetPosition: { x: 4, y: 18 } });
-    await settled(['Git', '文件', '终端']);
+    await tab('终端').dragTo(tab('文件'), { targetPosition: { x: 4, y: 18 } });
+    await settled(['终端', '文件']);
     // dropping a tab after the tab in front of it must leave it where it is
-    await tab('文件').dragTo(tab('Git'), { targetPosition: { x: 45, y: 18 } });
+    await tab('文件').dragTo(tab('终端'), { targetPosition: { x: 45, y: 18 } });
     await page.waitForTimeout(500);
-    assert.deepEqual(await order(), ['Git', '文件', '终端']);
-    await tab('终端').dragTo(tab('Git'), { targetPosition: { x: 4, y: 18 } });
-    await settled(['终端', 'Git', '文件']);
+    assert.deepEqual(await order(), ['终端', '文件']);
     // opening a workspace rebinds these tabs to it, which rewrites their keys
     await page.locator('.machine.connected').click({ button: 'right' });
     await page.getByRole('menuitem', { name: /新建工作区/ }).click();
     await page.getByRole('tab', { name: '~' }).waitFor();
     await tab('文件').dragTo(tab('终端'), { targetPosition: { x: 4, y: 18 } });
-    await settled(['文件', '终端', 'Git']);
+    await settled(['文件', '终端']);
     await desktop.close(); desktop = undefined;
     await open();
-    await settled(['文件', '终端', 'Git']);
+    await settled(['文件', '终端']);
     assert.deepEqual(errors, []);
   } finally {
     await desktop?.close();

@@ -24,6 +24,10 @@
       {
         "from": "dist/plugins",
         "to": "plugins"
+      },
+      {
+        "from": "node",
+        "to": "node"
       }
     ],
     "mac": {
@@ -35,8 +39,8 @@
     }
   },
   "scripts": {
-    "dev": "node tools/build-plugins.mjs && electron-vite dev",
-    "build": "node tools/build-plugins.mjs && electron-vite build",
+    "dev": "node tools/fetch-node.mjs && node tools/build-plugins.mjs && electron-vite dev",
+    "build": "node tools/fetch-node.mjs && node tools/build-plugins.mjs && electron-vite build",
     "start": "electron .",
     "package": "npm run build && electron-builder --mac dir",
     "typecheck": "tsc"

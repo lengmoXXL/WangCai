@@ -77,12 +77,14 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     writeInit(home, [
       { id: 'alpha', config: { font: { size: 30 }, junk: 'dropped' } },
       { id: 'beta', config: { font: { family: 42, size: 'thirty' } } },
+      // files is one the app ships: a wrong directory must be an error, not a fall back to that copy.
+      { id: 'files', directory: join(home, 'not-a-plugin') },
       'broken', 'failed-ui', 'syntax', 'missing',
     ]);
     let page = await launch();
-    // Only the listed plugins load, in id order; one of them cannot start and one is not installed.
+    // Only the listed plugins load, in id order; the ones that fail are reported rather than dropped.
     assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)),
-      ['alpha', 'beta', 'broken', 'failed-ui', 'missing', 'syntax']);
+      ['alpha', 'beta', 'broken', 'failed-ui', 'files', 'missing', 'syntax']);
     assert.equal(await page.evaluate(() => window.wangcai.request('alpha', 'sharedSDK')), true);
     assert.equal(await page.evaluate(() => window.wangcai.request('beta', 'sharedSDK')), true);
     // The schema keeps a value of the type it names, defaults what init.ts leaves out and drops the rest.
@@ -111,6 +113,7 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     await page.getByText('broken: intentional failure', { exact: true }).waitFor();
     await page.getByText('failed-ui: UI failure', { exact: true }).waitFor();
     await page.getByText('missing: Plugin is not installed', { exact: true }).waitFor();
+    await page.getByText('files: Plugin is not installed', { exact: true }).waitFor();
     assert.equal(await page.locator('.plugin-error[data-plugin=syntax]').count(), 1);
     await desktop.close(); desktop = undefined;
     for (const name of ['alpha', 'beta']) {
