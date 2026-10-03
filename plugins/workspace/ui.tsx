@@ -6,17 +6,16 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { fileLocation, registerFileLinks } from './links';
 import type { WorkspaceApi } from './main';
-import type { Config, Machine, MachineState, Session, WangcaiAPI, Workspace } from './shared';
+import type { Config, Machine, MachineState, Session, Settings, WangcaiAPI, Workspace } from './shared';
 import '@xterm/xterm/css/xterm.css';
 import './style.css';
-import type { Profile } from '@wangcai/sdk';
 import type { Context } from '@wangcai/sdk/channel';
 
 let api: WangcaiAPI;
 let sidebar: HTMLElement;
 
 function TerminalPane({ machineId, session, active, connected, generation, profile }: {
-  machineId: string; session: Session; active: boolean; connected: boolean; generation: number; profile: Profile;
+  machineId: string; session: Session; active: boolean; connected: boolean; generation: number; profile: Settings;
 }) {
   const element = useRef<HTMLDivElement>(null);
   const terminal = useRef<Terminal>(null);
@@ -25,8 +24,8 @@ function TerminalPane({ machineId, session, active, connected, generation, profi
 
   useEffect(() => {
     const term = new Terminal({
-      cursorBlink: true, fontSize: profile.font.terminal.size, lineHeight: profile.font.terminal.lineHeight,
-      fontFamily: profile.font.terminal.family,
+      cursorBlink: true, fontSize: profile.font.size, lineHeight: profile.font.lineHeight,
+      fontFamily: profile.font.family,
       // xterm takes its scrollbar width from the overview ruler, which also paints the ruler outline.
       overviewRuler: { width: 10 },
       scrollback: 10_000, cols: session.cols, rows: session.rows,
@@ -125,7 +124,7 @@ function MachineForm({ machine, onUpdate, onClose }: { machine?: Machine; onUpda
 
 type Menu = { left: number; top: number; trigger: HTMLElement; label?: string; kind: 'header' | 'machine' | 'workspace' | 'empty'; machineId?: string; workspaceId?: string };
 
-function App({ context, profile }: { context: Context; profile: Profile }) {
+function App({ context, profile }: { context: Context; profile: Settings }) {
   const [config, setConfig] = useState<Config>();
   const [states, setStates] = useState<Record<string, MachineState>>({});
   const [selectedWorkspaces, setSelectedWorkspaces] = useState<Record<string, string>>({});
@@ -339,7 +338,9 @@ export async function mount(container: HTMLElement, context: Context) {
     onState: (callback) => context.ui.subscribe('state', callback),
     onTerminal: (callback) => context.ui.subscribe('terminal', callback),
   };
-  const profile = await context.host.request<Profile>('config');
+  const profile = await context.host.request<Settings>('config');
+  container.style.fontFamily = profile.font.family;
+  sidebar.style.fontFamily = profile.font.family;
   const root = createRoot(container);
   root.render(<App context={context} profile={profile} />);
   return () => root.unmount();

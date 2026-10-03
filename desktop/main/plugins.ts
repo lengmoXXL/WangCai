@@ -8,6 +8,26 @@ import type { Channel, Context } from '@wangcai/sdk/channel';
 import { denied, type Dispose, type PluginInfo } from '../shared';
 import { configDirectory, type PluginSpec } from './config';
 
+// A schema is an object of leaves, each naming the type it takes and the default to use without one.
+// Only keys the schema lists survive, so a plugin decides for itself which config it accepts.
+function resolveConfig(schema: unknown, values: unknown): Record<string, unknown> {
+  const settings: Record<string, unknown> = {};
+  if (typeof schema !== 'object' || schema === null) return settings;
+  const given = (typeof values === 'object' && values !== null ? values : {}) as Record<string, unknown>;
+  for (const [key, entry] of Object.entries(schema as Record<string, unknown>)) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const declared = entry as { type?: unknown; default?: unknown };
+    if (typeof declared.type === 'string') {
+      const value = typeof given[key] === declared.type ? given[key] : declared.default;
+      if (value !== undefined) settings[key] = value;
+      continue;
+    }
+    const nested = resolveConfig(entry, given[key]);
+    if (Object.keys(nested).length) settings[key] = nested;
+  }
+  return settings;
+}
+
 export async function loadPlugins(sdkPath: string, resourcesDirectory: string, bundled: string, agent: AgentInfo, profile: Profile, specs: PluginSpec[], emit: (id: string, event: string, data: unknown) => void, broadcast: (event: string, data: unknown) => void) {
   const userPlugins = join(configDirectory, 'plugins');
   const plugins: PluginInfo[] = [];
@@ -26,7 +46,7 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, b
   // mounts, so what one plugin observes must not depend on the config file.
   for (const spec of [...specs].sort((a, b) => a.id.localeCompare(b.id))) {
     const id = spec.id;
-    const info: PluginInfo = { id };
+    const info: PluginInfo = { id, config: {} };
     plugins.push(info);
     const methods = new Map<string, (params: any) => unknown>();
     handlers.set(id, methods);
@@ -34,11 +54,21 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, b
     channels.add(subscriptions);
     try {
       const directory = spec.directory ?? (existsSync(join(userPlugins, id)) ? join(userPlugins, id) : join(bundled, id));
-      if (!existsSync(join(directory, 'main.cjs'))) throw new Error('Plugin is not installed');
+      const filename = join(directory, 'main.cjs');
+      if (!existsSync(filename)) throw new Error('Plugin is not installed');
       if (existsSync(join(directory, 'ui.js'))) {
         info.ui = `wangcai-plugin://plugins/${encodeURIComponent(id)}/ui.js`;
         if (existsSync(join(directory, 'ui.css'))) info.css = `wangcai-plugin://plugins/${encodeURIComponent(id)}/ui.css`;
       }
+      const localRequire = createRequire(filename);
+      // Prebuilt plugins use the host SDK so its connection pool stays shared across plugins.
+      const pluginRequire = Object.assign((name: string) => name === '@wangcai/sdk' ? requirePlugin(sdkPath) : localRequire(name), localRequire);
+      const module = { exports: {} as { activate(context: Context): void | Dispose | Promise<void | Dispose>; config?: unknown } };
+      compileFunction(readFileSync(filename, 'utf8'), ['require', 'module', 'exports', '__filename', '__dirname'], { filename })
+        .call(module.exports, pluginRequire, module, module.exports, filename, dirname(filename));
+      // The app knows nothing about the fields a plugin takes.
+      const settings = resolveConfig(module.exports.config, spec.config);
+      info.config = settings;
       const dataDirectory = join(homedir(), '.local/shared/wangcai/data', id);
       const logDirectory = join(homedir(), '.local/shared/wangcai/logs', id);
       mkdirSync(dataDirectory, { recursive: true });
@@ -74,19 +104,12 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, b
             if (topic === 'logDirectory') return logDirectory;
             if (topic === 'resourcesDirectory') return resourcesDirectory;
             if (topic === 'agent') return agent;
-            if (topic === 'config') return profile;
+            if (topic === 'config') return { ...profile, ...settings };
             throw new Error(`Unsupported host topic: ${topic}`);
           }) as Channel['request'],
           handle: denied('host', 'handle'),
         },
       };
-      const filename = join(directory, 'main.cjs');
-      const localRequire = createRequire(filename);
-      // Prebuilt plugins use the host SDK so its connection pool stays shared across plugins.
-      const pluginRequire = Object.assign((name: string) => name === '@wangcai/sdk' ? requirePlugin(sdkPath) : localRequire(name), localRequire);
-      const module = { exports: {} as { activate(context: Context): void | Dispose | Promise<void | Dispose> } };
-      compileFunction(readFileSync(filename, 'utf8'), ['require', 'module', 'exports', '__filename', '__dirname'], { filename })
-        .call(module.exports, pluginRequire, module, module.exports, filename, dirname(filename));
       const dispose = await module.exports.activate(context);
       if (dispose) disposers.push(dispose);
       directories.set(id, directory);

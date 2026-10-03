@@ -7,14 +7,15 @@ import 'monaco-editor/basic-languages/monaco.contribution.js';
 import 'monaco-editor/languages/features/json/jsonMode.js';
 import { jsonDefaults } from 'monaco-editor/languages/features/json/register.js';
 import 'monaco-editor/editor/contrib/find/browser/findController.js';
-import type { DirectoryEntry, Profile, Theme } from '@wangcai/sdk';
+import type { DirectoryEntry, Theme } from '@wangcai/sdk';
 import type { Context } from '@wangcai/sdk/channel';
-import type { ActiveTerminal, FileClick } from './shared';
+import type { ActiveTerminal, FileClick, Font, Settings } from './shared';
 import './style.css';
 
 export const title = '文件';
 let activeWorkspaceId: string | undefined;
 let preview: { url: string; message: string };
+let font: Font;
 jsonDefaults.setModeConfiguration({ tokens: true });
 
 function editorTheme(theme: Theme): monaco.editor.IStandaloneThemeData {
@@ -82,12 +83,13 @@ function Preview({ file, text, mode }: { file: FileClick; text: string; mode: Mo
   }, [mode, text]);
   useEffect(() => {
     if (mode !== 'text') return;
+    const size = font.size;
     const name = file.path.split('/').pop()!;
     const language = monaco.languages.getLanguages().find((item) => item.filenames?.includes(name) || item.extensions?.some((extension) => name.endsWith(extension)))?.id ?? 'plaintext';
     const editor = monaco.editor.create(element.current!, {
       value: text, language, theme: 'wangcai', readOnly: true, domReadOnly: true,
       automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false,
-      fontSize: 13, lineNumbersMinChars: 3, renderLineHighlight: 'none',
+      fontSize: size, lineHeight: font.lineHeight ? Math.round(size * font.lineHeight) : 0, fontFamily: font.family, lineNumbersMinChars: 3, renderLineHighlight: 'none',
       ariaLabel: '代码预览', contextmenu: false,
     });
     const position = { lineNumber: file.line ?? 1, column: file.column ?? 1 };
@@ -182,6 +184,7 @@ export async function restore(context: Context, record: { id: string; workspaceI
 
 function openTab(context: Context, workspaceId?: string) {
   return context.host.request('tabs', { id: 'directory', title: '文件', workspaceId, mount(container: HTMLElement) {
+    container.style.fontFamily = font.family;
     const root = createRoot(container);
     let revision = 0;
     return {
@@ -192,7 +195,8 @@ function openTab(context: Context, workspaceId?: string) {
 }
 
 export async function mount(_container: HTMLElement, context: Context) {
-  const profile = await context.host.request<Profile>('config');
+  const profile = await context.host.request<Settings>('config');
+  font = profile.font;
   preview = await context.host.request<typeof preview>('preview');
   monaco.editor.defineTheme('wangcai', editorTheme(profile.theme));
   const response = await fetch(new URL('./ui.worker.js', import.meta.url));
@@ -212,6 +216,7 @@ export async function mount(_container: HTMLElement, context: Context) {
       id: JSON.stringify([file.machine.host ?? file.machine.id, file.path]),
       title: file.path.split('/').filter(Boolean).pop() ?? '/', tooltip: `${file.machine.name}: ${file.path}`, workspaceId: activeWorkspaceId,
       mount(container: HTMLElement) {
+        container.style.fontFamily = font.family;
         const root = createRoot(container);
         let revision = 0;
         return {

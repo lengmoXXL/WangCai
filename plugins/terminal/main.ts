@@ -4,6 +4,15 @@ import { connect, type AgentInfo, type MachineConnection, type Pty } from '@wang
 import type { Context } from '@wangcai/sdk/channel';
 import type { ActiveTerminal, Machine, TerminalRef } from './shared';
 
+// Which fields this plugin takes from init.ts, and the default each one falls back to.
+export const config = {
+  font: {
+    family: { type: 'string', default: '"DejaVuSansM Nerd Font Mono", monospace' },
+    size: { type: 'number', default: 13 },
+    lineHeight: { type: 'number', default: 1 },
+  },
+};
+
 export async function activate(context: Context) {
   const path = join(await context.host.request<string>('dataDirectory'), 'sessions.json');
   const sessions: Record<string, Machine> = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) as Record<string, Machine> : {};

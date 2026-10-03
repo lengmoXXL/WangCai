@@ -72,7 +72,7 @@ test('packaged app carries its plugins, previews files and prefers plugins from 
     rmSync(join(home, '.config/wangcai/init.ts'));
     page = await launch();
     await page.locator('.machine.connected').waitFor();
-    assert.match(readFileSync(join(home, '.config/wangcai/init.ts'), 'utf8'), /plugins: \[\{ id: 'workspace' \}/);
+    assert.match(readFileSync(join(home, '.config/wangcai/init.ts'), 'utf8'), /plugins: \[\n    \{ id: 'workspace' \}/);
     assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)), ['files', 'git', 'terminal', 'workspace']);
   } finally {
     await desktop?.close();

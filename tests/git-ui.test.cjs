@@ -43,6 +43,9 @@ test('Git tab follows terminal cwd and shows one read-only diff at a time', { ti
     const staged = page.locator('.git-rail > details').filter({ has: page.locator('summary', { hasText: /^已暂存/ }) });
     await staged.locator('.git-file').first().click();
     await page.locator('.git-editor .view-lines').filter({ hasText: 'STAGED_VALUE' }).waitFor();
+    const diffText = page.locator('.git-editor .view-lines').first();
+    assert.equal(await diffText.evaluate((element) => getComputedStyle(element).fontSize), '12px');
+    assert.match(await diffText.evaluate((element) => getComputedStyle(element).fontFamily), /^"DejaVuSansM Nerd Font Mono"/);
     const worktree = page.locator('.git-rail > details').filter({ has: page.locator('summary', { hasText: /^未暂存/ }) });
     await worktree.locator('.git-file').first().click();
     await page.locator('.git-editor .editor.modified .view-lines').filter({ hasText: 'WORKTREE_VALUE' }).waitFor();

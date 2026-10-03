@@ -71,7 +71,7 @@ test('view picker browses current terminal directory; file links preview code, M
     assert.equal(await codePanel.locator('.preview-path').innerText(), code);
     assert.equal(await codePanel.locator('.preview-mode').count(), 0);
     assert.equal(await codePanel.locator('.preview-header').evaluate((element) => getComputedStyle(element).fontSize), '12px');
-    assert.equal(await codePanel.locator('.monaco-editor .view-lines').evaluate((element) => getComputedStyle(element).fontSize), '13px');
+    assert.equal(await codePanel.locator('.monaco-editor .view-lines').evaluate((element) => getComputedStyle(element).fontSize), '12px');
     await page.screenshot({ path: 'tests/dist/screenshots/files-code.png' });
     assert.equal(await page.locator('.file-preview .monaco-editor').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(18, 19, 20)');
     await page.locator('.monaco-editor .view-lines').filter({ hasText: 'CODE_PREVIEW' }).waitFor();
@@ -113,7 +113,7 @@ test('view picker browses current terminal directory; file links preview code, M
     assert.equal(await markdownPanel.locator('.markdown-preview').evaluate((element) => getComputedStyle(element).fontSize), '13px');
     await markdownPanel.getByRole('button', { name: 'Markdown 预览', exact: true }).click();
     await markdownPanel.getByRole('menuitem', { name: '文本', exact: true }).click();
-    assert.equal(await markdownPanel.locator('.monaco-editor .view-lines').evaluate((element) => getComputedStyle(element).fontSize), '13px');
+    assert.equal(await markdownPanel.locator('.monaco-editor .view-lines').evaluate((element) => getComputedStyle(element).fontSize), '12px');
     await markdownPanel.locator('.monaco-editor .view-lines').filter({ hasText: '# Markdown preview' }).waitFor();
     await markdownPanel.getByRole('button', { name: '文本', exact: true }).click();
     await markdownPanel.getByRole('menuitem', { name: 'Markdown 预览', exact: true }).click();
@@ -164,7 +164,7 @@ test('view picker browses current terminal directory; file links preview code, M
     assert.equal(await htmlFrame.locator('#heading').innerText(), 'Rendered page');
     assert.equal(await page.locator('.html-frame').getAttribute('sandbox'), 'allow-scripts');
     assert.equal(await htmlFrame.locator('body').evaluate((element) => getComputedStyle(element).fontSize), '13px');
-    assert.match(await htmlFrame.locator('body').evaluate((element) => getComputedStyle(element).fontFamily), /Segoe UI/);
+    assert.match(await htmlFrame.locator('body').evaluate((element) => getComputedStyle(element).fontFamily), /DejaVuSansM Nerd Font Mono/);
     const htmlPanel = page.getByRole('tabpanel', { name: 'page.html' });
     assert.equal(await htmlPanel.locator('.preview-path').innerText(), html);
     await htmlPanel.getByRole('button', { name: 'HTML 预览', exact: true }).click();

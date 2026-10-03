@@ -1,5 +1,5 @@
 import type { Channel, Context } from '@wangcai/sdk/channel';
-import { denied, previewMessage, previewUrl, type Dispose, type TabRecord } from '../shared';
+import { denied, previewMessage, previewUrl, uiFont, type Dispose, type TabRecord } from '../shared';
 import './style.css';
 
 type TabContent = { dispose: Dispose; onSelect?(): void };
@@ -28,7 +28,7 @@ async function start() {
   const plugins = await window.wangcai.plugins();
   const profile = await window.wangcai.config();
   for (const [token, color] of Object.entries(profile.theme)) document.documentElement.style.setProperty(`--wc-${token}`, color);
-  document.documentElement.style.setProperty('--wc-font', profile.font.ui.family);
+  document.documentElement.style.setProperty('--wc-font', uiFont);
   const [r, g, b] = getComputedStyle(document.body).backgroundColor.match(/\d+/g)!.map(Number);
   document.documentElement.style.colorScheme = r * 299 + g * 587 + b * 114 > 128_000 ? 'light' : 'dark';
   if (!plugins.length) root.textContent = '未安装插件';
@@ -360,7 +360,7 @@ async function start() {
           subscribe: denied('host', 'subscribe'),
           request: (async (topic: string, params?: unknown) => {
             if (topic === 'sidebar') return sidebarSlot();
-            if (topic === 'config') return profile;
+            if (topic === 'config') return { ...profile, ...plugin.config };
             if (topic === 'tabs') return openTab(params as TabOptions);
             if (topic === 'preview') return { url: previewUrl, message: previewMessage };
             throw new Error(`Unsupported host topic: ${topic}`);

@@ -4,12 +4,13 @@ import { createRoot } from 'react-dom/client';
 import * as monaco from 'monaco-editor/editor/editor.api.js';
 import 'monaco-editor/basic-languages/monaco.contribution.js';
 import 'monaco-editor/editor/contrib/find/browser/findController.js';
-import type { Profile, Theme } from '@wangcai/sdk';
+import type { Theme } from '@wangcai/sdk';
 import type { Context } from '@wangcai/sdk/channel';
-import type { ActiveTerminal, Commit, Comparison, Diff, GitFile, History, Overview, Stage } from './shared';
+import type { ActiveTerminal, Commit, Comparison, Diff, Font, GitFile, History, Overview, Settings, Stage } from './shared';
 import './style.css';
 
 export const title = 'Git';
+let font: Font;
 let activeWorkspaceId: string | undefined;
 const stages: Record<Stage, string> = { conflicted: '冲突', staged: '已暂存', unstaged: '未暂存', untracked: '未跟踪' };
 const readingOrder = ['auto', 'split', 'inline'] as const;
@@ -66,6 +67,7 @@ function DiffEditor({ diff, path, reading, wrap }: { diff: Diff; path: string; r
   } as const;
   useEffect(() => {
     const name = path.split('/').pop()!;
+    const size = font.size;
     const language = monaco.languages.getLanguages().find(item => item.filenames?.includes(name) || item.extensions?.some(extension => name.endsWith(extension)))?.id ?? 'plaintext';
     const original = monaco.editor.createModel(diff.oldText, language);
     const modified = monaco.editor.createModel(diff.newText, language);
@@ -73,7 +75,7 @@ function DiffEditor({ diff, path, reading, wrap }: { diff: Diff; path: string; r
       theme: 'wangcai', readOnly: true, domReadOnly: true,
       automaticLayout: true, scrollBeyondLastLine: false,
       renderOverviewRuler: false, hideUnchangedRegions: { enabled: true },
-      ...options, fontSize: 13, lineNumbersMinChars: 3, contextmenu: false,
+      ...options, fontSize: size, lineHeight: font.lineHeight ? Math.round(size * font.lineHeight) : 0, fontFamily: font.family, lineNumbersMinChars: 3, contextmenu: false,
     });
     view.setModel({ original, modified });
     view.getOriginalEditor().updateOptions({ glyphMargin: false });
@@ -290,6 +292,7 @@ export async function restore(context: Context, record: { workspaceId?: string }
 
 function openTab(context: Context, workspaceId?: string) {
   return context.host.request('tabs', { id: 'history', title: 'Git', workspaceId, mount(container: HTMLElement) {
+    container.style.fontFamily = font.family;
     const root = createRoot(container);
     let activation = 0;
     return { onSelect: () => root.render(<GitView context={context} activation={++activation} workspaceId={workspaceId} />), dispose: () => root.unmount() };
@@ -297,7 +300,8 @@ function openTab(context: Context, workspaceId?: string) {
 }
 
 export async function mount(_container: HTMLElement, context: Context) {
-  const profile = await context.host.request<Profile>('config');
+  const profile = await context.host.request<Settings>('config');
+  font = profile.font;
   monaco.editor.defineTheme('wangcai', editorTheme(profile.theme));
   const offActive = context.global.subscribe<ActiveTerminal | null>('terminal:active', (value) => { activeWorkspaceId = value?.workspaceId; });
   void context.global.publish('terminal:query', null);

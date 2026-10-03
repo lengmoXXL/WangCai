@@ -5,6 +5,15 @@ import { connect, type AgentInfo, type MachineConnection, type Pty } from '@wang
 import type { Context } from '@wangcai/sdk/channel';
 import type { Config, FileClick, Machine, MachineState, Workspace } from './shared';
 
+// Which fields this plugin takes from init.ts, and the default each one falls back to.
+export const config = {
+  font: {
+    family: { type: 'string', default: '"DejaVuSansM Nerd Font Mono", monospace' },
+    size: { type: 'number', default: 13 },
+    lineHeight: { type: 'number', default: 1 },
+  },
+};
+
 export type WorkspaceApi = {
   click(params: { id: string; sessionId: string; location: Pick<FileClick, 'path' | 'line' | 'column'> }): Promise<void>;
   config(): Config;

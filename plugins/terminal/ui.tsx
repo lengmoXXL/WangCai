@@ -2,15 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { Profile, TerminalEvent } from '@wangcai/sdk';
+import type { TerminalEvent } from '@wangcai/sdk';
 import type { Context } from '@wangcai/sdk/channel';
-import type { ActiveTerminal, Machine, TerminalRef } from './shared';
+import type { ActiveTerminal, Machine, Settings, TerminalRef } from './shared';
 import '@xterm/xterm/css/xterm.css';
 import './style.css';
 
 export const title = '终端';
 
-let profile: Profile;
+let profile: Settings;
 let activeTerminal: ActiveTerminal | null = null;
 
 function TerminalPane({ context, machine, sessionId, activation }: { context: Context; machine: Machine; sessionId: string; activation: number }) {
@@ -20,8 +20,8 @@ function TerminalPane({ context, machine, sessionId, activation }: { context: Co
 
   useEffect(() => {
     const term = new Terminal({
-      cursorBlink: true, fontSize: profile.font.terminal.size, lineHeight: profile.font.terminal.lineHeight,
-      fontFamily: profile.font.terminal.family,
+      cursorBlink: true, fontSize: profile.font.size, lineHeight: profile.font.lineHeight,
+      fontFamily: profile.font.family,
       // xterm takes its scrollbar width from the overview ruler, which also paints the ruler outline.
       overviewRuler: { width: 10 },
       scrollback: 10_000,
@@ -93,6 +93,7 @@ function openTab(context: Context, tab: TerminalRef & { workspaceId?: string }) 
     onClose: () => { void context.ui.request('close', tab.sessionId).catch(() => {}); },
     mount(container: HTMLElement) {
       container.classList.add('wangcai-terminal');
+      container.style.fontFamily = profile.font.family;
       const root = createRoot(container);
       let activation = 0;
       return {
@@ -108,6 +109,7 @@ function showMessage(context: Context, id: string, message: string, workspaceId?
     id, title: '终端', tooltip: message, workspaceId,
     mount(container: HTMLElement) {
       container.classList.add('wangcai-terminal');
+      container.style.fontFamily = profile.font.family;
       const text = document.createElement('div');
       text.className = 'terminal-message';
       text.textContent = message;
@@ -139,7 +141,7 @@ export async function restore(context: Context, record: { id: string; workspaceI
 }
 
 export async function mount(_container: HTMLElement, context: Context) {
-  profile = await context.host.request<Profile>('config');
+  profile = await context.host.request<Settings>('config');
   const off = context.global.subscribe<ActiveTerminal | null>('terminal:active', (value) => { activeTerminal = value; });
   void context.global.publish('terminal:query', null);
   return off;

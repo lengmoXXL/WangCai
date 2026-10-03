@@ -19,11 +19,14 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     const { writeFileSync } = require('node:fs');
     const { join } = require('node:path');
     const { connect } = require('@wangcai/sdk');
+    // A plugin states the fields it accepts; the app only checks the types and fills in the defaults.
+    exports.config = { font: { family: { type: 'string', default: '${name} Font' }, size: { type: 'number', default: 10 } } };
     exports.activate = async (context) => {
       globalThis.fixtureConnect ??= connect;
       context.ui.handle('sharedSDK', () => globalThis.fixtureConnect === require('@wangcai/sdk').connect);
       writeFileSync(join(await context.host.request('logDirectory'), 'plugin.log'), '${name}');
-      writeFileSync(join(await context.host.request('logDirectory'), 'config.log'), (await context.host.request('config')).theme.background);
+      const settings = await context.host.request('config');
+      writeFileSync(join(await context.host.request('logDirectory'), 'settings.log'), JSON.stringify(settings));
       const received = [];
       const off = context.global.subscribe('onclick', (data) => received.push(data));
       context.ui.handle('received', () => received);
@@ -35,7 +38,8 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     };
   `;
   const ui = (name) => `
-    export function mount(container, context) {
+    export async function mount(container, context) {
+      container.dataset.font = JSON.stringify((await context.host.request('config')).font);
       const stop = context.global.subscribe('onclick', (data) => { container.dataset.channel = data; });
       context.ui.subscribe('stop', stop);
       const off = context.ui.subscribe('echo', (text) => { container.dataset.event = text; });
@@ -70,13 +74,21 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
       'ui.js': 'export function mount(container, context) { container.hidden = true; context.global.subscribe("onclick", () => { document.body.dataset.leaked = "yes"; }); throw new Error("UI failure"); }',
     });
     write('syntax', { 'main.cjs': 'exports.activate = (;' });
-    writeInit(home, ['alpha', 'beta', 'broken', 'failed-ui', 'syntax', 'missing']);
+    writeInit(home, [
+      { id: 'alpha', config: { font: { size: 30 }, junk: 'dropped' } },
+      { id: 'beta', config: { font: { family: 42, size: 'thirty' } } },
+      'broken', 'failed-ui', 'syntax', 'missing',
+    ]);
     let page = await launch();
     // Only the listed plugins load, in id order; one of them cannot start and one is not installed.
     assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)),
       ['alpha', 'beta', 'broken', 'failed-ui', 'missing', 'syntax']);
     assert.equal(await page.evaluate(() => window.wangcai.request('alpha', 'sharedSDK')), true);
     assert.equal(await page.evaluate(() => window.wangcai.request('beta', 'sharedSDK')), true);
+    // The schema keeps a value of the type it names, defaults what init.ts leaves out and drops the rest.
+    await page.waitForFunction(() => document.querySelector('[data-plugin=alpha]')?.dataset.font);
+    assert.equal(await page.locator('[data-plugin=alpha]').getAttribute('data-font'), '{"family":"alpha Font","size":30}');
+    assert.equal(await page.locator('[data-plugin=beta]').getAttribute('data-font'), '{"family":"beta Font","size":10}');
     assert.equal(await page.getByText('alpha v1', { exact: true }).evaluate((element) => getComputedStyle(element).color), 'rgb(1, 2, 3)');
     await page.getByText('alpha v1', { exact: true }).click();
     await page.waitForFunction(() => document.querySelector('[data-plugin=alpha]')?.getAttribute('data-reply') === 'alpha:hello');
@@ -104,7 +116,10 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     for (const name of ['alpha', 'beta']) {
       assert.equal(readFileSync(join(home, '.local/shared/wangcai/data', name, 'cleaned'), 'utf8'), 'yes');
       assert.equal(readFileSync(join(home, '.local/shared/wangcai/logs', name, 'plugin.log'), 'utf8'), name);
-      assert.equal(readFileSync(join(home, '.local/shared/wangcai/logs', name, 'config.log'), 'utf8'), '#121314');
+      const settings = JSON.parse(readFileSync(join(home, '.local/shared/wangcai/logs', name, 'settings.log'), 'utf8'));
+      assert.equal(settings.theme.background, '#121314');
+      assert.equal(settings.junk, undefined);
+      assert.deepEqual(settings.font, name === 'alpha' ? { family: 'alpha Font', size: 30 } : { family: 'beta Font', size: 10 });
     }
     // A plugin is a set of files that the app loads; nothing here is compiled or cached.
     assert.equal(existsSync(join(home, '.cache/wangcai')), false);

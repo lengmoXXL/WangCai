@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { loadPlugins } from './plugins';
 import { loadConfig } from './config';
-import { previewMessage, previewScheme, previewUrl, type TabRecord } from '../shared';
+import { previewMessage, previewScheme, previewUrl, uiFont, type TabRecord } from '../shared';
 
 app.setName('旺财');
 protocol.registerSchemesAsPrivileged([
@@ -17,7 +17,7 @@ const PREVIEW_CSP = "default-src 'none'; script-src 'unsafe-inline' http: https:
 // Writing the page into this document, rather than setting innerHTML, is what runs its scripts. The base font
 // keeps an unstyled page readable next to the editor that the same file shows in source form; document.open()
 // discards the document, so the style goes in afterwards and sits first, where the page's own rules override it.
-const previewDocument = (family: string) => `<!doctype html><meta charset="utf-8"><script>parent.postMessage('${previewMessage}', '*'); addEventListener('message', (event) => { document.open(); document.write(event.data); document.close(); const base = document.createElement('style'); base.textContent = ${JSON.stringify(`html { font-family: ${family}; font-size: 13px; line-height: 1.6; }`)}; document.head.prepend(base); });</script>`;
+const previewDocument = () => `<!doctype html><meta charset="utf-8"><script>parent.postMessage('${previewMessage}', '*'); addEventListener('message', (event) => { document.open(); document.write(event.data); document.close(); const base = document.createElement('style'); base.textContent = ${JSON.stringify(`html { font-family: ${uiFont}; font-size: 13px; line-height: 1.6; }`)}; document.head.prepend(base); });</script>`;
 let window: BrowserWindow | undefined;
 
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -50,7 +50,7 @@ else {
       return new Response(response.body, { status: response.status, headers });
     });
     protocol.handle(previewScheme, (request) => request.url === previewUrl
-      ? new Response(previewDocument(profile.font.ui.family), { headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': PREVIEW_CSP } })
+      ? new Response(previewDocument(), { headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': PREVIEW_CSP } })
       : new Response('Not found', { status: 404 }));
     ipcMain.handle('wangcai:publish', (_, event: string, data: unknown) => plugins.publish(event, data));
     ipcMain.handle('wangcai:plugins', () => plugins.plugins);

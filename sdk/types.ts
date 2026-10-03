@@ -44,10 +44,6 @@ export interface Theme {
 }
 
 export interface Profile {
-  font: {
-    ui: { family: string };
-    terminal: { family: string; size: number; lineHeight: number };
-  };
   theme: Theme;
   agent: { downloadPrefix: string };
 }

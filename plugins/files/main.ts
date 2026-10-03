@@ -3,6 +3,15 @@ import { connect, type AgentInfo, type MachineConnection } from '@wangcai/sdk';
 import type { Context } from '@wangcai/sdk/channel';
 import type { FileClick } from './shared';
 
+// Which fields this plugin takes from init.ts, and the default each one falls back to.
+export const config = {
+  font: {
+    family: { type: 'string', default: '"DejaVuSansM Nerd Font Mono", monospace' },
+    size: { type: 'number', default: 12 },
+    lineHeight: { type: 'number' },
+  },
+};
+
 export function activate(context: Context) {
   const pending = new Set<AbortController>();
   const connections = new Set<MachineConnection>();
