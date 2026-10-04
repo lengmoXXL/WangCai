@@ -48,3 +48,54 @@ jobs:
         run: |
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
           gh release upload "$GITHUB_REF_NAME" "wangcai-${{ matrix.target }}" --clobber
+
+  app:
+    needs: agent
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            target: x86_64-apple-darwin
+          - arch: arm64
+            target: aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the workspaces and the plugins
+        run: |
+          npm ci
+          npm ci --prefix plugins/terminal-agent
+          npm ci --prefix plugins/files
+          npm ci --prefix plugins/terminal
+      - name: Add the target
+        run: rustup target add ${{ matrix.target }}
+      - name: Package the ad-hoc signed app for ${{ matrix.arch }}
+        run: npm run package:mac:${{ matrix.arch }}
+      - name: Check the app carries the architecture it was built for
+        run: |
+          want=${{ matrix.arch == 'x64' && 'x86_64' || 'arm64' }}
+          app=$(ls -d desktop/dist/package/mac*/旺财.app)
+          for binary in Contents/MacOS/旺财 Contents/Resources/wangcai Contents/Resources/node/bin/node; do
+            got=$(lipo -archs "$app/$binary")
+            test "$got" = "$want" || { echo "$binary is $got, expected $want"; exit 1; }
+          done
+      # The runner is arm64, so this leg starts the app it just built; the x64 app cannot run here.
+      - name: Check the packaged app itself
+        if: matrix.arch == 'arm64'
+        run: node --test tests/package.cjs
+      - uses: actions/upload-artifact@v4
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        with:
+          name: wangcai-mac-${{ matrix.arch }}
+          path: |
+            desktop/dist/package/*.dmg
+            desktop/dist/package/*.zip
+      - name: Publish to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" desktop/dist/package/*.dmg desktop/dist/package/*.zip --clobber

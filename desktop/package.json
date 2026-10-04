@@ -11,6 +11,7 @@
     "appId": "dev.wangcai.desktop",
     "productName": "旺财",
     "icon": "build/icon.png",
+    "artifactName": "wangcai-${version}-${arch}.${ext}",
     "files": [
       "dist/main/**/*",
       "dist/preload/**/*",
@@ -32,7 +33,9 @@
     ],
     "mac": {
       "icon": "build/icon.icns",
-      "category": "public.app-category.developer-tools"
+      "category": "public.app-category.developer-tools",
+      "identity": "-",
+      "hardenedRuntime": false
     },
     "directories": {
       "output": "dist/package"
