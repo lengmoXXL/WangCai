@@ -2,11 +2,11 @@ const { mkdirSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
 
 /** The app loads only what init.ts lists, so a test that wants plugins writes the file first. */
-exports.writeInit = (home, entries) => {
-  const plugins = (entries ?? ['terminal-agent', 'files', 'terminal'])
-    .map((entry) => JSON.stringify(typeof entry === 'string' ? { id: entry } : entry));
+exports.writeInit = (home, lists) => {
+  const { workspaces = [], tabs = [] } = lists ?? { workspaces: ['terminal-agent'], tabs: ['files', 'terminal'] };
+  const list = (entries) => entries.map((entry) => JSON.stringify(typeof entry === 'string' ? { id: entry } : entry)).join(', ');
   mkdirSync(join(home, '.config/wangcai'), { recursive: true });
-  writeFileSync(join(home, '.config/wangcai/init.ts'), `export default { plugins: [${plugins.join(', ')}] };\n`);
+  writeFileSync(join(home, '.config/wangcai/init.ts'), `export default { workspaces: [${list(workspaces)}], tabs: [${list(tabs)}] };\n`);
 };
 
 exports.waitForShell = (page) => page.locator('.workspaces').waitFor();

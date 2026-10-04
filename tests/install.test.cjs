@@ -39,7 +39,7 @@ test('repository plugins are cloned, built and rebuilt when their commit moves',
   };
   const stages = () => page.locator('.installs li').evaluateAll((rows) => rows.map((row) => [row.querySelector('.install-id').textContent, row.dataset.stage]));
   try {
-    writeInit(home, [{ id: 'good', repo: good.directory, commit: good.commit }]);
+    writeInit(home, { tabs: [{ id: 'good', repo: good.directory, commit: good.commit }] });
     await launch();
     // The clone and its build land in the user's plugin directory.
     assert.equal(existsSync(join(plugin, 'main.cjs')), true);
@@ -66,11 +66,13 @@ test('repository plugins are cloned, built and rebuilt when their commit moves',
     await desktop.close(); desktop = undefined;
 
     // A commit the repository does not have stops that plugin and is reported with the reason.
-    writeInit(home, [
-      { id: 'terminal-agent' },
-      { id: 'good', repo: good.directory, commit: moved },
-      { id: 'broken', repo: good.directory, commit: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef' },
-    ]);
+    writeInit(home, {
+      workspaces: [{ id: 'terminal-agent' }],
+      tabs: [
+        { id: 'good', repo: good.directory, commit: moved },
+        { id: 'broken', repo: good.directory, commit: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef' },
+      ],
+    });
     await launch();
     assert.deepEqual(await stages(), [['terminal-agent', 'ready'], ['good', 'ready'], ['broken', 'failed']]);
     assert.match(await page.locator('.installs .install-message').innerText(), /deadbeef/);
@@ -88,7 +90,7 @@ test('the plugin page is styled by the app theme while a plugin is still install
   const env = { ...process.env, HOME: home };
   delete env.ELECTRON_RUN_AS_NODE;
   const slow = makePluginRepo(home, 'slow', 4000);
-  writeInit(home, [{ id: 'slow', repo: slow.directory, commit: slow.commit }]);
+  writeInit(home, { tabs: [{ id: 'slow', repo: slow.directory, commit: slow.commit }] });
   let desktop;
   try {
     desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });

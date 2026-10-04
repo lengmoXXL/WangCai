@@ -66,14 +66,13 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, b
       const localRequire = createRequire(filename);
       // Prebuilt plugins use the host SDK so its connection pool stays shared across plugins.
       const pluginRequire = Object.assign((name: string) => name === '@wangcai/sdk' ? requirePlugin(sdkPath) : localRequire(name), localRequire);
-      const module = { exports: {} as { activate(context: Context): void | Dispose | Promise<void | Dispose>; config?: unknown; workspaces?: unknown } };
+      const module = { exports: {} as { activate(context: Context): void | Dispose | Promise<void | Dispose>; config?: unknown } };
       compileFunction(readFileSync(filename, 'utf8'), ['require', 'module', 'exports', '__filename', '__dirname'], { filename })
         .call(module.exports, pluginRequire, module, module.exports, filename, dirname(filename));
       // The app knows nothing about the fields a plugin takes.
       const settings = resolveConfig(module.exports.config, spec.config);
       info.config = settings;
-      // The window asks a plugin that claims workspaces what "+" can open.
-      info.workspaces = module.exports.workspaces === true;
+      info.workspaces = spec.workspaces;
       const dataDirectory = join(homedir(), '.local/shared/wangcai/data', id);
       const logDirectory = join(homedir(), '.local/shared/wangcai/logs', id);
       mkdirSync(dataDirectory, { recursive: true });

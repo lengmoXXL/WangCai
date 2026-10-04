@@ -74,13 +74,15 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
       'ui.js': 'export function mount(container, context) { container.hidden = true; context.global.subscribe("onclick", () => { document.body.dataset.leaked = "yes"; }); throw new Error("UI failure"); }',
     });
     write('syntax', { 'main.cjs': 'exports.activate = (;' });
-    writeInit(home, [
-      { id: 'alpha', config: { font: { size: 30 }, junk: 'dropped' } },
-      { id: 'beta', config: { font: { family: 42, size: 'thirty' } } },
-      // files is one the app ships: a wrong directory must be an error, not a fall back to that copy.
-      { id: 'files', directory: join(home, 'not-a-plugin') },
-      'broken', 'failed-ui', 'syntax', 'missing',
-    ]);
+    writeInit(home, {
+      tabs: [
+        { id: 'alpha', config: { font: { size: 30 }, junk: 'dropped' } },
+        { id: 'beta', config: { font: { family: 42, size: 'thirty' } } },
+        // files is one the app ships: a wrong directory must be an error, not a fall back to that copy.
+        { id: 'files', directory: join(home, 'not-a-plugin') },
+        'broken', 'failed-ui', 'syntax', 'missing',
+      ],
+    });
     let page = await launch();
     // Only the listed plugins load, in id order; the ones that fail are reported rather than dropped.
     assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)),
@@ -115,7 +117,7 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     await page.getByText('missing: Plugin is not installed', { exact: true }).waitFor();
     await page.getByText('files: Plugin is not installed', { exact: true }).waitFor();
     assert.equal(await page.locator('.plugin-error[data-plugin=syntax]').count(), 1);
-    // None of these plugins provides workspaces, so the "+" has nothing to offer.
+    // None of these plugins is listed for workspaces, so the menu has nothing to offer.
     await openWorkspaceMenu(page);
     await page.locator('#workspace-row-menu').getByText('没有可用的工作区', { exact: true }).waitFor();
     await desktop.close(); desktop = undefined;

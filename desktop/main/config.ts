@@ -37,7 +37,7 @@ const DEFAULT_PROFILE: Profile = {
 
 export const configDirectory = join(homedir(), '.config/wangcai');
 
-export type PluginSpec = { id: string; repo?: string; commit?: string; directory?: string; config?: Record<string, unknown> };
+export type PluginSpec = { id: string; workspaces: boolean; repo?: string; commit?: string; directory?: string; config?: Record<string, unknown> };
 
 /** The directory a spec lives in: what init.ts names, else the user's plugin directory. */
 export const pluginDirectory = (spec: PluginSpec) => spec.directory ?? join(configDirectory, 'plugins', spec.id);
@@ -45,7 +45,8 @@ export const pluginDirectory = (spec: PluginSpec) => spec.directory ?? join(conf
 type ProfileInput = {
   theme?: Record<string, unknown>;
   agent?: { downloadPrefix?: unknown };
-  plugins?: unknown;
+  workspaces?: unknown;
+  tabs?: unknown;
 };
 
 const text = (value: unknown, fallback: string) => typeof value === 'string' && value.trim() ? value : fallback;
@@ -61,29 +62,36 @@ function mergeProfile(input: ProfileInput): Profile {
 }
 
 // A relative directory is taken from the config directory. The first entry for an id wins.
-function mergePlugins(input: unknown): PluginSpec[] {
-  if (!Array.isArray(input)) return [];
-  const specs = new Map<string, PluginSpec>();
-  for (const entry of input) {
+function mergePlugins(entries: unknown, workspaces: boolean, specs: Map<string, PluginSpec>) {
+  if (!Array.isArray(entries)) return;
+  for (const entry of entries) {
     const { id, repo, commit, directory, config } = (entry ?? {}) as Record<string, unknown>;
     if (typeof id !== 'string' || !id.trim() || specs.has(id)) continue;
     const relative = trimmed(directory);
     specs.set(id, {
       id,
+      workspaces,
       repo: trimmed(repo),
       commit: trimmed(commit),
       directory: relative ? resolve(configDirectory, relative) : undefined,
       config: typeof config === 'object' && config !== null && !Array.isArray(config) ? config as Record<string, unknown> : undefined,
     });
   }
+}
+
+// init.ts names its plugins twice: the ones the window draws workspaces for, and the ones that add sidebar tabs.
+function pluginsFrom(input: ProfileInput): PluginSpec[] {
+  const specs = new Map<string, PluginSpec>();
+  mergePlugins(input.workspaces, true, specs);
+  mergePlugins(input.tabs, false, specs);
   return [...specs.values()];
 }
 
 // What a fresh install starts with: the plugins the app ships.
 export const DEFAULT_PLUGINS: PluginSpec[] = [
-  { id: 'terminal-agent' },
-  { id: 'files' },
-  { id: 'terminal' },
+  { id: 'terminal-agent', workspaces: true },
+  { id: 'files', workspaces: false },
+  { id: 'terminal', workspaces: false },
 ];
 
 // Written once, when init.ts is missing; from then on the file belongs to the user.
@@ -94,7 +102,8 @@ const PRESET = `// 旺财的启动入口：启动时由 app 直接加载，只�
 //             brightGreen, brightYellow, brightBlue, brightMagenta, brightCyan, brightWhite }
 //           界面与终端配色，值写 '#rrggbb'；终端调色板是 black 到 brightWhite
 //   agent   { downloadPrefix }            下载 agent 的地址前缀
-//   plugins [{ id, repo, commit, directory, config }]  要加载的插件；没列出来的不会加载
+//   workspaces [{ id, repo, commit, directory, config }]  工作区插件：窗口从这里取工作区列表，以及菜单里能开什么
+//   tabs       [{ id, repo, commit, directory, config }]  侧栏标签页插件：它导出的视图出现在视图菜单里
 // 插件条目的字段：
 //   id        插件 id，也就是插件目录名
 //   repo      插件仓库：clone 并在这里构建（app 自带 node 与 npm）；不写 directory 时 clone 到
@@ -106,8 +115,11 @@ const PRESET = `// 旺财的启动入口：启动时由 app 直接加载，只�
 // 插件就是一个目录，里面是编译好的 main.cjs（主进程）和可选的 ui.js / ui.css（界面文件）。
 // 删掉本文件会重新生成这份默认配置。
 export default {
-  plugins: [
-${DEFAULT_PLUGINS.map(({ id }) => `    { id: '${id}' }`).join(',\n')},
+  workspaces: [
+${DEFAULT_PLUGINS.filter((spec) => spec.workspaces).map(({ id }) => `    { id: '${id}' }`).join(',\n')},
+  ],
+  tabs: [
+${DEFAULT_PLUGINS.filter((spec) => !spec.workspaces).map(({ id }) => `    { id: '${id}' }`).join(',\n')},
   ],
 };
 `;
@@ -126,7 +138,7 @@ export async function loadConfig(): Promise<{ profile: Profile; plugins: PluginS
   }
   try {
     const { default: input } = await import(pathToFileURL(source).href) as { default?: ProfileInput };
-    return { profile: mergeProfile(input ?? {}), plugins: mergePlugins(input?.plugins) };
+    return { profile: mergeProfile(input ?? {}), plugins: pluginsFrom(input ?? {}) };
   } catch (error) {
     console.error('User config:', error);
     return { profile: DEFAULT_PROFILE, plugins: [] };

@@ -1,11 +1,11 @@
 export interface AgentInfo { version: string; prefix: string }
 
 /**
- * The workspace protocol. A plugin whose main module declares `export const workspaces = true` is a
- * workspace provider, and the app drives it through these `ui` methods:
+ * The workspace protocol. A plugin that init.ts lists under `workspaces` is a workspace provider, and
+ * the app drives it through these `ui` methods:
  *
  *   workspaces()              -> WorkspaceRow[]        one flat row per workspace, in draw order
- *   workspace-menu()          -> WorkspaceMenuItem[]   what "+" offers to open; an entry that carries
+ *   workspace-menu()          -> WorkspaceMenuItem[]   what the menu offers to open; an entry that carries
  *                                                      an error stays listed but is not clickable
  *   workspace-create({ key }) -> { id: string }        the id of the workspace it made
  *   workspace-select({ id })

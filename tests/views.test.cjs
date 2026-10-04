@@ -13,7 +13,7 @@ test('view menu switches plugins and handles empty and closed terminals', { time
   delete env.ELECTRON_RUN_AS_NODE;
   let desktop;
   try {
-    writeInit(home, ['terminal-agent', 'files', 'other']);
+    writeInit(home, { workspaces: ['terminal-agent'], tabs: ['files', 'other'] });
     const other = join(home, '.config/wangcai/plugins/other');
     mkdirSync(other, { recursive: true });
     writeFileSync(join(other, 'main.cjs'), 'exports.activate = () => {};');
@@ -274,7 +274,7 @@ test('sidebar tabs can be dragged into a new order', { timeout: 180000 }, async 
     await page.getByRole('button', { name: '切换右侧栏' }).click();
   };
   try {
-    writeInit(home, [{ id: 'terminal-agent' }, { id: 'files' }, { id: 'terminal' }]);
+    writeInit(home);
     await open();
     for (const name of ['文件', '终端']) {
       await page.getByRole('button', { name: '新建侧栏标签页' }).click();

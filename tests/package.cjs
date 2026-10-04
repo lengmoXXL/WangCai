@@ -19,7 +19,7 @@ test('packaged app carries its plugins, previews files and prefers plugins from 
     return desktop.firstWindow();
   };
   try {
-    writeInit(home, [{ id: 'terminal-agent' }, { id: 'files' }, { id: 'terminal' }]);
+    writeInit(home);
     assert.equal(execFileSync('plutil', ['-extract', 'CFBundleName', 'raw', join(bundle, 'Info.plist')], { encoding: 'utf8' }).trim(), '旺财');
     page = await launch();
     await waitForShell(page);
@@ -71,7 +71,7 @@ test('packaged app carries its plugins, previews files and prefers plugins from 
     rmSync(join(home, '.config/wangcai/init.ts'));
     page = await launch();
     await waitForShell(page);
-    assert.match(readFileSync(join(home, '.config/wangcai/init.ts'), 'utf8'), /plugins: \[\n    \{ id: 'terminal-agent' \}/);
+    assert.match(readFileSync(join(home, '.config/wangcai/init.ts'), 'utf8'), /workspaces: \[\n    \{ id: 'terminal-agent' \}/);
     assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)), ['files', 'terminal', 'terminal-agent']);
     assert.equal(await page.locator('.plugin-error').count(), 0);
   } finally {

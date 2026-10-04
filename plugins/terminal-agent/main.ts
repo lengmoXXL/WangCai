@@ -5,9 +5,6 @@ import { connect, type AgentInfo, type MachineConnection, type Pty, type Workspa
 import type { Context } from '@wangcai/sdk/channel';
 import type { FileClick, Machine, MachineState, Workspace } from './shared';
 
-// A workspace is a terminal on a machine, so the workspace view asks this plugin what it holds.
-export const workspaces = true;
-
 // Which fields this plugin takes from init.ts, and the default each one falls back to.
 export const config = {
   font: {

@@ -28,8 +28,10 @@ test('user config: init.ts drives the plugins, the UI theme, their own config an
       export const profiles = {
         day: {
           theme: { background: '#f7f8fa', foreground: '#203040', border: 42 },
-          plugins: [
+          workspaces: [
             { id: 'terminal-agent', config: { font: { family: 'Config UI Font' }, machines: [{ name: '测试服务器', host: 'dev-server' }] } },
+          ],
+          tabs: [
             { id: 'terminal', config: { font: { family: 'Config Mono', size: 20, lineHeight: 1.5 } } },
           ],
         },
@@ -37,7 +39,7 @@ test('user config: init.ts drives the plugins, the UI theme, their own config an
       export default profiles.day;
     `);
     let page = await launchReady();
-    // The list decides what loads: the plugins it does not list never run.
+    // The lists decide what loads: the plugins they do not name never run.
     assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)), ['terminal', 'terminal-agent']);
     // A plugin's schema fills in what its entry leaves out.
     assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map(({ id, config }) => [id, config])), [
@@ -49,7 +51,7 @@ test('user config: init.ts drives the plugins, the UI theme, their own config an
       const body = getComputedStyle(document.body);
       return [body.backgroundColor, body.color, body.fontFamily, getComputedStyle(document.documentElement).getPropertyValue('--wc-border'), document.documentElement.style.colorScheme];
     }), ['rgb(247, 248, 250)', 'rgb(32, 48, 64)', '"DejaVuSansM Nerd Font Mono", monospace', '#333536', 'light']);
-    // The "+" menu offers what init.ts names: the local machine first, then the hosts it lists.
+    // The menu offers what init.ts names: the local machine first, then the hosts it lists.
     const menu = page.locator('#workspace-row-menu');
     await openWorkspaceMenu(page);
     await menu.getByRole('menuitem', { name: '本机', exact: true }).waitFor();
@@ -90,10 +92,10 @@ test('user config: init.ts drives the plugins, the UI theme, their own config an
     assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)), ['files', 'terminal', 'terminal-agent']);
     assert.equal(await page.locator('.plugin-error').count(), 0);
     const preset = readFileSync(init, 'utf8');
-    assert.match(preset, /plugins: \[\n    \{ id: 'terminal-agent' \},\n    \{ id: 'files' \},\n    \{ id: 'terminal' \},\n  \],/);
+    assert.match(preset, /workspaces: \[\n    \{ id: 'terminal-agent' \},\n  \],\n  tabs: \[\n    \{ id: 'files' \},\n    \{ id: 'terminal' \},\n  \],/);
     // The preset never mentions a font: a plugin's schema and its entry's config decide those alone.
     assert.doesNotMatch(preset, /font/);
-    assert.match(preset, /plugins \[\{ id, repo, commit, directory, config \}\]/);
+    assert.match(preset, /workspaces \[\{ id, repo, commit, directory, config \}\]/);
     // The reference the preset carries names every theme token the app defaults to.
     for (const token of Object.keys(await page.evaluate(async () => (await window.wangcai.config()).theme))) assert.match(preset, new RegExp(token));
     await desktop.close(); desktop = undefined;

@@ -214,7 +214,7 @@ async function start() {
     show();
     refresh();
   };
-  // The workspace view: a flat list of the workspaces the providers hold, and a "+" of what they can create.
+  // The workspace view draws the rows every provider holds, and the menu offers what they can create.
   const providers = plugins.filter((plugin) => plugin.workspaces && !plugin.error).map((plugin) => plugin.id);
   const grouped = new Map(providers.map((id) => [id, [] as WorkspaceRow[]]));
   const listed = () => providers.flatMap((provider) => grouped.get(provider)!);
