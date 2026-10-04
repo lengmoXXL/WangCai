@@ -21,7 +21,7 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     const { connect } = require('@wangcai/sdk');
     // A plugin states the fields it accepts; the app only checks the types and fills in the defaults.
     exports.config = { font: { family: { type: 'string', default: '${name} Font' }, size: { type: 'number', default: 10 } } };
-    exports.activate = async (context) => {
+    exports.activate = (context) => {
       globalThis.fixtureConnect ??= connect;
       context.ui.handle('sharedSDK', () => globalThis.fixtureConnect === require('@wangcai/sdk').connect);
       writeFileSync(join(context.host.dataDirectory, 'name.txt'), '${name}');
@@ -34,11 +34,11 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
       context.ui.handle('stop', () => context.ui.publish('stop'));
       context.ui.handle('publish', (data) => context.global.publish('onclick', data));
       context.ui.handle('echo', (data) => { context.ui.publish('echo', data); return '${name}:' + data; });
-      return async () => writeFileSync(join(context.host.dataDirectory, 'cleaned'), 'yes');
+      return () => writeFileSync(join(context.host.dataDirectory, 'cleaned'), 'yes');
     };
   `;
   const ui = (name) => `
-    export async function mount(container, context) {
+    export function mount(container, context) {
       container.dataset.font = JSON.stringify(context.host.config.font);
       const stop = context.global.subscribe('onclick', (data) => { container.dataset.channel = data; });
       context.ui.subscribe('stop', stop);
@@ -64,8 +64,8 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     write('broken', { 'main.cjs': `
       const { writeFileSync } = require('node:fs');
       const { join } = require('node:path');
-      exports.activate = async (context) => {
-        context.global.subscribe('onclick', async () => writeFileSync(join(context.host.dataDirectory, 'leaked'), 'yes'));
+      exports.activate = (context) => {
+        context.global.subscribe('onclick', () => writeFileSync(join(context.host.dataDirectory, 'leaked'), 'yes'));
         throw new Error('intentional failure');
       };
     ` });

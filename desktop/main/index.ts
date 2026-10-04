@@ -38,7 +38,7 @@ else {
     const statuses: InstallStatus[] = specs.map(({ id }) => ({ id, stage: 'ready' }));
     const announce = (status: InstallStatus) => {
       statuses[statuses.findIndex((entry) => entry.id === status.id)] = status;
-      send('wangcai:channel', 'installs', statuses);
+      send('wangcai:channel', 'install-statuses', statuses);
     };
     // Everything that needs a plugin waits for this.
     const loading = (async () => {

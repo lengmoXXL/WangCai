@@ -11,7 +11,7 @@ export interface TabRecord { plugin: string; id: string; workspaceId?: string }
 /** The bus every plugin shares: what one publishes reaches the others, in either realm. */
 export interface Bus {
   publish(topic: string, data: unknown): Promise<void>;
-  subscribe<T>(topic: string, callback: (data: T) => void): () => void;
+  subscribe<T>(topic: string, callback: (data: T) => void | Promise<void>): () => void;
 }
 
 /** What a main.cjs gets: the methods its own ui.js calls, and the machine it runs on. */
@@ -37,7 +37,7 @@ export interface UiContext {
   ui: {
     request<T = unknown>(method: string, params?: unknown): Promise<T>;
     // The topics this plugin's main.cjs publishes, as '<id>:<topic>'.
-    subscribe<T>(topic: string, callback: (data: T) => void): () => void;
+    subscribe<T>(topic: string, callback: (data: T) => void | Promise<void>): () => void;
   };
   host: {
     config: any;

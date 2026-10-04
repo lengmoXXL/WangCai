@@ -136,7 +136,7 @@ function App({ profile }: { profile: Settings }) {
   </div>;
 }
 
-export async function mount(container: HTMLElement, context: UiContext) {
+export function mount(container: HTMLElement, context: UiContext) {
   container.classList.add('wangcai-terminal-agent');
   api = {
     click: (id, sessionId, location) => context.ui.request('click', { id, sessionId, location }),

@@ -140,7 +140,7 @@ export function open(context: UiContext, record?: TabRecord) {
     .catch((error: Error) => showMessage(context, 'message', error.message, terminal.workspaceId));
 }
 
-export async function mount(_container: HTMLElement, context: UiContext) {
+export function mount(_container: HTMLElement, context: UiContext) {
   profile = context.host.config;
   const off = context.global.subscribe<WorkspaceActive | null>('workspace:active', (value) => { activeTerminal = value; });
   void context.global.publish('workspace:query', null);

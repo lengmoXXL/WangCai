@@ -4,7 +4,7 @@ import type { PluginBridge } from '../shared';
 const api: PluginBridge = {
   publish: (event, data) => ipcRenderer.invoke('wangcai:publish', event, data),
   subscribe: (event, callback) => {
-    const listener = (_: unknown, name: string, data: unknown) => { if (name === event) void Promise.resolve().then(() => callback(data as never)).catch(console.error); };
+    const listener = (_: unknown, name: string, data: unknown) => { if (name === event) void Promise.resolve().then(() => callback(data)).catch(console.error); };
     ipcRenderer.on('wangcai:channel', listener);
     return () => { ipcRenderer.removeListener('wangcai:channel', listener); };
   },

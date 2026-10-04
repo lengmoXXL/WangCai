@@ -75,7 +75,7 @@ async function start() {
   window.wangcai.subscribe('fullscreen', (value) => document.documentElement.toggleAttribute('data-fullscreen', value === true));
   const installs = installsPage();
   window.wangcai.subscribe('plugin-page', () => { installs.element.hidden = false; });
-  window.wangcai.subscribe('installs', (statuses) => installs.update(statuses as InstallStatus[]));
+  window.wangcai.subscribe('install-statuses', (statuses) => installs.update(statuses as InstallStatus[]));
   installs.update(await window.wangcai.installs());
   root.append(installs.element);
   // This resolves once every repository has been installed and every plugin has loaded.
@@ -474,7 +474,7 @@ async function start() {
   root.append(toggle, viewMenu);
   disposers.push(window.wangcai.subscribe('workspaces', () => void refreshRows()));
   void refreshRows();
-  const opens = new Map<string, (record: TabRecord) => void | Promise<void>>();
+  const opens = new Map<string, (record: TabRecord) => Promise<void>>();
   for (const plugin of plugins) {
     if (!plugin.error && !plugin.ui) continue;
     const container = document.createElement('section');
@@ -600,18 +600,16 @@ async function start() {
         },
       };
       const module = await import(/* @vite-ignore */ plugin.ui!);
-      if (module.open) {
-        container.hidden = true;
-        opens.set(plugin.id, async (record) => {
-          try { await module.open(context, record); } catch (error) { await fail(error); }
-        });
-      }
+      if (module.open) container.hidden = true;
       dispose = await module.mount(container, context);
       if (module.open) {
         const item = document.createElement('button');
         item.textContent = module.title ?? plugin.id;
         item.onclick = () => { void module.open(context); viewMenu.hidePopover(); };
         viewMenu.append(item);
+        opens.set(plugin.id, async (record) => {
+          try { await module.open(context, record); } catch (error) { await fail(error); }
+        });
       }
       const cleanup = async () => {
         for (const off of subscriptions) off();
