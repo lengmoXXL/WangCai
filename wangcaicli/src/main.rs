@@ -55,9 +55,9 @@ pub struct ServerInfo {
     protocol: u32,
 }
 
-fn config_dir() -> Result<PathBuf> {
+fn data_dir() -> Result<PathBuf> {
     let home = std::env::var_os("HOME").context("HOME is not set")?;
-    Ok(PathBuf::from(home).join(".config/wangcai"))
+    Ok(PathBuf::from(home).join(".local/share/wangcai"))
 }
 
 fn rpc(info: &ServerInfo, op: &str) -> Result<Value> {
@@ -77,7 +77,7 @@ fn rpc(info: &ServerInfo, op: &str) -> Result<Value> {
 }
 
 fn running_info() -> Result<ServerInfo> {
-    let path = config_dir()?.join("server.json");
+    let path = data_dir()?.join("server.json");
     let info: ServerInfo = serde_json::from_slice(
         &fs::read(path).context("Node is not running. Run: wangcai server start")?,
     )?;
@@ -120,7 +120,7 @@ fn main() -> Result<()> {
             foreground: false,
             json: as_json,
         } => {
-            let dir = config_dir()?;
+            let dir = data_dir()?;
             fs::create_dir_all(&dir)?;
             let startup = fs::OpenOptions::new()
                 .create(true)
@@ -180,7 +180,7 @@ fn main() -> Result<()> {
         ServerCommand::Start {
             foreground: true, ..
         } => {
-            let dir = config_dir()?;
+            let dir = data_dir()?;
             fs::create_dir_all(&dir)?;
             let lock = fs::OpenOptions::new()
                 .create(true)

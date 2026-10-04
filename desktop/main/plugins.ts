@@ -1,12 +1,11 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
 import { compileFunction } from 'node:vm';
 import type { AgentInfo, Profile } from '@wangcai/sdk';
 import type { Dispose, MainContext } from '@wangcai/sdk/channel';
 import type { PluginInfo } from '../shared';
-import { pluginDirectory, type PluginSpec } from './config';
+import { pluginDirectory, storageDirectory, type PluginSpec } from './config';
 
 // A schema is an object of leaves, each naming the type it takes and the default to use without one.
 // An 'array' leaf takes whatever list init.ts holds and leaves its entries to the plugin to check.
@@ -77,7 +76,7 @@ export async function loadPlugins(options: {
       const settings = resolveConfig(module.exports.config, spec.config);
       info.config = settings;
       info.workspaces = spec.workspaces;
-      const dataDirectory = join(homedir(), '.local/shared/wangcai/data', id);
+      const dataDirectory = join(storageDirectory, 'data', id);
       mkdirSync(dataDirectory, { recursive: true });
       const context: MainContext = {
         global: {

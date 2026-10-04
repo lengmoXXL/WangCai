@@ -16,7 +16,7 @@ test('the terminal view opens its own shell in the sidebar, reattaches it and ki
   delete env.ELECTRON_RUN_AS_NODE;
   const binary = join(process.cwd(), 'wangcaicli/dist/debug/wangcai');
   const directory = join(home, '示例 project');
-  const store = join(home, '.local/shared/wangcai/data/terminal/sessions.json');
+  const store = join(home, '.local/share/wangcai/data/terminal/sessions.json');
   const record = () => Object.keys(JSON.parse(readFileSync(store, 'utf8')))[0];
   const sessions = async () => {
     const node = await connect({ type: 'local', binary });

@@ -7,7 +7,7 @@ const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
 
-test('packaged app carries its plugins, previews files and prefers plugins from the config directory', { timeout: 180000 }, async () => {
+test('packaged app carries its plugins, previews files and prefers plugins from the user\'s plugin directory', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-package-'));
   const env = { ...process.env, HOME: home, PATH: '/usr/bin:/bin' };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -25,7 +25,7 @@ test('packaged app carries its plugins, previews files and prefers plugins from 
     await waitForShell(page);
     const baseSpacing = await page.locator('.desktop-main .plugin[data-plugin=terminal-agent]').evaluate((element) => getComputedStyle(element).letterSpacing);
     // The app carries prebuilt plugins and never installs or compiles them into the user's home.
-    assert.equal(existsSync(join(home, '.local/shared/wangcai/plugins')), false);
+    assert.equal(existsSync(join(home, '.local/share/wangcai/plugins')), false);
     for (const id of ['terminal-agent', 'files', 'terminal']) {
       assert.equal(existsSync(join(bundle, 'Resources/plugins', id, 'main.cjs')), true);
       assert.equal(existsSync(join(bundle, 'Resources/plugins', id, 'ui.js')), true);
@@ -48,8 +48,8 @@ test('packaged app carries its plugins, previews files and prefers plugins from 
     ]), 'function');
     await page.getByRole('button', { name: '关闭 packaged.ts' }).click();
     await desktop.close(); desktop = undefined;
-    // A plugin in the config directory wins over the one the app ships.
-    const override = join(home, '.config/wangcai/plugins/terminal-agent');
+    // A plugin in the user's plugin directory wins over the one the app ships.
+    const override = join(home, '.local/share/wangcai/plugins/terminal-agent');
     cpSync(join(bundle, 'Resources/plugins/terminal-agent'), override, { recursive: true });
     writeFileSync(join(override, 'ui.css'), `${readFileSync(join(override, 'ui.css'), 'utf8')}\n.desktop-main .plugin[data-plugin=terminal-agent] { letter-spacing: 7px; }\n`);
     page = await launch();
@@ -60,7 +60,7 @@ test('packaged app carries its plugins, previews files and prefers plugins from 
     await page.keyboard.type("printf 'PACKAGED_%s\\n' success");
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => document.querySelector('.terminal-pane.active .xterm-rows')?.textContent.includes('PACKAGED_success'));
-    assert.ok(JSON.parse(readFileSync(join(home, '.config/wangcai/server.json'))).port > 0);
+    assert.ok(JSON.parse(readFileSync(join(home, '.local/share/wangcai/server.json'))).port > 0);
     await desktop.close(); desktop = undefined;
     rmSync(override, { recursive: true });
     page = await launch();

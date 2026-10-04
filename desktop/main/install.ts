@@ -112,7 +112,6 @@ export async function installPlugin(spec: PluginSpec, node: string, installsPath
     }
     if (!existsSync(join(directory, 'main.cjs'))) throw new Error(`${repository} has no build script that writes main.cjs`);
     installs[spec.id] = { repo: repository, commit };
-    mkdirSync(dirname(installsPath), { recursive: true });
     writeFileSync(installsPath, JSON.stringify(installs, null, 2));
   }
   onStage('ready');

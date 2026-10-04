@@ -10,7 +10,7 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
   const home = mkdtempSync(join(tmpdir(), 'wangcai-plugins-'));
   const env = { ...process.env, HOME: home };
   delete env.ELECTRON_RUN_AS_NODE;
-  const plugins = join(home, '.config/wangcai/plugins');
+  const plugins = join(home, '.local/share/wangcai/plugins');
   const write = (id, files) => {
     mkdirSync(join(plugins, id), { recursive: true });
     for (const [name, body] of Object.entries(files)) writeFileSync(join(plugins, id, name), body);
@@ -110,7 +110,7 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     await page.evaluate(() => window.wangcai.publish('onclick', 'after-unsubscribe'));
     await page.waitForFunction(() => document.querySelector('[data-plugin=beta]')?.getAttribute('data-channel') === 'after-unsubscribe');
     assert.equal(await page.locator('[data-plugin=alpha]').getAttribute('data-channel'), 'main-event');
-    assert.equal(existsSync(join(home, '.local/shared/wangcai/data/broken/leaked')), false);
+    assert.equal(existsSync(join(home, '.local/share/wangcai/data/broken/leaked')), false);
     assert.equal(await page.evaluate(() => document.body.dataset.leaked), undefined);
     await page.getByText('broken: intentional failure', { exact: true }).waitFor();
     await page.getByText('failed-ui: UI failure', { exact: true }).waitFor();
@@ -122,9 +122,9 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     await page.locator('#workspace-row-menu').getByText('没有可用的工作区', { exact: true }).waitFor();
     await desktop.close(); desktop = undefined;
     for (const name of ['alpha', 'beta']) {
-      assert.equal(readFileSync(join(home, '.local/shared/wangcai/data', name, 'cleaned'), 'utf8'), 'yes');
-      assert.equal(readFileSync(join(home, '.local/shared/wangcai/data', name, 'name.txt'), 'utf8'), name);
-      const settings = JSON.parse(readFileSync(join(home, '.local/shared/wangcai/data', name, 'settings.json'), 'utf8'));
+      assert.equal(readFileSync(join(home, '.local/share/wangcai/data', name, 'cleaned'), 'utf8'), 'yes');
+      assert.equal(readFileSync(join(home, '.local/share/wangcai/data', name, 'name.txt'), 'utf8'), name);
+      const settings = JSON.parse(readFileSync(join(home, '.local/share/wangcai/data', name, 'settings.json'), 'utf8'));
       assert.equal(settings.theme.background, '#121314');
       assert.equal(settings.junk, undefined);
       assert.deepEqual(settings.font, name === 'alpha' ? { family: 'alpha Font', size: 30 } : { family: 'beta Font', size: 10 });
@@ -137,7 +137,7 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     await page.getByText('alpha v2', { exact: true }).waitFor();
     await page.getByText('beta v1', { exact: true }).waitFor();
     assert.equal(await page.getByText('alpha v1', { exact: true }).count(), 0);
-    assert.equal(existsSync(join(home, '.config/wangcai/server.json')), false);
+    assert.equal(existsSync(join(home, '.local/share/wangcai/server.json')), false);
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });

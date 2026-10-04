@@ -14,7 +14,7 @@ test('view menu switches plugins and handles empty and closed terminals', { time
   let desktop;
   try {
     writeInit(home, { workspaces: ['terminal-agent'], tabs: ['files', 'other'] });
-    const other = join(home, '.config/wangcai/plugins/other');
+    const other = join(home, '.local/share/wangcai/plugins/other');
     mkdirSync(other, { recursive: true });
     writeFileSync(join(other, 'main.cjs'), 'exports.activate = () => {};');
     writeFileSync(join(other, 'ui.js'), `
@@ -176,7 +176,7 @@ test('view menu switches plugins and handles empty and closed terminals', { time
     await page.getByRole('tablist', { name: '工作区' }).getByRole('tab').waitFor({ state: 'detached' });
     assert.equal(await page.locator('.sidebar-panel[data-plugin=files]').count(), 0);
     const existing = await page.evaluate(async () => (await window.wangcai.request('terminal-agent', 'config')).workspaces.map((workspace) => workspace.id));
-    const stored = JSON.parse(readFileSync(join(home, 'electron', 'tabs.json'), 'utf8'));
+    const stored = JSON.parse(readFileSync(join(home, '.local/share/wangcai', 'tabs.json'), 'utf8'));
     assert.deepEqual(stored.filter((record) => record.workspaceId && !existing.includes(record.workspaceId)), []);
     if (!(await page.locator('.sidebar-right').isVisible())) await toggle.click();
     await picker.click();

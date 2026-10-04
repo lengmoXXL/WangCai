@@ -1,9 +1,9 @@
 import { app, BrowserWindow, ipcMain, Menu, net, protocol } from 'electron';
 import { join, resolve, relative, isAbsolute, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { loadPlugins } from './plugins';
-import { loadConfig } from './config';
+import { loadConfig, storageDirectory } from './config';
 import { installPlugin } from './install';
 import type { TabRecord } from '@wangcai/sdk/channel';
 import { previewMessage, previewScheme, previewUrl, uiFont, type InstallStatus } from '../shared';
@@ -33,7 +33,8 @@ else {
     const { profile, plugins: specs } = await loadConfig();
     // The window opens before the plugins do: a plugin may have to be cloned and built first, and the
     // manager page reports each stage while it happens.
-    const installsPath = join(app.getPath('userData'), 'installs.json');
+    mkdirSync(storageDirectory, { recursive: true });
+    const installsPath = join(storageDirectory, 'installs.json');
     const node = app.isPackaged ? join(process.resourcesPath, 'node/bin/node') : join(app.getAppPath(), 'node/bin/node');
     const statuses: InstallStatus[] = specs.map(({ id }) => ({ id, stage: 'ready' }));
     const announce = (status: InstallStatus) => {
@@ -87,7 +88,7 @@ else {
     ipcMain.handle('wangcai:request', async (_, id: string, method: string, params: unknown) => (await loading).request(id, method, params));
     ipcMain.handle('wangcai:config', () => profile);
     ipcMain.handle('wangcai:installs', () => statuses);
-    const tabsPath = join(app.getPath('userData'), 'tabs.json');
+    const tabsPath = join(storageDirectory, 'tabs.json');
     ipcMain.handle('wangcai:tabs', () => existsSync(tabsPath) ? JSON.parse(readFileSync(tabsPath, 'utf8')) as TabRecord[] : []);
     ipcMain.handle('wangcai:save-tabs', (_: unknown, tabs: TabRecord[]) => {
       writeFileSync(`${tabsPath}.tmp`, JSON.stringify(tabs, null, 2));
@@ -99,7 +100,7 @@ else {
       { label: 'View', submenu: [{ role: 'toggleDevTools' }, { role: 'togglefullscreen' }, { type: 'separator' },
         { label: '插件', click: () => send('wangcai:channel', 'plugin-page') }] },
     ]));
-    const statePath = join(app.getPath('userData'), 'window-state.json');
+    const statePath = join(storageDirectory, 'window-state.json');
     const { maximized, ...bounds } = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : { width: 1180, height: 780 };
     const win = new BrowserWindow({
       ...bounds, minWidth: 740, minHeight: 460,

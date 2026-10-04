@@ -28,7 +28,7 @@ test('repository plugins are cloned, built and rebuilt when their commit moves',
   const env = { ...process.env, HOME: home };
   delete env.ELECTRON_RUN_AS_NODE;
   const good = makePluginRepo(home, 'good');
-  const plugin = join(home, '.config/wangcai/plugins/good');
+  const plugin = join(home, '.local/share/wangcai/plugins/good');
   const init = join(home, '.config/wangcai/init.ts');
   let desktop;
   let page;

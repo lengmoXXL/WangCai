@@ -62,14 +62,14 @@ test('Electron: local terminal, reconnect and relaunch', { timeout: 180000 }, as
     await page.waitForFunction(() => document.querySelectorAll('.workspaces [role=tab]').length === 1);
     await page.waitForFunction(() => document.querySelector('.terminal-pane.active .xterm-rows')?.textContent.includes('DESKTOP_success'));
     // What the plugin keeps of its own is the workspaces it holds, not the machines init.ts names.
-    const stored = JSON.parse(readFileSync(join(home, '.local/shared/wangcai/data/terminal-agent/config.json'), 'utf8'));
+    const stored = JSON.parse(readFileSync(join(home, '.local/share/wangcai/data/terminal-agent/config.json'), 'utf8'));
     assert.deepEqual(Object.keys(stored), ['workspaces']);
     assert.equal(stored.workspaces[0].sessionId, workspaces[0].sessionId);
     await page.getByRole('button', { name: '切换右侧栏' }).click();
     await page.getByRole('button', { name: '新建侧栏标签页' }).click();
     await page.locator('#view-menu').getByRole('button', { name: '文件', exact: true }).click();
     await page.getByRole('tab', { name: '文件', exact: true }).waitFor();
-    const storedTabs = JSON.parse(readFileSync(join(home, 'electron-data/tabs.json'), 'utf8'));
+    const storedTabs = JSON.parse(readFileSync(join(home, '.local/share/wangcai/tabs.json'), 'utf8'));
     assert.deepEqual(storedTabs, [{ plugin: 'files', id: 'directory', workspaceId: workspaces[0].id }]);
     await page.screenshot({ path: 'tests/dist/screenshots/desktop.png' });
     await desktop.close(); desktop = undefined;
