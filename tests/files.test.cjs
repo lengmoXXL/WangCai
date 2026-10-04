@@ -31,30 +31,57 @@ test('view picker browses current terminal directory; file links preview code, M
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+    await page.evaluate(() => { window.linkClicks = []; window.wangcai.subscribe('onclick', (payload) => window.linkClicks.push(payload)); });
     await createWorkspace(page);
     const sessionId = await page.evaluate(async () => (await window.wangcai.request('terminal-agent', 'config')).workspaces[0].sessionId);
-    const clickLink = async (link, label = link, cwd = home) => {
-      const output = label === link ? link : `\\033]8;;${link}\\007${label}\\033]8;;\\007`;
-      const command = `cd '${cwd}'; printf '\\033[2J\\033[H%b\\n' '${output}'\r`;
-      await page.evaluate(({ id, command }) => window.wangcai.request('terminal-agent', 'pty', { id: 'local', op: 'input', params: { session_id: id, data: command } }), { id: sessionId, command });
-      const row = page.locator('.terminal-pane.active .xterm-rows > div').filter({ hasText: label }).first();
-      await page.waitForFunction(label => document.querySelector('.terminal-pane.active .xterm-rows > div')?.textContent.trim() === label, label);
-      const point = await row.evaluate((element, label) => {
-        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-        for (let node; node = walker.nextNode();) {
-          const index = node.textContent.indexOf(label);
-          if (index < 0) continue;
-          const range = document.createRange();
-          range.setStart(node, index); range.setEnd(node, index + 1);
-          const rect = range.getBoundingClientRect();
-          return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-        }
-        throw new Error('Link text not found');
-      }, label);
+    // A wide or differently styled character gets a span of its own, so the text is looked for one
+    // node at a time and the first character of the link is enough for the point.
+    const firstChar = (row, label) => row.evaluate((element, label) => {
+      const nodes = [];
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      for (let node; node = walker.nextNode();) nodes.push(node);
+      const pointAt = (node, index) => {
+        const range = document.createRange();
+        range.setStart(node, index); range.setEnd(node, index + 1);
+        const rect = range.getBoundingClientRect();
+        return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+      };
+      for (const node of nodes) {
+        const index = node.textContent.indexOf(label);
+        if (index >= 0) return pointAt(node, index);
+      }
+      for (const node of nodes) {
+        const index = node.textContent.indexOf(label[0]);
+        if (index >= 0) return pointAt(node, index);
+      }
+      throw new Error('Link text not found');
+    }, label);
+    const clickPoint = async (point) => {
+      // Away from every link first, so the cursor belongs to this hover and not to the last one.
       await page.mouse.move(500, 500);
+      await page.waitForFunction(() => !document.querySelector('.xterm-cursor-pointer'));
+      // Forget what earlier clicks published, so the answer read below is this click's.
+      await page.evaluate(() => { window.linkClicks = []; });
       await page.mouse.move(point.x, point.y);
       await page.waitForFunction(() => !!document.querySelector('.xterm-cursor-pointer'));
       await page.mouse.click(point.x, point.y);
+    };
+    const printLine = async (text, session, cwd = home) => {
+      const command = `cd '${cwd}'; printf '\\033[2J\\033[H%b\\n' '${text}'\r`;
+      await page.evaluate(({ id, command }) => window.wangcai.request('terminal-agent', 'pty', { id: 'local', op: 'input', params: { session_id: id, data: command } }), { id: session, command });
+    };
+    const clickLink = async (link, { label = link, cwd = home, anchor = label, session = sessionId } = {}) => {
+      const output = label === link ? link : `\\033]8;;${link}\\007${label}\\033]8;;\\007`;
+      await printLine(output, session, cwd);
+      const row = page.locator('.terminal-pane.active .xterm-rows > div').filter({ hasText: label }).first();
+      await page.waitForFunction((label) => document.querySelector('.terminal-pane.active .xterm-rows > div')?.textContent.trim() === label, label);
+      await clickPoint(await firstChar(row, anchor));
+    };
+    const lastClick = async () => {
+      // The click crosses the plugin channel, so wait for its answer instead of the last one.
+      await page.waitForFunction(() => window.linkClicks.length > 0);
+      const { type, path, line, column } = await page.evaluate(() => window.linkClicks.at(-1));
+      return { type, path, line, column };
     };
     assert.equal(await page.locator('.sidebar-right').isVisible(), false);
     await page.getByRole('button', { name: '切换右侧栏' }).click();
@@ -93,10 +120,10 @@ test('view picker browses current terminal directory; file links preview code, M
     const fileBounds = await page.locator('.sidebar-right').boundingBox();
     assert.ok(fileBounds.x >= terminalBounds.x + terminalBounds.width);
     mkdirSync(join(home, 'sub'));
-    await clickLink('../sample.ts:2:3', '../sample.ts:2:3', join(home, 'sub'));
+    await clickLink('../sample.ts:2:3', { cwd: join(home, 'sub') });
     assert.equal(await page.getByRole('tablist', { name: '侧栏标签页' }).getByRole('tab').count(), 2);
     await page.locator('.monaco-editor .view-lines').filter({ hasText: 'CODE_PREVIEW' }).waitFor();
-    await clickLink(pathToFileURL(markdown).href, 'MARKDOWN_LINK');
+    await clickLink(pathToFileURL(markdown).href, { label: 'MARKDOWN_LINK' });
     await page.getByRole('heading', { name: 'Markdown preview' }).waitFor();
     assert.equal(await page.locator('.markdown-preview strong').innerText(), 'Rendered content');
     assert.equal(await page.locator('.markdown-preview table').count(), 1);
@@ -152,12 +179,12 @@ test('view picker browses current terminal directory; file links preview code, M
     await fileTabs.getByRole('tab', { name: '说明 file.md', exact: true }).click();
     await page.getByRole('heading', { name: 'Markdown preview' }).waitFor();
     const tabCount = await fileTabs.getByRole('tab').count();
-    await clickLink(pathToFileURL(markdown).href, 'MARKDOWN_LINK');
+    await clickLink(pathToFileURL(markdown).href, { label: 'MARKDOWN_LINK' });
     await page.getByRole('heading', { name: 'Markdown preview' }).waitFor();
     assert.equal(await fileTabs.getByRole('tab').count(), tabCount);
 
     await page.screenshot({ path: 'tests/dist/screenshots/files-preview.png' });
-    await clickLink(pathToFileURL(html).href, 'HTML_LINK');
+    await clickLink(pathToFileURL(html).href, { label: 'HTML_LINK' });
     const htmlFrame = page.frameLocator('.html-frame');
     await htmlFrame.locator('#heading[data-scripted=yes]').waitFor();
     assert.equal(await htmlFrame.locator('#heading').innerText(), 'Rendered page');
@@ -173,16 +200,16 @@ test('view picker browses current terminal directory; file links preview code, M
     await htmlPanel.getByRole('button', { name: '文本', exact: true }).click();
     await htmlPanel.getByRole('menuitem', { name: 'HTML 预览', exact: true }).click();
     await htmlFrame.getByRole('heading', { name: 'Rendered page' }).waitFor();
-    await clickLink(pathToFileURL(json).href, 'JSON_LINK');
+    await clickLink(pathToFileURL(json).href, { label: 'JSON_LINK' });
     await page.locator('.monaco-editor .view-lines').filter({ hasText: 'ready' }).waitFor();
     await page.waitForFunction(() => new Set([...document.querySelectorAll('.monaco-editor .view-line span')].map(el => getComputedStyle(el).color)).size > 1);
-    await clickLink(pathToFileURL(binary).href, 'BINARY_LINK');
+    await clickLink(pathToFileURL(binary).href, { label: 'BINARY_LINK' });
     await page.getByRole('alert').filter({ hasText: '暂不支持二进制' }).waitFor();
     const beforeMissing = await fileTabs.getByRole('tab').count();
-    await page.evaluate(() => { window.missingClicks = []; window.wangcai.subscribe('onclick', data => window.missingClicks.push(data)); });
-    await clickLink(pathToFileURL(join(home, 'missing.ts')).href, 'MISSING_LINK');
+    await clickLink(pathToFileURL(join(home, 'missing.ts')).href, { label: 'MISSING_LINK' });
+    const published = await page.evaluate(() => window.linkClicks.length);
     await page.evaluate(({ sessionId, path }) => window.wangcai.request('terminal-agent', 'click', { id: 'local', sessionId, location: { path } }), { sessionId, path: 'missing.ts' });
-    assert.deepEqual(await page.evaluate(() => window.missingClicks), []);
+    assert.equal(await page.evaluate(() => window.linkClicks.length), published);
     assert.equal(await fileTabs.getByRole('tab').count(), beforeMissing);
     assert.equal(await page.getByRole('alert').filter({ hasText: 'No such file' }).count(), 0);
     const closeOthers = page.locator('.close-tab:not([aria-label="关闭 文件"])');
@@ -223,12 +250,49 @@ test('view picker browses current terminal directory; file links preview code, M
     await fileTabs.getByRole('tab', { name: 'sub', exact: true }).waitFor();
     await page.getByRole('navigation', { name: '当前目录文件' }).getByRole('button', { name: 'inside.md', exact: true }).click();
     await page.getByRole('heading', { name: 'Directory link preview' }).waitFor();
-    await clickLink(pathToFileURL(join(home, 'sub')).href, 'DIRECTORY_LINK');
+    await clickLink(pathToFileURL(join(home, 'sub')).href, { label: 'DIRECTORY_LINK' });
     assert.equal(await fileTabs.getByRole('tab', { name: 'sub', exact: true }).count(), 1);
     await page.getByRole('navigation', { name: '当前目录文件' }).getByRole('button', { name: 'inside.md', exact: true }).waitFor();
     await fileTabs.getByRole('tab', { name: '文件', exact: true }).click();
     await page.getByRole('navigation', { name: '当前目录文件' }).getByRole('button', { name: 'sample.ts', exact: true }).waitFor();
     assert.equal((await page.evaluate(() => window.wangcai.request('terminal-agent', 'config'))).workspaces[0].sessionId, sessionId);
+    // The links below are read from the pane in front, which the active workspace owns.
+    const activeSession = await page.evaluate(async () => {
+      const config = await window.wangcai.request('terminal-agent', 'config');
+      return config.workspaces.find((workspace) => workspace.id === config.active)?.sessionId;
+    });
+    // A compiler writes a location as path(line,column), a traceback as "path", line 3.
+    await clickLink('sample.ts(2,3)', { session: activeSession });
+    assert.deepEqual(await lastClick(), { type: 'file', path: code, line: 2, column: 3 });
+    await clickLink('"说明 file.md", line 3', { anchor: '说明 file.md', session: activeSession });
+    assert.deepEqual(await lastClick(), { type: 'file', path: markdown, line: 3, column: undefined });
+    // A web address, and a path that is not there, are left alone: a link opens what the app can
+    // show, and the filesystem is what tells a path apart from the words around it.
+    for (const text of ['https://example.com/a%20b', 'missing.ts:12']) {
+      await printLine(text, activeSession);
+      await page.waitForFunction((text) => [...document.querySelectorAll('.terminal-pane.active .xterm-rows > div')].some((row) => row.textContent.trim() === text), text);
+      const clicksSoFar = await page.evaluate(() => window.linkClicks.length);
+      const point = await firstChar(page.locator('.terminal-pane.active .xterm-rows > div').filter({ hasText: text }).first(), text);
+      await page.mouse.move(500, 500);
+      await page.mouse.move(point.x, point.y);
+      await page.waitForTimeout(500);
+      assert.equal(await page.evaluate(() => !!document.querySelector('.xterm-cursor-pointer')), false);
+      await page.mouse.click(point.x, point.y);
+      await page.waitForTimeout(500);
+      assert.equal(await page.evaluate(() => window.linkClicks.length), clicksSoFar);
+    }
+    // The sidebar terminal finds links with the same rules. The picker opens its popover from a
+    // click on the element itself; a click through the mouse hangs on it.
+    await page.evaluate(() => document.querySelector('button[aria-label="新建侧栏标签页"]').click());
+    await page.locator('#view-menu').getByRole('button', { name: '终端', exact: true }).click();
+    const sidebar = page.locator('.sidebar-panel:visible .terminal-pane');
+    await sidebar.locator('.xterm-helper-textarea').focus();
+    await page.keyboard.type(`cd '${home}'; printf '\\033[2J\\033[Hsample.ts:2\\n'`);
+    await page.keyboard.press('Enter');
+    const sidebarRow = sidebar.locator('.xterm-rows > div').filter({ hasText: 'sample.ts:2' }).first();
+    await page.waitForFunction(() => [...document.querySelectorAll('.sidebar-panel .xterm-rows > div')].some((row) => row.textContent.trim() === 'sample.ts:2'));
+    await clickPoint(await firstChar(sidebarRow, 'sample.ts:2'));
+    assert.deepEqual(await lastClick(), { type: 'file', path: code, line: 2, column: undefined });
     assert.deepEqual(errors, []);
     assert.equal(await page.evaluate(() => document.documentElement.scrollTop), 0);
     await desktop.close(); desktop = undefined;

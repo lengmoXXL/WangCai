@@ -4,6 +4,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import type { TerminalEvent, WorkspaceActive } from '@wangcai/sdk';
 import type { TabRecord, UiContext } from '@wangcai/sdk/channel';
+import { registerFileLinks } from './links';
 import type { Machine, Settings, TerminalRef } from './shared';
 import '@xterm/xterm/css/xterm.css';
 import './style.css';
@@ -30,6 +31,10 @@ function TerminalPane({ context, machine, sessionId, activation }: { context: Ui
     const addon = new FitAddon();
     term.loadAddon(addon);
     term.open(element.current!);
+    const links = registerFileLinks(term, {
+      resolve: (paths) => context.ui.request('resolve', { machine, sessionId, paths }),
+      activate: (path, line, column) => { void context.ui.request('click', { machine, sessionId, location: { path, line, column } }).catch((error: Error) => setError(error.message)); },
+    });
     terminal.current = term;
     let alive = true;
     let replaying = false;
@@ -71,7 +76,8 @@ function TerminalPane({ context, machine, sessionId, activation }: { context: Ui
     }).catch((error: Error) => { if (alive) setError(error.message); });
     return () => {
       alive = false;
-      unsubscribe(); input.dispose(); resize.dispose(); observer.disconnect(); term.dispose();
+      unsubscribe(); input.dispose(); resize.dispose(); observer.disconnect();
+      links.dispose(); term.dispose();
       terminal.current = null;
       void context.ui.request('pty', { op: 'detach', sessionId }).catch(() => {});
     };

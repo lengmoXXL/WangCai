@@ -30,6 +30,7 @@ export interface WangcaiAPI {
   states(): Promise<MachineState[]>;
   selectWorkspace(id: string): Promise<void>;
   pty(machineId: string, op: string, params?: Record<string, unknown>): Promise<unknown>;
+  resolve(machineId: string, sessionId: string, paths: string[]): Promise<Record<string, string>>;
   onConfig(callback: (config: Config) => void): () => void;
   onState(callback: (state: MachineState) => void): () => void;
   onTerminal(callback: (event: TerminalEvent) => void): () => void;

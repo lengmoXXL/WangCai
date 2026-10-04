@@ -1,8 +1,11 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, join, posix } from 'node:path';
 import { connect, type MachineConnection, type Pty, type WorkspaceActive } from '@wangcai/sdk';
 import type { MainContext } from '@wangcai/sdk/channel';
-import type { Machine, TerminalRef } from './shared';
+import type { FileClick, Machine, TerminalRef } from './shared';
+
+/** How long a path stays answered. */
+const resolvedTtl = 10_000;
 
 // Which fields this plugin takes from init.ts, and the default each one falls back to.
 export const config = {
@@ -65,6 +68,41 @@ export async function activate(context: MainContext) {
     const machine = sessions[sessionId];
     if (!machine) throw new Error('这个终端已经找不到了');
     return ref(machine, sessionId);
+  }));
+  // A hovered line asks which of the paths it printed exist, so only real paths become links.
+  const resolved = new Map<string, string | undefined>();
+  let resolvedUntil = 0;
+  handlers.push(context.ui.handle('resolve', async ({ machine, sessionId, paths }: { machine: Machine; sessionId: string; paths: string[] }) => {
+    const node = await connection(machine);
+    if (Date.now() > resolvedUntil) {
+      resolved.clear();
+      resolvedUntil = Date.now() + resolvedTtl;
+    }
+    const cwd = await node.pty.cwd(sessionId);
+    const wanted = paths.map((text) => ({
+      text,
+      key: `${machine.id}\0${cwd}\0${text}`,
+      path: posix.isAbsolute(text) ? posix.resolve(text) : posix.resolve(cwd, text),
+    }));
+    // One look per path, all of them at once: a remote machine answers a batch in one round trip
+    // rather than one per path.
+    await Promise.all(wanted.map(async (item) => {
+      if (resolved.has(item.key)) return;
+      resolved.set(item.key, (await node.fs.stat(item.path)) ? item.path : undefined);
+    }));
+    const found: Record<string, string> = {};
+    for (const item of wanted) {
+      const path = resolved.get(item.key);
+      if (path) found[item.text] = path;
+    }
+    return found;
+  }));
+  handlers.push(context.ui.handle('click', async ({ machine, sessionId, location }: { machine: Machine; sessionId: string; location: Pick<FileClick, 'path' | 'line' | 'column'> }) => {
+    const node = await connection(machine);
+    const path = posix.isAbsolute(location.path) ? posix.resolve(location.path) : posix.resolve(await node.pty.cwd(sessionId), location.path);
+    const stat = await node.fs.stat(path);
+    if (!stat) return;
+    await context.global.publish('onclick', { type: stat.isDirectory ? 'directory' : 'file', machine, ...location, path });
   }));
   handlers.push(context.ui.handle('attach', async ({ machine, sessionId }: WorkspaceActive) => {
     const terminal = await (await connection(machine)).pty.attach(sessionId);

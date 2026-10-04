@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { fileLocation, registerFileLinks } from './links';
+import { registerFileLinks } from './links';
 import type { UiContext } from '@wangcai/sdk/channel';
 import type { Config, MachineState, Session, Settings, WangcaiAPI, Workspace } from './shared';
 import '@xterm/xterm/css/xterm.css';
@@ -30,9 +30,9 @@ function TerminalPane({ machineId, session, active, connected, generation, profi
     const addon = new FitAddon();
     term.loadAddon(addon);
     term.open(element.current!);
-    const links = registerFileLinks(term, (text) => {
-      const location = fileLocation(text);
-      if (location) void api.click(machineId, session.id, location).catch((error: Error) => setError(error.message));
+    const links = registerFileLinks(term, {
+      resolve: (paths) => api.resolve(machineId, session.id, paths),
+      activate: (path, line, column) => { void api.click(machineId, session.id, { path, line, column }).catch((error: Error) => setError(error.message)); },
     });
     terminal.current = term;
     fit.current = addon;
@@ -144,6 +144,7 @@ export function mount(container: HTMLElement, context: UiContext) {
     states: () => context.ui.request('states'),
     selectWorkspace: (id) => context.ui.request('workspace-select', { id }),
     pty: (id, op, params = {}) => context.ui.request('pty', { id, op, params }),
+    resolve: (id, sessionId, paths) => context.ui.request('resolve', { id, sessionId, paths }),
     onConfig: (callback) => context.ui.subscribe('config', callback),
     onState: (callback) => context.ui.subscribe('state', callback),
     onTerminal: (callback) => context.ui.subscribe('terminal', callback),

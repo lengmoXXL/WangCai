@@ -17,6 +17,9 @@ export const config = {
 
 const LOCAL: Machine = { id: 'local', name: '本机' };
 
+/** How long a path stays answered. */
+const resolvedTtl = 10_000;
+
 /** The hosts init.ts names, with the local machine always first; a host is both the id and the identity. */
 function machineList(given: unknown[]): Machine[] {
   const machines = [LOCAL];
@@ -152,6 +155,35 @@ export async function activate(context: MainContext) {
     await context.global.publish('workspace:active', front);
   }
 
+  // A hovered line asks which of the paths it printed exist, so only real paths become links.
+  const resolved = new Map<string, string | undefined>();
+  let resolvedUntil = 0;
+  handlers.push(context.ui.handle('resolve', async ({ id, sessionId, paths }: { id: string; sessionId: string; paths: string[] }) => {
+    const node = connections.get(id);
+    if (!node) return {};
+    if (Date.now() > resolvedUntil) {
+      resolved.clear();
+      resolvedUntil = Date.now() + resolvedTtl;
+    }
+    const cwd = await node.pty.cwd(sessionId);
+    const wanted = paths.map((text) => ({
+      text,
+      key: `${id}\0${cwd}\0${text}`,
+      path: posix.isAbsolute(text) ? posix.resolve(text) : posix.resolve(cwd, text),
+    }));
+    // One look per path, all of them at once: a remote machine answers a batch in one round trip
+    // rather than one per path.
+    await Promise.all(wanted.map(async (item) => {
+      if (resolved.has(item.key)) return;
+      resolved.set(item.key, (await node.fs.stat(item.path)) ? item.path : undefined);
+    }));
+    const found: Record<string, string> = {};
+    for (const item of wanted) {
+      const path = resolved.get(item.key);
+      if (path) found[item.text] = path;
+    }
+    return found;
+  }));
   handlers.push(context.ui.handle('click', async ({ id, sessionId, location }: { id: string; sessionId: string; location: Pick<FileClick, 'path' | 'line' | 'column'> }) => {
     const machine = machines.find((machine) => machine.id === id);
     const node = connections.get(id);
