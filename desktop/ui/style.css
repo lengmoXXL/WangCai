@@ -3,7 +3,7 @@ body { background: var(--wc-background); color: var(--wc-foreground); font-famil
 #root { display: flex; overflow: hidden; padding: 3px; box-sizing: border-box; }
 .desktop-main, .sidebar-left, .sidebar-right { border: 1px solid var(--wc-border); border-radius: 8px; overflow: hidden; }
 /* The list and the main pane merge at their contact face; only the outer three sides are outlined. */
-.sidebar-left { border-radius: 8px 0 0 8px; border-right: 0; }
+.sidebar-left { border-radius: 8px 0 0 0; border-right: 0; }
 .desktop-main { display: flex; flex: 1; min-width: 240px; border-radius: 0 8px 8px 0; border-left: 0; }
 .plugin { flex: 1; min-width: 0; height: 100%; }
 .plugin-error { flex: 1; min-width: 0; padding: 48px 16px 16px; white-space: pre-wrap; overflow: auto; color: var(--wc-red); }
@@ -14,16 +14,12 @@ body { background: var(--wc-background); color: var(--wc-foreground); font-famil
 html[data-fullscreen] .sidebar-left { padding-top: 0; }
 /* The heading sits a little left of the rows below, so the list reads as one level in. */
 .workspace-header { flex-shrink: 0; display: flex; align-items: center; height: 24px; padding: 0 4px 0 8px; color: var(--wc-muted); font-size: 12px; font-weight: 600; -webkit-app-region: no-drag; }
-.workspace-add { margin-left: auto; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--wc-muted); font-size: 15px; font-weight: 400; line-height: 1; cursor: pointer; }
-.workspace-add:hover { background: var(--wc-overlay); color: var(--wc-foreground); }
-.workspace-add:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: -1px; }
 .workspaces { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 0 8px; -webkit-app-region: no-drag; }
 /* A bar here would take its width out of the rows, which run to the column hairline; the list still scrolls by wheel. */
 .workspaces::-webkit-scrollbar { display: none; }
 .workspace { display: flex; gap: 7px; align-items: center; height: 24px; padding: 0 8px 0 12px; color: var(--wc-muted); font-size: 12px; cursor: pointer; }
-.workspace:hover { background: var(--wc-overlay); }
 /* The hairline cannot be a border (layout), a box-shadow (drag indicator) or an outline (focus ring), so it is a pseudo-element. */
-.workspace.selected { position: relative; color: var(--wc-foreground); background: var(--wc-background); border-radius: 6px 0 0 6px; }
+.workspace.selected { position: relative; color: var(--wc-foreground); background: var(--wc-background); }
 .workspace.selected::after { content: ''; position: absolute; inset: 0; border: 1px solid var(--wc-border); border-radius: inherit; pointer-events: none; }
 .workspace .glyph { flex-shrink: 0; color: var(--wc-muted); fill: none; stroke: currentColor; stroke-width: 1.1; }
 .workspace.running .glyph { color: var(--wc-foreground); }

@@ -11,8 +11,8 @@ exports.writeInit = (home, entries) => {
 
 exports.waitForShell = (page) => page.locator('.workspaces').waitFor();
 
-/** The "+" opens the menu of machines a workspace can be opened on. */
-exports.openWorkspaceMenu = (page) => page.getByRole('button', { name: '新增工作区' }).click();
+/** A right-click on the workspace heading opens the menu of machines a workspace can be opened on. */
+exports.openWorkspaceMenu = (page) => page.locator('.workspace-header').click({ button: 'right' });
 
 /** Waits until the workspace in front has a terminal that takes input; a session id alone is not enough. */
 const waitForTerminal = async (page) => {

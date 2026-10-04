@@ -69,8 +69,8 @@ test('view menu switches plugins and handles empty and closed terminals', { time
     await directory.getByRole('button', { name: '子目录 with spaces/', exact: true }).locator('svg[data-kind=folder]').waitFor();
     assert.equal(await page.locator('.workspace.selected').evaluate((element) => getComputedStyle(element).backgroundColor),
       await page.locator('.sidebar-tab:has([aria-selected=true])').first().evaluate((element) => getComputedStyle(element).backgroundColor));
-    // Only the outer corners are rounded; the inner ones meet the neighbouring pane square.
-    for (const [selector, corners] of [['.workspace.selected', '6px 0px 0px 6px'], ['.sidebar-tab:has([aria-selected=true])', '8px 8px 0px 0px']]) {
+    // The column rounds its top left, so does the tab above the pane, and the selected row stays square.
+    for (const [selector, corners] of [['.sidebar-left', '8px 0px 0px'], ['.workspace.selected', '0px'], ['.sidebar-tab:has([aria-selected=true])', '8px 8px 0px 0px']]) {
       assert.equal(await page.locator(selector).first().evaluate((element) => getComputedStyle(element).borderRadius), corners);
     }
     // The hairline sits on a pseudo-element, so selecting a row or a tab never moves its icon.

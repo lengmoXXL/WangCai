@@ -224,16 +224,7 @@ async function start() {
   workspaceHeader.className = 'workspace-header';
   const workspaceTitle = document.createElement('span');
   workspaceTitle.textContent = '工作区';
-  const workspaceAdd = document.createElement('button');
-  workspaceAdd.className = 'workspace-add';
-  workspaceAdd.textContent = '+';
-  workspaceAdd.setAttribute('aria-label', '新增工作区');
-  // The button opens the menu a right-click on the list opens.
-  workspaceAdd.onclick = () => {
-    const box = workspaceAdd.getBoundingClientRect();
-    showRowMenu({ left: box.left, top: box.bottom + 2 }, undefined);
-  };
-  workspaceHeader.append(workspaceTitle, workspaceAdd);
+  workspaceHeader.append(workspaceTitle);
   const workspaceList = document.createElement('nav');
   workspaceList.className = 'workspaces';
   workspaceList.setAttribute('role', 'tablist');
@@ -329,11 +320,14 @@ async function start() {
     rowMenu.replaceChildren(...items);
     clampMenu(rowMenu, at);
   };
-  workspaceList.oncontextmenu = (event) => {
+  // A right-click on the heading or on empty list space opens the menu with no row to close.
+  const openRowMenu = (event: MouseEvent) => {
     event.preventDefault();
     const row = (event.target as Element).closest<HTMLElement>('.workspace');
     showRowMenu({ left: event.clientX, top: event.clientY }, row?.dataset.workspace);
   };
+  workspaceHeader.oncontextmenu = openRowMenu;
+  workspaceList.oncontextmenu = openRowMenu;
 
   const selectWorkspace = (id: string) => {
     const provider = providerOf(id);
