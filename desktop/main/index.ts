@@ -5,7 +5,8 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { loadPlugins } from './plugins';
 import { loadConfig } from './config';
 import { installPlugin } from './install';
-import { previewMessage, previewScheme, previewUrl, uiFont, type InstallStatus, type TabRecord } from '../shared';
+import type { TabRecord } from '@wangcai/sdk/channel';
+import { previewMessage, previewScheme, previewUrl, uiFont, type InstallStatus } from '../shared';
 
 app.setName('旺财');
 protocol.registerSchemesAsPrivileged([
@@ -20,6 +21,8 @@ const PREVIEW_CSP = "default-src 'none'; script-src 'unsafe-inline' http: https:
 // discards the document, so the style goes in afterwards and sits first, where the page's own rules override it.
 const previewDocument = () => `<!doctype html><meta charset="utf-8"><script>parent.postMessage('${previewMessage}', '*'); addEventListener('message', (event) => { document.open(); document.write(event.data); document.close(); const base = document.createElement('style'); base.textContent = ${JSON.stringify(`html { font-family: ${uiFont}; font-size: 13px; line-height: 1.6; }`)}; document.head.prepend(base); });</script>`;
 let window: BrowserWindow | undefined;
+// A plugin event can outlive the window that would show it.
+const send = (channel: string, ...args: unknown[]) => { if (window && !window.isDestroyed()) window.webContents.send(channel, ...args); };
 
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
@@ -35,7 +38,7 @@ else {
     const statuses: InstallStatus[] = specs.map(({ id }) => ({ id, stage: 'ready' }));
     const announce = (status: InstallStatus) => {
       statuses[statuses.findIndex((entry) => entry.id === status.id)] = status;
-      if (window && !window.isDestroyed()) window.webContents.send('wangcai:install', statuses);
+      send('wangcai:channel', 'installs', statuses);
     };
     // Everything that needs a plugin waits for this.
     const loading = (async () => {
@@ -51,14 +54,15 @@ else {
           announce({ id: spec.id, stage: 'failed', message: error instanceof Error ? error.message : String(error) });
         }
       }
-      return loadPlugins(require.resolve('@wangcai/sdk'),
-        app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug'),
+      return loadPlugins({
+        sdkPath: require.resolve('@wangcai/sdk'),
+        resourcesDirectory: app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug'),
         bundled,
-        { version: app.getVersion(), prefix: profile.agent.downloadPrefix },
+        agent: { version: app.getVersion(), prefix: profile.agent.downloadPrefix },
         profile,
-        specs.filter((spec) => !failed.has(spec.id)),
-        (id, event, data) => { if (window && !window.isDestroyed()) window.webContents.send('wangcai:event', id, event, data); },
-        (event, data) => { if (window && !window.isDestroyed()) window.webContents.send('wangcai:channel', event, data); });
+        specs: specs.filter((spec) => !failed.has(spec.id)),
+        broadcast: (event, data) => send('wangcai:channel', event, data),
+      });
     })();
     // Serves a loaded plugin's files to the renderer; the directories exist once loading is done.
     protocol.handle('wangcai-plugin', async (request) => {
@@ -93,7 +97,7 @@ else {
       { label: '旺财', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'quit' }] },
       { label: 'Edit', submenu: [{ role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
       { label: 'View', submenu: [{ role: 'toggleDevTools' }, { role: 'togglefullscreen' }, { type: 'separator' },
-        { label: '插件', click: () => window?.webContents.send('wangcai:channel', 'installs', true) }] },
+        { label: '插件', click: () => send('wangcai:channel', 'plugin-page') }] },
     ]));
     const statePath = join(app.getPath('userData'), 'window-state.json');
     const { maximized, ...bounds } = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : { width: 1180, height: 780 };
@@ -103,8 +107,8 @@ else {
       webPreferences: { preload: join(__dirname, '../preload/preload.js') },
     });
     window = win;
-    win.on('enter-full-screen', () => win.webContents.send('wangcai:channel', 'fullscreen', true));
-    win.on('leave-full-screen', () => win.webContents.send('wangcai:channel', 'fullscreen', false));
+    win.on('enter-full-screen', () => send('wangcai:channel', 'fullscreen', true));
+    win.on('leave-full-screen', () => send('wangcai:channel', 'fullscreen', false));
     if (maximized) win.maximize();
     win.on('close', () => {
       writeFileSync(`${statePath}.tmp`, JSON.stringify({ ...win.getNormalBounds(), maximized: win.isMaximized() }));

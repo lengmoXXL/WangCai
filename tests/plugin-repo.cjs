@@ -15,7 +15,7 @@ exports.makePluginRepo = (home, id, buildDelay = 0) => {
   writeFileSync(join(directory, 'build.mjs'), `import { readFileSync, writeFileSync } from 'node:fs';
 const revision = readFileSync(new URL('./revision.txt', import.meta.url), 'utf8').trim();
 ${buildDelay ? `await new Promise((done) => setTimeout(done, ${buildDelay}));` : ''}
-writeFileSync(new URL('./main.cjs', import.meta.url), \`exports.activate = async (context) => { await context.host.request('logDirectory'); };\\n// \${revision}\\n\`);
+writeFileSync(new URL('./main.cjs', import.meta.url), \`exports.activate = () => {};\\n// \${revision}\\n\`);
 writeFileSync(new URL('./ui.js', import.meta.url), \`export function mount(container) { container.dataset.revision = '\${revision}'; }\\n\`);
 `);
   const git = (...args) => execFileSync('git', ['-C', directory, ...args], { encoding: 'utf8' });

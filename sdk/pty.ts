@@ -7,7 +7,6 @@ export class Pty {
   private buffered: Output[] = [];
   private snapshots = new Set<(event: Snapshot) => void>();
   private outputs = new Set<(event: Output) => void>();
-  private errors = new Set<(error: Error) => void>();
 
   constructor(readonly id: string,
     private request: (op: string, params: Record<string, unknown>) => Promise<unknown>,
@@ -42,12 +41,6 @@ export class Pty {
     return () => { this.outputs.delete(callback); };
   }
 
-  onError(callback: (error: Error) => void) {
-    this.errors.add(callback);
-    if (this.error) callback(this.error);
-    return () => { this.errors.delete(callback); };
-  }
-
   async write(data: string) {
     if (this.error) throw this.error;
     const parts = Array.from(data);
@@ -72,8 +65,7 @@ export class Pty {
 
   release(error = new Error('Terminal detached')) {
     this.error = error;
-    for (const callback of this.errors) callback(error);
-    this.snapshots.clear(); this.outputs.clear(); this.errors.clear();
+    this.snapshots.clear(); this.outputs.clear();
     this.snapshot = undefined;
     this.buffered = [];
   }

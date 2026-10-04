@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { fileLocation, registerFileLinks } from './links';
-import type { Context } from '@wangcai/sdk/channel';
+import type { UiContext } from '@wangcai/sdk/channel';
 import type { Config, MachineState, Session, Settings, WangcaiAPI, Workspace } from './shared';
 import '@xterm/xterm/css/xterm.css';
 import './style.css';
@@ -136,7 +136,7 @@ function App({ profile }: { profile: Settings }) {
   </div>;
 }
 
-export async function mount(container: HTMLElement, context: Context) {
+export async function mount(container: HTMLElement, context: UiContext) {
   container.classList.add('wangcai-terminal-agent');
   api = {
     click: (id, sessionId, location) => context.ui.request('click', { id, sessionId, location }),
@@ -148,7 +148,7 @@ export async function mount(container: HTMLElement, context: Context) {
     onState: (callback) => context.ui.subscribe('state', callback),
     onTerminal: (callback) => context.ui.subscribe('terminal', callback),
   };
-  const profile = await context.host.request<Settings>('config');
+  const profile: Settings = context.host.config;
   container.style.fontFamily = profile.font.family;
   const root = createRoot(container);
   root.render(<App profile={profile} />);

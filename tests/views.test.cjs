@@ -20,7 +20,7 @@ test('view menu switches plugins and handles empty and closed terminals', { time
     writeFileSync(join(other, 'ui.js'), `
       export const title = '测试视图';
       export function mount() {}
-      export function open(context) { void context.host.request('tabs', { id: 'other', title: '测试视图', mount(container) {
+      export function open(context) { context.host.tabs({ id: 'other', title: '测试视图', mount(container) {
         const input = document.createElement('input');
         input.setAttribute('aria-label', '视图内容');
         container.append(input);

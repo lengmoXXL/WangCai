@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { connect, type AgentInfo, type MachineConnection, type Pty, type WorkspaceActive } from '@wangcai/sdk';
-import type { Context } from '@wangcai/sdk/channel';
+import { connect, type MachineConnection, type Pty, type WorkspaceActive } from '@wangcai/sdk';
+import type { MainContext } from '@wangcai/sdk/channel';
 import type { Machine, TerminalRef } from './shared';
 
 // Which fields this plugin takes from init.ts, and the default each one falls back to.
@@ -13,8 +13,8 @@ export const config = {
   },
 };
 
-export async function activate(context: Context) {
-  const path = join(await context.host.request<string>('dataDirectory'), 'sessions.json');
+export async function activate(context: MainContext) {
+  const path = join(context.host.dataDirectory, 'sessions.json');
   const sessions: Record<string, Machine> = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) as Record<string, Machine> : {};
   const connections = new Map<string, MachineConnection>();
   const terminals = new Map<string, Pty>();
@@ -31,8 +31,8 @@ export async function activate(context: Context) {
     const existing = connections.get(key(machine));
     if (existing) return existing;
     const node = await connect(machine.host
-      ? { type: 'ssh', host: machine.host, agent: await context.host.request<AgentInfo>('agent') }
-      : { type: 'local', binary: join(await context.host.request<string>('resourcesDirectory'), 'wangcai') });
+      ? { type: 'ssh', host: machine.host, agent: context.host.agent }
+      : { type: 'local', binary: join(context.host.resourcesDirectory, 'wangcai') });
     connections.set(key(machine), node);
     return node;
   }
@@ -69,8 +69,8 @@ export async function activate(context: Context) {
   handlers.push(context.ui.handle('attach', async ({ machine, sessionId }: WorkspaceActive) => {
     const terminal = await (await connection(machine)).pty.attach(sessionId);
     terminals.set(sessionId, terminal);
-    terminal.onSnapshot((event) => { void context.ui.publish('terminal', { ...event, event: 'snapshot', session_id: terminal.id }); });
-    terminal.onData((event) => { void context.ui.publish('terminal', { ...event, event: 'output', session_id: terminal.id }); });
+    terminal.onSnapshot((event) => { context.ui.publish('terminal', { ...event, event: 'snapshot', session_id: terminal.id }); });
+    terminal.onData((event) => { context.ui.publish('terminal', { ...event, event: 'output', session_id: terminal.id }); });
   }));
   handlers.push(context.ui.handle('pty', async ({ op, sessionId, params }: { op: string; sessionId: string; params: { data: string; rows: number; cols: number } }) => {
     const terminal = terminals.get(sessionId);

@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { connect, type AgentInfo, type MachineConnection, type Pty, type WorkspaceActive, type WorkspaceRow } from '@wangcai/sdk';
-import type { Context } from '@wangcai/sdk/channel';
+import { connect, type MachineConnection, type Pty, type WorkspaceActive, type WorkspaceRow } from '@wangcai/sdk';
+import type { MainContext } from '@wangcai/sdk/channel';
 import type { FileClick, Machine, MachineState, Workspace } from './shared';
 
 // Which fields this plugin takes from init.ts, and the default each one falls back to.
@@ -32,9 +32,9 @@ function machineList(given: unknown[]): Machine[] {
   return machines;
 }
 
-export async function activate(context: Context) {
-  const path = join(await context.host.request('dataDirectory'), 'config.json');
-  const settings = await context.host.request<{ machines: unknown[] }>('config');
+export async function activate(context: MainContext) {
+  const path = join(context.host.dataDirectory, 'config.json');
+  const settings: { machines: unknown[] } = context.host.config;
   const machines = machineList(settings.machines);
   let workspaces: Workspace[] = [];
   let active: string | undefined;
@@ -78,19 +78,19 @@ export async function activate(context: Context) {
     if (!machine) throw new Error('Unknown machine');
     const state: MachineState = { machineId: id, status: 'connecting', sessions: states.get(id)?.sessions ?? [], generation: 0 };
     states.set(id, state);
-    void context.ui.publish('state', state);
+    context.ui.publish('state', state);
     const controller = new AbortController();
     const result = (async () => {
       try {
         const node = await connect(machine.host
-          ? { type: 'ssh', host: machine.host, agent: await context.host.request<AgentInfo>('agent'), signal: controller.signal }
-          : { type: 'local', binary: join(await context.host.request('resourcesDirectory'), 'wangcai'), signal: controller.signal });
+          ? { type: 'ssh', host: machine.host, agent: context.host.agent, signal: controller.signal }
+          : { type: 'local', binary: join(context.host.resourcesDirectory, 'wangcai'), signal: controller.signal });
         if (controller.signal.aborted) { node.disconnect(); throw new Error('Connection cancelled'); }
         connections.set(id, node);
         node.onState((value) => {
           const state = { ...value, machineId: id };
           states.set(id, state);
-          void context.ui.publish('state', state);
+          context.ui.publish('state', state);
           void announce();
         });
         return { ...node.state, machineId: id };
@@ -98,7 +98,7 @@ export async function activate(context: Context) {
         if (controller.signal.aborted) throw error;
         const failed: MachineState = { ...state, status: 'disconnected', error: String(error) };
         states.set(id, failed);
-        void context.ui.publish('state', failed);
+        context.ui.publish('state', failed);
         throw error;
       } finally {
         if (pending.get(id)?.controller === controller) pending.delete(id);
@@ -136,7 +136,7 @@ export async function activate(context: Context) {
   let announced = '';
   // The window draws the list from this, and the tab views follow whichever workspace is in front.
   async function announce() {
-    await context.ui.publish('config', { workspaces, active });
+    context.ui.publish('config', { workspaces, active });
     const list = rows();
     // A listener acts on a change; republishing a list it already has only sends it round again.
     const current = JSON.stringify(list);
@@ -241,8 +241,8 @@ export async function activate(context: Context) {
       case 'attach': {
         const terminal = await node.pty.attach(params.session_id);
         terminals.set(key, terminal);
-        terminal.onSnapshot((event) => { void context.ui.publish('terminal', { ...event, event: 'snapshot', machineId: id, session_id: terminal.id }); });
-        terminal.onData((event) => { void context.ui.publish('terminal', { ...event, event: 'output', machineId: id, session_id: terminal.id }); });
+        terminal.onSnapshot((event) => { context.ui.publish('terminal', { ...event, event: 'snapshot', machineId: id, session_id: terminal.id }); });
+        terminal.onData((event) => { context.ui.publish('terminal', { ...event, event: 'output', machineId: id, session_id: terminal.id }); });
         return;
       }
       case 'input':

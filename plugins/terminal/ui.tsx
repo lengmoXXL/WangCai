@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import type { TerminalEvent, WorkspaceActive } from '@wangcai/sdk';
-import type { Context } from '@wangcai/sdk/channel';
+import type { TabRecord, UiContext } from '@wangcai/sdk/channel';
 import type { Machine, Settings, TerminalRef } from './shared';
 import '@xterm/xterm/css/xterm.css';
 import './style.css';
@@ -13,7 +13,7 @@ export const title = '终端';
 let profile: Settings;
 let activeTerminal: WorkspaceActive | null = null;
 
-function TerminalPane({ context, machine, sessionId, activation }: { context: Context; machine: Machine; sessionId: string; activation: number }) {
+function TerminalPane({ context, machine, sessionId, activation }: { context: UiContext; machine: Machine; sessionId: string; activation: number }) {
   const element = useRef<HTMLDivElement>(null);
   const terminal = useRef<Terminal>(null);
   const [error, setError] = useState('');
@@ -87,8 +87,8 @@ function TerminalPane({ context, machine, sessionId, activation }: { context: Co
   </div>;
 }
 
-function openTab(context: Context, tab: TerminalRef & { workspaceId?: string }) {
-  return context.host.request('tabs', {
+function openTab(context: UiContext, tab: TerminalRef & { workspaceId?: string }) {
+  context.host.tabs({
     id: tab.sessionId, title: tab.label, tooltip: `${tab.machine.name}: ${tab.label}`, workspaceId: tab.workspaceId,
     onClose: () => { void context.ui.request('close', tab.sessionId).catch(() => {}); },
     mount(container: HTMLElement) {
@@ -104,8 +104,8 @@ function openTab(context: Context, tab: TerminalRef & { workspaceId?: string }) 
   });
 }
 
-function showMessage(context: Context, id: string, message: string, workspaceId?: string) {
-  return context.host.request('tabs', {
+function showMessage(context: UiContext, id: string, message: string, workspaceId?: string) {
+  context.host.tabs({
     id, title: '终端', tooltip: message, workspaceId,
     mount(container: HTMLElement) {
       container.classList.add('wangcai-terminal');
@@ -119,29 +119,29 @@ function showMessage(context: Context, id: string, message: string, workspaceId?
   });
 }
 
-export function open(context: Context) {
+const noTerminal = '请先打开一个工作区终端';
+
+export function open(context: UiContext, record?: TabRecord) {
+  if (record) {
+    // A remembered tab: the message one has no session left to describe.
+    if (record.id === 'message') showMessage(context, 'message', noTerminal, record.workspaceId);
+    else void context.ui.request<TerminalRef>('describe', record.id)
+      .then((tab) => openTab(context, { ...tab, workspaceId: record.workspaceId }))
+      .catch((error: Error) => showMessage(context, record.id, error.message, record.workspaceId));
+    return;
+  }
   const terminal = activeTerminal;
   if (!terminal) {
-    void showMessage(context, 'message', '请先打开一个工作区终端');
+    showMessage(context, 'message', noTerminal);
     return;
   }
-  void context.ui.request<TerminalRef>('open', terminal).then((tab) => {
-    void openTab(context, { ...tab, workspaceId: terminal.workspaceId });
-  }).catch((error: Error) => showMessage(context, 'message', error.message, terminal.workspaceId));
+  void context.ui.request<TerminalRef>('open', terminal)
+    .then((tab) => openTab(context, { ...tab, workspaceId: terminal.workspaceId }))
+    .catch((error: Error) => showMessage(context, 'message', error.message, terminal.workspaceId));
 }
 
-export async function restore(context: Context, record: { id: string; workspaceId?: string }) {
-  if (record.id === 'message') {
-    await showMessage(context, 'message', '请先打开一个工作区终端', record.workspaceId);
-    return;
-  }
-  await context.ui.request<TerminalRef>('describe', record.id)
-    .then((tab) => openTab(context, { ...tab, workspaceId: record.workspaceId }))
-    .catch((error: Error) => showMessage(context, record.id, error.message, record.workspaceId));
-}
-
-export async function mount(_container: HTMLElement, context: Context) {
-  profile = await context.host.request<Settings>('config');
+export async function mount(_container: HTMLElement, context: UiContext) {
+  profile = context.host.config;
   const off = context.global.subscribe<WorkspaceActive | null>('workspace:active', (value) => { activeTerminal = value; });
   void context.global.publish('workspace:query', null);
   return off;

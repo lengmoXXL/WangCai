@@ -8,7 +8,7 @@ import 'monaco-editor/languages/features/json/jsonMode.js';
 import { jsonDefaults } from 'monaco-editor/languages/features/json/register.js';
 import 'monaco-editor/editor/contrib/find/browser/findController.js';
 import type { DirectoryEntry, Theme, WorkspaceActive } from '@wangcai/sdk';
-import type { Context } from '@wangcai/sdk/channel';
+import type { TabRecord, UiContext } from '@wangcai/sdk/channel';
 import type { FileClick, Font, Settings } from './shared';
 import './style.css';
 
@@ -105,7 +105,7 @@ function Preview({ file, text, mode }: { file: FileClick; text: string; mode: Mo
   return <div className="code-preview" ref={element} />;
 }
 
-function Directory({ context, location }: { context: Context; location: { machine: FileClick['machine']; sessionId?: string; path?: string } | null }) {
+function Directory({ context, location }: { context: UiContext; location: { machine: FileClick['machine']; sessionId?: string; path?: string } | null }) {
   const [path, setPath] = useState(location?.path);
   const [directory, setDirectory] = useState<{ path: string; entries: DirectoryEntry[] }>();
   const [error, setError] = useState('');
@@ -137,7 +137,7 @@ function Directory({ context, location }: { context: Context; location: { machin
   </div>;
 }
 
-function DirectoryView({ context, workspaceId }: { context: Context; workspaceId?: string }) {
+function DirectoryView({ context, workspaceId }: { context: UiContext; workspaceId?: string }) {
   const [terminal, setTerminal] = useState<WorkspaceActive | null>(null);
   useEffect(() => {
     const off = context.global.subscribe<WorkspaceActive | null>('workspace:active', (value) => {
@@ -150,7 +150,7 @@ function DirectoryView({ context, workspaceId }: { context: Context; workspaceId
   return <Directory key={`${terminal?.machine.id}:${terminal?.sessionId}`} context={context} location={terminal} />;
 }
 
-function FileView({ context, file }: { context: Context; file: FileClick }) {
+function FileView({ context, file }: { context: UiContext; file: FileClick }) {
   const [text, setText] = useState<string>();
   const [error, setError] = useState('');
   useEffect(() => {
@@ -174,16 +174,12 @@ function FileView({ context, file }: { context: Context; file: FileClick }) {
   </section>;
 }
 
-export function open(context: Context) {
-  void openTab(context, activeWorkspaceId);
+export function open(context: UiContext, record?: TabRecord) {
+  if (!record || record.id === 'directory') openTab(context, record?.workspaceId ?? activeWorkspaceId);
 }
 
-export async function restore(context: Context, record: { id: string; workspaceId?: string }) {
-  if (record.id === 'directory') await openTab(context, record.workspaceId);
-}
-
-function openTab(context: Context, workspaceId?: string) {
-  return context.host.request('tabs', { id: 'directory', title: '文件', workspaceId, mount(container: HTMLElement) {
+function openTab(context: UiContext, workspaceId?: string) {
+  context.host.tabs({ id: 'directory', title: '文件', workspaceId, mount(container: HTMLElement) {
     container.style.fontFamily = font.family;
     const root = createRoot(container);
     let revision = 0;
@@ -194,10 +190,10 @@ function openTab(context: Context, workspaceId?: string) {
   } });
 }
 
-export async function mount(_container: HTMLElement, context: Context) {
-  const profile = await context.host.request<Settings>('config');
+export async function mount(_container: HTMLElement, context: UiContext) {
+  const profile: Settings = context.host.config;
   font = profile.font;
-  preview = await context.host.request<typeof preview>('preview');
+  preview = context.host.preview;
   monaco.editor.defineTheme('wangcai', editorTheme(profile.theme));
   const response = await fetch(new URL('./ui.worker.js', import.meta.url));
   if (!response.ok) throw new Error('Cannot load file preview worker');
@@ -212,7 +208,7 @@ export async function mount(_container: HTMLElement, context: Context) {
   void context.global.publish('workspace:query', null);
   const off = context.global.subscribe<FileClick>('onclick', (file) => {
     if (file.type !== 'file' && file.type !== 'directory') return;
-    void context.host.request('tabs', {
+    context.host.tabs({
       id: JSON.stringify([file.machine.host ?? file.machine.id, file.path]),
       title: file.path.split('/').filter(Boolean).pop() ?? '/', tooltip: `${file.machine.name}: ${file.path}`, workspaceId: activeWorkspaceId,
       mount(container: HTMLElement) {

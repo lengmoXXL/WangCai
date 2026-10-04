@@ -1,10 +1,8 @@
 import type { WorkspaceMenuItem, WorkspaceRow } from '@wangcai/sdk';
-import type { Channel, Context } from '@wangcai/sdk/channel';
-import { denied, previewMessage, previewUrl, uiFont, type Dispose, type InstallStage, type InstallStatus, type TabRecord } from '../shared';
+import type { Dispose, TabContent, TabOptions, TabRecord, UiContext } from '@wangcai/sdk/channel';
+import { previewMessage, previewUrl, uiFont, type InstallStage, type InstallStatus } from '../shared';
 import './style.css';
 
-type TabContent = { dispose: Dispose; onSelect?(): void };
-type TabOptions = { id: string; title: string; tooltip?: string; workspaceId?: string; onClose?(): void; mount(container: HTMLElement): TabContent };
 type MenuAnchor = { left: number; top: number };
 
 const root = document.getElementById('root')!;
@@ -76,8 +74,8 @@ async function start() {
   document.documentElement.style.colorScheme = r * 299 + g * 587 + b * 114 > 128_000 ? 'light' : 'dark';
   window.wangcai.subscribe('fullscreen', (value) => document.documentElement.toggleAttribute('data-fullscreen', value === true));
   const installs = installsPage();
-  window.wangcai.subscribe('installs', () => { installs.element.hidden = false; });
-  window.wangcai.onInstall((statuses) => installs.update(statuses));
+  window.wangcai.subscribe('plugin-page', () => { installs.element.hidden = false; });
+  window.wangcai.subscribe('installs', (statuses) => installs.update(statuses as InstallStatus[]));
   installs.update(await window.wangcai.installs());
   root.append(installs.element);
   // This resolves once every repository has been installed and every plugin has loaded.
@@ -476,7 +474,7 @@ async function start() {
   root.append(toggle, viewMenu);
   disposers.push(window.wangcai.subscribe('workspaces', () => void refreshRows()));
   void refreshRows();
-  const restores = new Map<string, (record: TabRecord) => Promise<void>>();
+  const opens = new Map<string, (record: TabRecord) => void | Promise<void>>();
   for (const plugin of plugins) {
     if (!plugin.error && !plugin.ui) continue;
     const container = document.createElement('section');
@@ -578,7 +576,7 @@ async function start() {
         tabs.set(key, tab);
         select(key);
       };
-      const context: Context = {
+      const context: UiContext = {
         global: {
           publish: window.wangcai.publish,
           subscribe(topic, callback) {
@@ -586,41 +584,33 @@ async function start() {
             subscriptions.add(off);
             return () => { off(); subscriptions.delete(off); };
           },
-          request: denied('global', 'request'),
-          handle: denied('global', 'handle'),
         },
         ui: {
-          publish: denied('ui', 'publish'),
+          request: (method, params) => window.wangcai.request(plugin.id, method, params),
           subscribe(topic, callback) {
-            const off = window.wangcai.on((id, event, data) => { if (id === plugin.id && event === topic) callback(data as never); });
+            const off = window.wangcai.subscribe(`${plugin.id}:${topic}`, callback as (data: unknown) => void);
             subscriptions.add(off);
             return () => { off(); subscriptions.delete(off); };
           },
-          request: (method, params) => window.wangcai.request(plugin.id, method, params),
-          handle: denied('ui', 'handle'),
         },
         host: {
-          publish: denied('host', 'publish'),
-          subscribe: denied('host', 'subscribe'),
-          request: (async (topic: string, params?: unknown) => {
-            if (topic === 'config') return { ...profile, ...plugin.config };
-            if (topic === 'tabs') return openTab(params as TabOptions);
-            if (topic === 'preview') return { url: previewUrl, message: previewMessage };
-            throw new Error(`Unsupported host topic: ${topic}`);
-          }) as Channel['request'],
-          handle: denied('host', 'handle'),
+          config: { ...profile, ...plugin.config },
+          preview: { url: previewUrl, message: previewMessage },
+          tabs: openTab,
         },
       };
       const module = await import(/* @vite-ignore */ plugin.ui!);
-      if (module.open) container.hidden = true;
+      if (module.open) {
+        container.hidden = true;
+        opens.set(plugin.id, async (record) => {
+          try { await module.open(context, record); } catch (error) { await fail(error); }
+        });
+      }
       dispose = await module.mount(container, context);
-      if (module.restore) restores.set(plugin.id, async (record) => {
-        try { await module.restore!(context, record); } catch (error) { await fail(error); }
-      });
       if (module.open) {
         const item = document.createElement('button');
         item.textContent = module.title ?? plugin.id;
-        item.onclick = () => { module.open(context); viewMenu.hidePopover(); };
+        item.onclick = () => { void module.open(context); viewMenu.hidePopover(); };
         viewMenu.append(item);
       }
       const cleanup = async () => {
@@ -634,7 +624,7 @@ async function start() {
       await fail(error);
     }
   }
-  for (const record of records.values()) await restores.get(record.plugin)?.(record);
+  for (const record of records.values()) await opens.get(record.plugin)?.(record);
   disposers.push(() => { for (const tab of tabs.values()) void tab.content.dispose(); tabs.clear(); });
 }
 void start().catch((error) => { root.textContent = String(error); });

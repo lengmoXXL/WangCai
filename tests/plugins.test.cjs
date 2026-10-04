@@ -24,9 +24,9 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     exports.activate = async (context) => {
       globalThis.fixtureConnect ??= connect;
       context.ui.handle('sharedSDK', () => globalThis.fixtureConnect === require('@wangcai/sdk').connect);
-      writeFileSync(join(await context.host.request('logDirectory'), 'plugin.log'), '${name}');
-      const settings = await context.host.request('config');
-      writeFileSync(join(await context.host.request('logDirectory'), 'settings.log'), JSON.stringify(settings));
+      writeFileSync(join(context.host.dataDirectory, 'name.txt'), '${name}');
+      const settings = context.host.config;
+      writeFileSync(join(context.host.dataDirectory, 'settings.json'), JSON.stringify(settings));
       const received = [];
       const off = context.global.subscribe('onclick', (data) => received.push(data));
       context.ui.handle('received', () => received);
@@ -34,12 +34,12 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
       context.ui.handle('stop', () => context.ui.publish('stop'));
       context.ui.handle('publish', (data) => context.global.publish('onclick', data));
       context.ui.handle('echo', (data) => { context.ui.publish('echo', data); return '${name}:' + data; });
-      return async () => writeFileSync(join(await context.host.request('dataDirectory'), 'cleaned'), 'yes');
+      return async () => writeFileSync(join(context.host.dataDirectory, 'cleaned'), 'yes');
     };
   `;
   const ui = (name) => `
     export async function mount(container, context) {
-      container.dataset.font = JSON.stringify((await context.host.request('config')).font);
+      container.dataset.font = JSON.stringify(context.host.config.font);
       const stop = context.global.subscribe('onclick', (data) => { container.dataset.channel = data; });
       context.ui.subscribe('stop', stop);
       const off = context.ui.subscribe('echo', (text) => { container.dataset.event = text; });
@@ -65,7 +65,7 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
       const { writeFileSync } = require('node:fs');
       const { join } = require('node:path');
       exports.activate = async (context) => {
-        context.global.subscribe('onclick', async () => writeFileSync(join(await context.host.request('dataDirectory'), 'leaked'), 'yes'));
+        context.global.subscribe('onclick', async () => writeFileSync(join(context.host.dataDirectory, 'leaked'), 'yes'));
         throw new Error('intentional failure');
       };
     ` });
@@ -123,8 +123,8 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     await desktop.close(); desktop = undefined;
     for (const name of ['alpha', 'beta']) {
       assert.equal(readFileSync(join(home, '.local/shared/wangcai/data', name, 'cleaned'), 'utf8'), 'yes');
-      assert.equal(readFileSync(join(home, '.local/shared/wangcai/logs', name, 'plugin.log'), 'utf8'), name);
-      const settings = JSON.parse(readFileSync(join(home, '.local/shared/wangcai/logs', name, 'settings.log'), 'utf8'));
+      assert.equal(readFileSync(join(home, '.local/shared/wangcai/data', name, 'name.txt'), 'utf8'), name);
+      const settings = JSON.parse(readFileSync(join(home, '.local/shared/wangcai/data', name, 'settings.json'), 'utf8'));
       assert.equal(settings.theme.background, '#121314');
       assert.equal(settings.junk, undefined);
       assert.deepEqual(settings.font, name === 'alpha' ? { family: 'alpha Font', size: 30 } : { family: 'beta Font', size: 10 });

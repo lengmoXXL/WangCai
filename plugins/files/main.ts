@@ -1,6 +1,6 @@
 import { join } from 'node:path';
-import { connect, type AgentInfo, type MachineConnection } from '@wangcai/sdk';
-import type { Context } from '@wangcai/sdk/channel';
+import { connect, type MachineConnection } from '@wangcai/sdk';
+import type { MainContext } from '@wangcai/sdk/channel';
 import type { FileClick } from './shared';
 
 // Which fields this plugin takes from init.ts, and the default each one falls back to.
@@ -12,7 +12,7 @@ export const config = {
   },
 };
 
-export function activate(context: Context) {
+export function activate(context: MainContext) {
   const pending = new Set<AbortController>();
   const connections = new Set<MachineConnection>();
   const handlers = ['read', 'list'].map((method) => context.ui.handle(method, async ({ machine, path, sessionId }: { machine: FileClick['machine']; path?: string; sessionId?: string }) => {
@@ -21,8 +21,8 @@ export function activate(context: Context) {
     let connection: MachineConnection | undefined;
     try {
       connection = await connect(machine.host
-        ? { type: 'ssh', host: machine.host, agent: await context.host.request<AgentInfo>('agent'), signal: controller.signal }
-        : { type: 'local', binary: join(await context.host.request('resourcesDirectory'), 'wangcai'), signal: controller.signal });
+        ? { type: 'ssh', host: machine.host, agent: context.host.agent, signal: controller.signal }
+        : { type: 'local', binary: join(context.host.resourcesDirectory, 'wangcai'), signal: controller.signal });
       controller.signal.throwIfAborted();
       connections.add(connection);
       if (method === 'list') {

@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { _electron: electron } = require('playwright');
-const { mkdtempSync, mkdirSync, realpathSync, rmSync, readFileSync, existsSync } = require('node:fs');
+const { mkdtempSync, mkdirSync, realpathSync, rmSync, readFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
@@ -65,7 +65,6 @@ test('Electron: local terminal, reconnect and relaunch', { timeout: 180000 }, as
     const stored = JSON.parse(readFileSync(join(home, '.local/shared/wangcai/data/terminal-agent/config.json'), 'utf8'));
     assert.deepEqual(Object.keys(stored), ['workspaces']);
     assert.equal(stored.workspaces[0].sessionId, workspaces[0].sessionId);
-    assert.equal(existsSync(join(home, '.local/shared/wangcai/logs/terminal-agent')), true);
     await page.getByRole('button', { name: '切换右侧栏' }).click();
     await page.getByRole('button', { name: '新建侧栏标签页' }).click();
     await page.locator('#view-menu').getByRole('button', { name: '文件', exact: true }).click();

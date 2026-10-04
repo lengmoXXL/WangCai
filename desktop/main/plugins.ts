@@ -4,8 +4,8 @@ import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
 import { compileFunction } from 'node:vm';
 import type { AgentInfo, Profile } from '@wangcai/sdk';
-import type { Channel, Context } from '@wangcai/sdk/channel';
-import { denied, type Dispose, type PluginInfo } from '../shared';
+import type { Dispose, MainContext } from '@wangcai/sdk/channel';
+import type { PluginInfo } from '../shared';
 import { pluginDirectory, type PluginSpec } from './config';
 
 // A schema is an object of leaves, each naming the type it takes and the default to use without one.
@@ -30,7 +30,11 @@ function resolveConfig(schema: unknown, values: unknown): Record<string, unknown
   return settings;
 }
 
-export async function loadPlugins(sdkPath: string, resourcesDirectory: string, bundled: string, agent: AgentInfo, profile: Profile, specs: PluginSpec[], emit: (id: string, event: string, data: unknown) => void, broadcast: (event: string, data: unknown) => void) {
+export async function loadPlugins(options: {
+  sdkPath: string; resourcesDirectory: string; bundled: string; agent: AgentInfo; profile: Profile;
+  specs: PluginSpec[]; broadcast: (event: string, data: unknown) => void;
+}) {
+  const { sdkPath, resourcesDirectory, bundled, agent, profile, specs, broadcast } = options;
   const plugins: PluginInfo[] = [];
   const directories = new Map<string, string>();
   const handlers = new Map<string, Map<string, (params: any) => unknown>>();
@@ -66,7 +70,7 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, b
       const localRequire = createRequire(filename);
       // Prebuilt plugins use the host SDK so its connection pool stays shared across plugins.
       const pluginRequire = Object.assign((name: string) => name === '@wangcai/sdk' ? requirePlugin(sdkPath) : localRequire(name), localRequire);
-      const module = { exports: {} as { activate(context: Context): void | Dispose | Promise<void | Dispose>; config?: unknown } };
+      const module = { exports: {} as { activate(context: MainContext): void | Dispose | Promise<void | Dispose>; config?: unknown } };
       compileFunction(readFileSync(filename, 'utf8'), ['require', 'module', 'exports', '__filename', '__dirname'], { filename })
         .call(module.exports, pluginRequire, module, module.exports, filename, dirname(filename));
       // The app knows nothing about the fields a plugin takes.
@@ -74,10 +78,8 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, b
       info.config = settings;
       info.workspaces = spec.workspaces;
       const dataDirectory = join(homedir(), '.local/shared/wangcai/data', id);
-      const logDirectory = join(homedir(), '.local/shared/wangcai/logs', id);
       mkdirSync(dataDirectory, { recursive: true });
-      mkdirSync(logDirectory, { recursive: true });
-      const context: Context = {
+      const context: MainContext = {
         global: {
           publish,
           subscribe(topic, callback) {
@@ -86,13 +88,9 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, b
             callbacks.add(callback);
             return () => { callbacks.delete(callback); };
           },
-          request: denied('global', 'request'),
-          handle: denied('global', 'handle'),
         },
         ui: {
-          publish: async (topic, data) => { emit(id, topic, data); },
-          subscribe: denied('ui', 'subscribe'),
-          request: denied('ui', 'request'),
+          publish: (topic, data) => { broadcast(`${id}:${topic}`, data); },
           handle(topic, handler) {
             if (topic.includes(':')) throw new Error(`Plugin method names cannot contain ":": ${topic}`);
             if (methods.has(topic)) throw new Error(`Duplicate plugin method: ${topic}`);
@@ -100,19 +98,7 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, b
             return () => { methods.delete(topic); };
           },
         },
-        host: {
-          publish: denied('host', 'publish'),
-          subscribe: denied('host', 'subscribe'),
-          request: (async (topic: string) => {
-            if (topic === 'dataDirectory') return dataDirectory;
-            if (topic === 'logDirectory') return logDirectory;
-            if (topic === 'resourcesDirectory') return resourcesDirectory;
-            if (topic === 'agent') return agent;
-            if (topic === 'config') return { ...profile, ...settings };
-            throw new Error(`Unsupported host topic: ${topic}`);
-          }) as Channel['request'],
-          handle: denied('host', 'handle'),
-        },
+        host: { dataDirectory, resourcesDirectory, agent, config: { ...profile, ...settings } },
       };
       const dispose = await module.exports.activate(context);
       if (dispose) disposers.push(dispose);

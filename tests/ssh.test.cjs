@@ -101,8 +101,6 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     const snapshots = [];
     terminal.onSnapshot((event) => snapshots.push(Buffer.from(event.data).toString()));
     await until(() => snapshots.some((text) => text.includes('SSH_survived')), () => 'remote snapshot');
-    const errors = [];
-    terminal.onError((error) => errors.push(error.message));
     connection.tunnel.kill();
     const beforeReconnect = state.generation;
     await until(() => state.status === 'connected' && state.generation > beforeReconnect, () => state.error);
@@ -116,7 +114,6 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     const restarted = JSON.parse(cli('status', '--json'));
     assert.notEqual(restarted.instance_id, info.instance_id);
     assert.deepEqual(state.sessions, []);
-    assert.match(errors[0], /restarted/);
     await assert.rejects(terminal.write('oops'), /restarted/);
   } finally {
     connection?.disconnect();
