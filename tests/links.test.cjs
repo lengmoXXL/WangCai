@@ -91,13 +91,15 @@ test('compiler and traceback locations are links, in the shapes they print', asy
 });
 
 test('only the paths that exist become links, a lone file name included', async () => {
-  const terminal = new Terminal({ cols: 120, rows: 4, allowProposedApi: true });
+  const terminal = new Terminal({ cols: 120, rows: 5, allowProposedApi: true });
   const view = pane(terminal, {
     './exists.ts': '/work/exists.ts',
     'src/main.ts': '/work/src/main.ts',
     'sample.ts': '/work/sample.ts',
+    'INSTALL.md': '/work/INSTALL.md',
+    INSTALL: '/work/INSTALL',
   });
-  await view.write('./exists.ts ./missing.ts src/main.ts\r\nsample.ts sample.ts:12 missing.ts:12\r\nnote:12 npm 12');
+  await view.write('./exists.ts ./missing.ts src/main.ts\r\nsample.ts sample.ts:12 missing.ts:12\r\nnote:12 npm 12\r\nsee INSTALL.md and INSTALL');
   assert.deepEqual((await view.links(1)).map(link => link.text), ['./exists.ts', 'src/main.ts']);
   // A file name of its own is a link only while it exists, and it keeps the line it printed.
   const names = await view.links(2);
@@ -105,6 +107,13 @@ test('only the paths that exist become links, a lone file name included', async 
   names[0].activate();
   assert.deepEqual(view.clicks, [{ path: '/work/sample.ts', line: 12, column: undefined }]);
   assert.deepEqual(await view.links(3), []);
+  // A name a build tool prints is the wider reading of `INSTALL.md`, so its click opens the whole
+  // name even while the build-name rule also reads the `INSTALL` inside it, and even when that
+  // shorter name exists as a file of its own.
+  const build = await view.links(4);
+  assert.deepEqual(build.map(link => link.text), ['INSTALL', 'INSTALL.md']);
+  build[1].activate();
+  assert.deepEqual(view.clicks.at(-1), { path: '/work/INSTALL.md', line: undefined, column: undefined });
   terminal.dispose();
 });
 

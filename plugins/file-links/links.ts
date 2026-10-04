@@ -170,21 +170,29 @@ function rowText(term: Terminal, y: number) {
 }
 
 // Every path the line holds, and every name in it that looks like a file. The plugin answers which
-// of them exist, which is what keeps a word that happens to hold a dot from becoming a link.
+// of them exist, which is what keeps a word that happens to hold a dot from becoming a link. Two
+// readings of one name can share cells and disagree in width — the build-name rule reads `INSTALL`
+// inside `INSTALL.md` — so the wider reading is the one the line printed, and a path leads where two
+// readings are equally wide. The paths come first, and their order is what breaks that tie.
 function candidates(term: Terminal, y: number) {
-  const paths = computeLink(y, scan, term).map(({ range, text }) => {
-    const location = fileLocation(text);
-    return { range, text, path: location?.path ?? text, line: location?.line, column: location?.column };
-  });
-  // The word regex captures nothing, so the link is its whole match.
-  const words = computeLink(y, word, term, 0)
-    .filter(({ range }) => !paths.some(path => overlaps(path.range, range)))
-    .map(({ range, text }) => ({ range, text, path: text, line: undefined, column: undefined }));
-  return [...paths, ...words];
+  const found = [
+    ...computeLink(y, scan, term).map(({ range, text }) => {
+      const location = fileLocation(text);
+      return { range, text, path: location?.path ?? text, line: location?.line, column: location?.column };
+    }),
+    // The word regex captures nothing, so the link is its whole match.
+    ...computeLink(y, word, term, 0).map(({ range, text }) => ({ range, text, path: text, line: undefined, column: undefined })),
+  ];
+  return found.filter((candidate, at) => !found.some((other, index) =>
+    holds(other.range, candidate.range) && (!holds(candidate.range, other.range) || index < at)));
 }
 
-// Whether two ranges share a cell, so the name inside a path is not offered a second time.
-function overlaps(left: IBufferRange, right: IBufferRange) {
-  const upTo = (point: IBufferCellPosition, end: IBufferCellPosition) => point.y < end.y || (point.y === end.y && point.x <= end.x);
-  return upTo(left.start, right.end) && upTo(right.start, left.end);
+// Whether a point sits at or before another, so ranges can be compared cell by cell.
+function upTo(point: IBufferCellPosition, end: IBufferCellPosition) {
+  return point.y < end.y || (point.y === end.y && point.x <= end.x);
+}
+
+// Whether one range covers another whole, which is what makes it the wider reading of those cells.
+function holds(outer: IBufferRange, inner: IBufferRange) {
+  return upTo(outer.start, inner.start) && upTo(inner.end, outer.end);
 }
