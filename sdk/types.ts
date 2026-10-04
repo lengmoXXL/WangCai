@@ -21,10 +21,19 @@ export interface AgentInfo { version: string; prefix: string }
  */
 export interface WorkspaceRow { id: string; label: string; machine: string; running: boolean }
 export interface WorkspaceMenuItem { key: string; label: string; hint?: string; error?: string }
+export interface Machine { id: string; name: string; host?: string }
 export interface WorkspaceActive {
-  machine: { id: string; name: string; host?: string };
+  machine: Machine;
   sessionId: string;
   workspaceId: string;
+}
+/** Where a click on a file or a directory points, as the 'onclick' topic carries it. */
+export interface FileClick {
+  type: 'file' | 'directory';
+  machine: Machine;
+  path: string;
+  line?: number;
+  column?: number;
 }
 export type ConnectionOptions = { type: 'local'; binary?: string; signal?: AbortSignal } | { type: 'ssh'; host: string; agent?: AgentInfo; signal?: AbortSignal };
 export interface Size { rows: number; cols: number }

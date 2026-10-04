@@ -1,15 +1,8 @@
-import type { Profile } from '@wangcai/sdk';
+import type { Machine, Profile } from '@wangcai/sdk';
+export type { Machine };
 
 // The config this plugin accepts: main.ts declares a schema for the same fields.
 export type Font = { family: string; size: number; lineHeight: number };
 export type Settings = Profile & { font: Font };
 
-export interface Machine { id: string; name: string; host?: string }
-export interface FileClick {
-  type: 'file' | 'directory';
-  machine: Machine;
-  path: string;
-  line?: number;
-  column?: number;
-}
 export interface TerminalRef { machine: Machine; sessionId: string; label: string }

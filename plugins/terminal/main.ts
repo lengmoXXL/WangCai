@@ -1,11 +1,9 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { basename, join, posix } from 'node:path';
+import { basename, join } from 'node:path';
 import { connect, type MachineConnection, type Pty, type WorkspaceActive } from '@wangcai/sdk';
 import type { MainContext } from '@wangcai/sdk/channel';
-import type { FileClick, Machine, TerminalRef } from './shared';
-
-/** How long a path stays answered. */
-const resolvedTtl = 10_000;
+import { registerFilePaths } from '../file-links/paths';
+import type { Machine, TerminalRef } from './shared';
 
 // Which fields this plugin takes from init.ts, and the default each one falls back to.
 export const config = {
@@ -57,6 +55,19 @@ export async function activate(context: MainContext) {
     return { machine, sessionId, label: await label(machine, node, cwd) };
   }
 
+  function machineOf(sessionId: string) {
+    const machine = sessions[sessionId];
+    if (!machine) throw new Error('这个终端已经找不到了');
+    return machine;
+  }
+
+  // As machineOf, but for a file request: a session this plugin no longer knows is not an error there.
+  function hostOf(sessionId: string) {
+    const machine = sessions[sessionId];
+    const node = machine && connections.get(key(machine));
+    return machine && node ? { machine, node } : undefined;
+  }
+
   handlers.push(context.ui.handle('open', async ({ machine, sessionId }: WorkspaceActive) => {
     const node = await connection(machine);
     const session = await node.pty.create({ rows: 24, cols: 80 }, await node.pty.cwd(sessionId));
@@ -64,48 +75,10 @@ export async function activate(context: MainContext) {
     save();
     return ref(machine, session.id);
   }));
-  handlers.push(context.ui.handle('describe', async (sessionId: string) => {
-    const machine = sessions[sessionId];
-    if (!machine) throw new Error('这个终端已经找不到了');
-    return ref(machine, sessionId);
-  }));
-  // A hovered line asks which of the paths it printed exist, so only real paths become links.
-  const resolved = new Map<string, string | undefined>();
-  let resolvedUntil = 0;
-  handlers.push(context.ui.handle('resolve', async ({ machine, sessionId, paths }: { machine: Machine; sessionId: string; paths: string[] }) => {
-    const node = await connection(machine);
-    if (Date.now() > resolvedUntil) {
-      resolved.clear();
-      resolvedUntil = Date.now() + resolvedTtl;
-    }
-    const cwd = await node.pty.cwd(sessionId);
-    const wanted = paths.map((text) => ({
-      text,
-      key: `${machine.id}\0${cwd}\0${text}`,
-      path: posix.isAbsolute(text) ? posix.resolve(text) : posix.resolve(cwd, text),
-    }));
-    // One look per path, all of them at once: a remote machine answers a batch in one round trip
-    // rather than one per path.
-    await Promise.all(wanted.map(async (item) => {
-      if (resolved.has(item.key)) return;
-      resolved.set(item.key, (await node.fs.stat(item.path)) ? item.path : undefined);
-    }));
-    const found: Record<string, string> = {};
-    for (const item of wanted) {
-      const path = resolved.get(item.key);
-      if (path) found[item.text] = path;
-    }
-    return found;
-  }));
-  handlers.push(context.ui.handle('click', async ({ machine, sessionId, location }: { machine: Machine; sessionId: string; location: Pick<FileClick, 'path' | 'line' | 'column'> }) => {
-    const node = await connection(machine);
-    const path = posix.isAbsolute(location.path) ? posix.resolve(location.path) : posix.resolve(await node.pty.cwd(sessionId), location.path);
-    const stat = await node.fs.stat(path);
-    if (!stat) return;
-    await context.global.publish('onclick', { type: stat.isDirectory ? 'directory' : 'file', machine, ...location, path });
-  }));
-  handlers.push(context.ui.handle('attach', async ({ machine, sessionId }: WorkspaceActive) => {
-    const terminal = await (await connection(machine)).pty.attach(sessionId);
+  handlers.push(context.ui.handle('describe', async (sessionId: string) => ref(machineOf(sessionId), sessionId)));
+  handlers.push(...registerFilePaths(context, hostOf));
+  handlers.push(context.ui.handle('attach', async (sessionId: string) => {
+    const terminal = await (await connection(machineOf(sessionId))).pty.attach(sessionId);
     terminals.set(sessionId, terminal);
     terminal.onSnapshot((event) => { context.ui.publish('terminal', { ...event, event: 'snapshot', session_id: terminal.id }); });
     terminal.onData((event) => { context.ui.publish('terminal', { ...event, event: 'output', session_id: terminal.id }); });
@@ -123,7 +96,7 @@ export async function activate(context: MainContext) {
     throw new Error(`Unknown terminal operation: ${op}`);
   }));
   handlers.push(context.ui.handle('close', async (sessionId: string) => {
-    const machine = sessions[sessionId]!;
+    const machine = machineOf(sessionId);
     delete sessions[sessionId];
     save();
     terminals.delete(sessionId);

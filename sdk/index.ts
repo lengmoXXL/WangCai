@@ -1,6 +1,6 @@
 import { MachineConnection } from './connection';
 import type { ConnectionOptions } from './types';
-export type { AgentInfo, ConnectionOptions, MachineState, Session, Size, Output, Snapshot, TerminalEvent, DirectoryEntry, ExecOptions, ExecResult, Profile, Theme, WorkspaceActive, WorkspaceRow, WorkspaceMenuItem } from './types';
+export type { AgentInfo, ConnectionOptions, FileClick, Machine, MachineState, Session, Size, Output, Snapshot, TerminalEvent, DirectoryEntry, ExecOptions, ExecResult, Profile, Theme, WorkspaceActive, WorkspaceRow, WorkspaceMenuItem } from './types';
 export type { MachineConnection } from './connection';
 export type { Pty } from './pty';
 export { ensureAgent } from './agent';

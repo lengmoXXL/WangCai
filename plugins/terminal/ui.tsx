@@ -4,8 +4,8 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import type { TerminalEvent, WorkspaceActive } from '@wangcai/sdk';
 import type { TabRecord, UiContext } from '@wangcai/sdk/channel';
-import { registerFileLinks } from './links';
-import type { Machine, Settings, TerminalRef } from './shared';
+import { registerFileLinks } from '../file-links/links';
+import type { Settings, TerminalRef } from './shared';
 import '@xterm/xterm/css/xterm.css';
 import './style.css';
 
@@ -14,7 +14,7 @@ export const title = '终端';
 let profile: Settings;
 let activeTerminal: WorkspaceActive | null = null;
 
-function TerminalPane({ context, machine, sessionId, activation }: { context: UiContext; machine: Machine; sessionId: string; activation: number }) {
+function TerminalPane({ context, sessionId, activation }: { context: UiContext; sessionId: string; activation: number }) {
   const element = useRef<HTMLDivElement>(null);
   const terminal = useRef<Terminal>(null);
   const [error, setError] = useState('');
@@ -32,8 +32,8 @@ function TerminalPane({ context, machine, sessionId, activation }: { context: Ui
     term.loadAddon(addon);
     term.open(element.current!);
     const links = registerFileLinks(term, {
-      resolve: (paths) => context.ui.request('resolve', { machine, sessionId, paths }),
-      activate: (path, line, column) => { void context.ui.request('click', { machine, sessionId, location: { path, line, column } }).catch((error: Error) => setError(error.message)); },
+      resolve: (paths) => context.ui.request('resolve', { sessionId, paths }),
+      activate: (path, line, column) => { void context.ui.request('click', { sessionId, location: { path, line, column } }).catch((error: Error) => setError(error.message)); },
     });
     terminal.current = term;
     let alive = true;
@@ -69,7 +69,7 @@ function TerminalPane({ context, machine, sessionId, activation }: { context: Ui
       if (!replaying && element.current?.offsetWidth && element.current?.offsetHeight) addon.fit();
     });
     observer.observe(element.current!);
-    void context.ui.request('attach', { machine, sessionId }).then(() => {
+    void context.ui.request('attach', sessionId).then(() => {
       if (!alive) return;
       ready = true;
       sendSize();
@@ -81,7 +81,7 @@ function TerminalPane({ context, machine, sessionId, activation }: { context: Ui
       terminal.current = null;
       void context.ui.request('pty', { op: 'detach', sessionId }).catch(() => {});
     };
-  }, [context, machine, sessionId]);
+  }, [context, sessionId]);
 
   useEffect(() => {
     requestAnimationFrame(() => terminal.current?.focus());
@@ -103,7 +103,7 @@ function openTab(context: UiContext, tab: TerminalRef & { workspaceId?: string }
       const root = createRoot(container);
       let activation = 0;
       return {
-        onSelect: () => { root.render(<TerminalPane context={context} machine={tab.machine} sessionId={tab.sessionId} activation={++activation} />); },
+        onSelect: () => { root.render(<TerminalPane context={context} sessionId={tab.sessionId} activation={++activation} />); },
         dispose: () => root.unmount(),
       };
     },

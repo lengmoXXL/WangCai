@@ -3,7 +3,8 @@ import { join, posix } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { connect, type MachineConnection, type Pty, type WorkspaceActive, type WorkspaceRow } from '@wangcai/sdk';
 import type { MainContext } from '@wangcai/sdk/channel';
-import type { FileClick, Machine, MachineState, Workspace } from './shared';
+import { registerFilePaths } from '../file-links/paths';
+import type { Machine, MachineState, Workspace } from './shared';
 
 // Which fields this plugin takes from init.ts, and the default each one falls back to.
 export const config = {
@@ -16,9 +17,6 @@ export const config = {
 };
 
 const LOCAL: Machine = { id: 'local', name: '本机' };
-
-/** How long a path stays answered. */
-const resolvedTtl = 10_000;
 
 /** The hosts init.ts names, with the local machine always first; a host is both the id and the identity. */
 function machineList(given: unknown[]): Machine[] {
@@ -43,7 +41,7 @@ export async function activate(context: MainContext) {
   let active: string | undefined;
   const connections = new Map<string, MachineConnection>();
   const pending = new Map<string, { controller: AbortController; result: Promise<MachineState> }>();
-  const terminals = new Map<string, Pty>();
+  const terminals = new Map<string, Map<string, Pty>>();
   const states = new Map<string, MachineState>();
   const failures = new Map<string, string>();
   const handlers: (() => void)[] = [];
@@ -69,7 +67,7 @@ export async function activate(context: MainContext) {
     pending.delete(id);
     connections.get(id)?.disconnect();
     connections.delete(id);
-    for (const key of terminals.keys()) if (key.startsWith(`${id}:`)) terminals.delete(key);
+    terminals.delete(id);
   }
 
   async function open(id: string): Promise<MachineState> {
@@ -155,44 +153,14 @@ export async function activate(context: MainContext) {
     await context.global.publish('workspace:active', front);
   }
 
-  // A hovered line asks which of the paths it printed exist, so only real paths become links.
-  const resolved = new Map<string, string | undefined>();
-  let resolvedUntil = 0;
-  handlers.push(context.ui.handle('resolve', async ({ id, sessionId, paths }: { id: string; sessionId: string; paths: string[] }) => {
-    const node = connections.get(id);
-    if (!node) return {};
-    if (Date.now() > resolvedUntil) {
-      resolved.clear();
-      resolvedUntil = Date.now() + resolvedTtl;
-    }
-    const cwd = await node.pty.cwd(sessionId);
-    const wanted = paths.map((text) => ({
-      text,
-      key: `${id}\0${cwd}\0${text}`,
-      path: posix.isAbsolute(text) ? posix.resolve(text) : posix.resolve(cwd, text),
-    }));
-    // One look per path, all of them at once: a remote machine answers a batch in one round trip
-    // rather than one per path.
-    await Promise.all(wanted.map(async (item) => {
-      if (resolved.has(item.key)) return;
-      resolved.set(item.key, (await node.fs.stat(item.path)) ? item.path : undefined);
-    }));
-    const found: Record<string, string> = {};
-    for (const item of wanted) {
-      const path = resolved.get(item.key);
-      if (path) found[item.text] = path;
-    }
-    return found;
-  }));
-  handlers.push(context.ui.handle('click', async ({ id, sessionId, location }: { id: string; sessionId: string; location: Pick<FileClick, 'path' | 'line' | 'column'> }) => {
-    const machine = machines.find((machine) => machine.id === id);
-    const node = connections.get(id);
-    if (!machine || !node) throw new Error('Machine is not connected');
-    const path = posix.isAbsolute(location.path) ? posix.resolve(location.path) : posix.resolve(await node.pty.cwd(sessionId), location.path);
-    const stat = await node.fs.stat(path);
-    if (!stat) return;
-    await context.global.publish('onclick', { type: stat.isDirectory ? 'directory' : 'file', machine, ...location, path });
-  }));
+  function hostOf(sessionId: string) {
+    const workspace = workspaces.find((workspace) => workspace.sessionId === sessionId);
+    const machine = machines.find((machine) => machine.id === workspace?.machineId);
+    const node = machine && connections.get(machine.id);
+    return machine && node ? { machine, node } : undefined;
+  }
+
+  handlers.push(...registerFilePaths(context, hostOf));
   handlers.push(context.ui.handle('config', () => ({ workspaces, active })));
   handlers.push(context.ui.handle('workspaces', rows));
   handlers.push(context.ui.handle('states', () => [...states.values()]));
@@ -240,7 +208,7 @@ export async function activate(context: MainContext) {
     const workspace = workspaces.find((item) => item.id === id);
     if (!workspace) return;
     if (workspace.sessionId !== undefined) {
-      terminals.delete(`${workspace.machineId}:${workspace.sessionId}`);
+      terminals.get(workspace.machineId)?.delete(workspace.sessionId);
       await connections.get(workspace.machineId)?.pty.close(workspace.sessionId).catch(() => {});
     }
     workspaces = workspaces.filter((item) => item.id !== id);
@@ -259,27 +227,30 @@ export async function activate(context: MainContext) {
     void announce();
   }));
   handlers.push(context.global.subscribe('workspace:query', () => { void announce(); }));
-  handlers.push(context.ui.handle('pty', async ({ id, op, params }: { id: string; op: string; params: { session_id: string; data: string; rows: number; cols: number } }) => {
-    const key = `${id}:${params.session_id}`;
+  handlers.push(context.ui.handle('pty', async ({ op, sessionId, params }: { op: string; sessionId: string; params: { data: string; rows: number; cols: number } }) => {
+    const host = hostOf(sessionId);
     if (op === 'detach') {
-      const terminal = terminals.get(key);
-      terminals.delete(key);
+      // A pane whose workspace is already gone has nothing left attached.
+      const held = host && terminals.get(host.machine.id);
+      const terminal = held?.get(sessionId);
+      held?.delete(sessionId);
       await terminal?.detach().catch(() => {});
       return;
     }
-    const node = connections.get(id);
-    if (!node) throw new Error('Machine is not connected');
+    if (!host) throw new Error('Machine is not connected');
     switch (op) {
       case 'attach': {
-        const terminal = await node.pty.attach(params.session_id);
-        terminals.set(key, terminal);
-        terminal.onSnapshot((event) => { context.ui.publish('terminal', { ...event, event: 'snapshot', machineId: id, session_id: terminal.id }); });
-        terminal.onData((event) => { context.ui.publish('terminal', { ...event, event: 'output', machineId: id, session_id: terminal.id }); });
+        const terminal = await host.node.pty.attach(sessionId);
+        const held = terminals.get(host.machine.id) ?? new Map<string, Pty>();
+        held.set(sessionId, terminal);
+        terminals.set(host.machine.id, held);
+        terminal.onSnapshot((event) => { context.ui.publish('terminal', { ...event, event: 'snapshot', session_id: terminal.id }); });
+        terminal.onData((event) => { context.ui.publish('terminal', { ...event, event: 'output', session_id: terminal.id }); });
         return;
       }
       case 'input':
       case 'resize': {
-        const terminal = terminals.get(key);
+        const terminal = terminals.get(host.machine.id)?.get(sessionId);
         if (!terminal) throw new Error('Terminal is not attached');
         return op === 'input' ? terminal.write(params.data) : terminal.resize({ rows: params.rows, cols: params.cols });
       }

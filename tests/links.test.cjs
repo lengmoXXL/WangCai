@@ -4,7 +4,7 @@ const { Terminal } = require('@xterm/headless');
 const { buildSync } = require('esbuild');
 const { Module } = require('node:module');
 const compiled = new Module('terminal-links');
-compiled._compile(buildSync({ entryPoints: ['plugins/terminal-agent/links.ts'], bundle: true, platform: 'node', write: false }).outputFiles[0].text, 'terminal-links.cjs');
+compiled._compile(buildSync({ entryPoints: ['plugins/file-links/links.ts'], bundle: true, platform: 'node', write: false }).outputFiles[0].text, 'terminal-links.cjs');
 const { fileLocation, registerFileLinks } = compiled.exports;
 
 // A terminal the link provider can scan, with the files the plugin would answer for: everything
@@ -112,12 +112,12 @@ test('punctuation printed around a path stays outside it', async () => {
   assert.deepEqual(fileLocation('src/a.ts、新建'), { path: 'src/a.ts', line: undefined, column: undefined });
   const terminal = new Terminal({ cols: 200, rows: 2, allowProposedApi: true });
   const view = pane(terminal, {
-    'plugins/terminal-agent/links.ts': '/work/plugins/terminal-agent/links.ts',
-    'plugins/terminal/links.ts': '/work/plugins/terminal/links.ts',
+    'plugins/file-links/links.ts': '/work/plugins/file-links/links.ts',
+    'plugins/file-links/paths.ts': '/work/plugins/file-links/paths.ts',
   });
-  await view.write('两份拷贝同步（plugins/terminal-agent/links.ts、新建 plugins/terminal/links.ts）\r\n「说明 file.md」，第 3 行');
+  await view.write('文件链接那块（plugins/file-links/links.ts、新建 plugins/file-links/paths.ts）\r\n「说明 file.md」，第 3 行');
   const sentence = await view.links(1);
-  assert.deepEqual(sentence.map(link => link.text), ['plugins/terminal-agent/links.ts', 'plugins/terminal/links.ts']);
+  assert.deepEqual(sentence.map(link => link.text), ['plugins/file-links/links.ts', 'plugins/file-links/paths.ts']);
   // A Chinese sentence around a name without a separator or a line is left alone.
   assert.deepEqual(await view.links(2), []);
   terminal.dispose();

@@ -21,7 +21,7 @@ const waitForTerminal = async (page) => {
     return config.workspaces.find((workspace) => workspace.id === config.active)?.sessionId;
   });
   for (let attempt = 0; attempt < 400; attempt++) {
-    const attached = await page.evaluate((session) => window.wangcai.request('terminal-agent', 'pty', { id: 'local', op: 'input', params: { session_id: session, data: '' } }).then(() => true, () => false), id);
+    const attached = await page.evaluate((session) => window.wangcai.request('terminal-agent', 'pty', { op: 'input', sessionId: session, params: { data: '' } }).then(() => true, () => false), id);
     if (attached) return;
     await page.waitForTimeout(50);
   }

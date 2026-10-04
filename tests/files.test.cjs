@@ -68,7 +68,7 @@ test('view picker browses current terminal directory; file links preview code, M
     };
     const printLine = async (text, session, cwd = home) => {
       const command = `cd '${cwd}'; printf '\\033[2J\\033[H%b\\n' '${text}'\r`;
-      await page.evaluate(({ id, command }) => window.wangcai.request('terminal-agent', 'pty', { id: 'local', op: 'input', params: { session_id: id, data: command } }), { id: session, command });
+      await page.evaluate(({ id, command }) => window.wangcai.request('terminal-agent', 'pty', { op: 'input', sessionId: id, params: { data: command } }), { id: session, command });
     };
     const clickLink = async (link, { label = link, cwd = home, anchor = label, session = sessionId } = {}) => {
       const output = label === link ? link : `\\033]8;;${link}\\007${label}\\033]8;;\\007`;
@@ -208,7 +208,7 @@ test('view picker browses current terminal directory; file links preview code, M
     const beforeMissing = await fileTabs.getByRole('tab').count();
     await clickLink(pathToFileURL(join(home, 'missing.ts')).href, { label: 'MISSING_LINK' });
     const published = await page.evaluate(() => window.linkClicks.length);
-    await page.evaluate(({ sessionId, path }) => window.wangcai.request('terminal-agent', 'click', { id: 'local', sessionId, location: { path } }), { sessionId, path: 'missing.ts' });
+    await page.evaluate(({ sessionId, path }) => window.wangcai.request('terminal-agent', 'click', { sessionId, location: { path } }), { sessionId, path: 'missing.ts' });
     assert.equal(await page.evaluate(() => window.linkClicks.length), published);
     assert.equal(await fileTabs.getByRole('tab').count(), beforeMissing);
     assert.equal(await page.getByRole('alert').filter({ hasText: 'No such file' }).count(), 0);
@@ -229,7 +229,7 @@ test('view picker browses current terminal directory; file links preview code, M
     await page.locator('#view-menu').getByRole('button', { name: '文件', exact: true }).click();
     await directory.getByRole('button', { name: 'sample.ts', exact: true }).waitFor();
     await page.screenshot({ path: 'tests/dist/screenshots/files-browser.png' });
-    await page.evaluate(({ id, path }) => window.wangcai.request('terminal-agent', 'pty', { id: 'local', op: 'input', params: { session_id: id, data: `cd '${path}'\r` } }), { id: sessionId, path: join(home, 'sub') });
+    await page.evaluate(({ id, path }) => window.wangcai.request('terminal-agent', 'pty', { op: 'input', sessionId: id, params: { data: `cd '${path}'\r` } }), { id: sessionId, path: join(home, 'sub') });
     await page.waitForFunction(async ({ id, path }) => {
       const result = await window.wangcai.request('files', 'list', { machine: { id: 'local', name: '本机' }, sessionId: id });
       return result.path === path;

@@ -114,7 +114,7 @@ test('workspaces can be dragged into a new order', { timeout: 180000 }, async ()
   const settled = (expected) => page.waitForFunction(([selector, want]) => [...document.querySelectorAll(selector)].map((node) => node.textContent).join() === want, [WORKSPACE_NAMES, expected.join()]);
   const cd = async (index, directory) => {
     const sessionId = (await page.evaluate(() => window.wangcai.request('terminal-agent', 'config'))).workspaces[index].sessionId;
-    await page.evaluate(({ sessionId, directory }) => window.wangcai.request('terminal-agent', 'pty', { id: 'local', op: 'input', params: { session_id: sessionId, data: `cd ${directory}\r` } }), { sessionId, directory });
+    await page.evaluate(({ sessionId, directory }) => window.wangcai.request('terminal-agent', 'pty', { op: 'input', sessionId, params: { data: `cd ${directory}\r` } }), { sessionId, directory });
   };
   try {
     writeInit(home);

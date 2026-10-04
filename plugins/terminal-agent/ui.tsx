@@ -2,16 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { registerFileLinks } from './links';
 import type { UiContext } from '@wangcai/sdk/channel';
+import { registerFileLinks } from '../file-links/links';
 import type { Config, MachineState, Session, Settings, WangcaiAPI, Workspace } from './shared';
 import '@xterm/xterm/css/xterm.css';
 import './style.css';
 
 let api: WangcaiAPI;
 
-function TerminalPane({ machineId, session, active, connected, generation, profile }: {
-  machineId: string; session: Session; active: boolean; connected: boolean; generation: number; profile: Settings;
+function TerminalPane({ session, active, connected, generation, profile }: {
+  session: Session; active: boolean; connected: boolean; generation: number; profile: Settings;
 }) {
   const element = useRef<HTMLDivElement>(null);
   const terminal = useRef<Terminal>(null);
@@ -31,8 +31,8 @@ function TerminalPane({ machineId, session, active, connected, generation, profi
     term.loadAddon(addon);
     term.open(element.current!);
     const links = registerFileLinks(term, {
-      resolve: (paths) => api.resolve(machineId, session.id, paths),
-      activate: (path, line, column) => { void api.click(machineId, session.id, { path, line, column }).catch((error: Error) => setError(error.message)); },
+      resolve: (paths) => api.resolve(session.id, paths),
+      activate: (path, line, column) => { void api.click(session.id, { path, line, column }).catch((error: Error) => setError(error.message)); },
     });
     terminal.current = term;
     fit.current = addon;
@@ -42,14 +42,14 @@ function TerminalPane({ machineId, session, active, connected, generation, profi
     setError('');
     const sendSize = () => {
       if (!alive || !ready || replaying) return;
-      void api.pty(machineId, 'resize', { session_id: session.id, rows: term.rows, cols: term.cols }).catch((error: Error) => { if (alive) setError(error.message); });
+      void api.pty('resize', session.id, { rows: term.rows, cols: term.cols }).catch((error: Error) => { if (alive) setError(error.message); });
     };
     const unsubscribe = api.onTerminal((event) => {
-      if (!alive || event.machineId !== machineId || event.session_id !== session.id) return;
+      if (!alive || event.session_id !== session.id) return;
       if (event.event === 'snapshot') {
         replaying = true;
         term.reset();
-        term.resize(event.cols!, event.rows!);
+        term.resize(event.cols, event.rows);
         term.write(event.data, () => {
           if (!alive) return;
           replaying = false;
@@ -63,7 +63,7 @@ function TerminalPane({ machineId, session, active, connected, generation, profi
     });
     const input = term.onData((data) => {
       if (!ready || replaying) return;
-      void api.pty(machineId, 'input', { session_id: session.id, data }).catch((error: Error) => { if (alive) setError(error.message); });
+      void api.pty('input', session.id, { data }).catch((error: Error) => { if (alive) setError(error.message); });
     });
     const resize = term.onResize(sendSize);
     const observer = new ResizeObserver(() => {
@@ -71,7 +71,7 @@ function TerminalPane({ machineId, session, active, connected, generation, profi
     });
     observer.observe(element.current!);
     if (connected) {
-      void api.pty(machineId, 'attach', { session_id: session.id }).then(() => {
+      void api.pty('attach', session.id).then(() => {
         if (!alive) return;
         ready = true;
         sendSize();
@@ -82,9 +82,9 @@ function TerminalPane({ machineId, session, active, connected, generation, profi
       ready = false;
       unsubscribe(); input.dispose(); resize.dispose(); observer.disconnect();
       links.dispose(); term.dispose(); terminal.current = null;
-      if (connected) void api.pty(machineId, 'detach', { session_id: session.id }).catch(() => {});
+      if (connected) void api.pty('detach', session.id).catch(() => {});
     };
-  }, [machineId, session.id, connected, generation, profile]);
+  }, [session.id, connected, generation, profile]);
 
   useEffect(() => {
     if (active) requestAnimationFrame(() => { fit.current?.fit(); terminal.current?.focus(); });
@@ -121,7 +121,6 @@ function App({ profile }: { profile: Settings }) {
       const session = sessionFor(workspace);
       return session ? <TerminalPane
         key={`${workspace.id}:${session.id}`}
-        machineId={workspace.machineId}
         session={session}
         active={workspace.id === config.active}
         connected={states[workspace.machineId]?.status === 'connected'}
@@ -139,12 +138,12 @@ function App({ profile }: { profile: Settings }) {
 export function mount(container: HTMLElement, context: UiContext) {
   container.classList.add('wangcai-terminal-agent');
   api = {
-    click: (id, sessionId, location) => context.ui.request('click', { id, sessionId, location }),
+    click: (sessionId, location) => context.ui.request('click', { sessionId, location }),
     config: () => context.ui.request('config'),
     states: () => context.ui.request('states'),
     selectWorkspace: (id) => context.ui.request('workspace-select', { id }),
-    pty: (id, op, params = {}) => context.ui.request('pty', { id, op, params }),
-    resolve: (id, sessionId, paths) => context.ui.request('resolve', { id, sessionId, paths }),
+    pty: (op, sessionId, params = {}) => context.ui.request('pty', { op, sessionId, params }),
+    resolve: (sessionId, paths) => context.ui.request('resolve', { sessionId, paths }),
     onConfig: (callback) => context.ui.subscribe('config', callback),
     onState: (callback) => context.ui.subscribe('state', callback),
     onTerminal: (callback) => context.ui.subscribe('terminal', callback),

@@ -185,7 +185,7 @@ test('view menu switches plugins and handles empty and closed terminals', { time
     await createWorkspace(page);
     await directory.getByRole('button', { name: '.hidden.md', exact: true }).waitFor();
     const sessionId = await page.evaluate(async () => (await window.wangcai.request('terminal-agent', 'config')).workspaces.at(-1).sessionId);
-    await page.evaluate((id) => window.wangcai.request('terminal-agent', 'pty', { id: 'local', op: 'input', params: { session_id: id, data: 'exit\r' } }), sessionId);
+    await page.evaluate((id) => window.wangcai.request('terminal-agent', 'pty', { op: 'input', sessionId: id, params: { data: 'exit\r' } }), sessionId);
     const restart = page.getByRole('button', { name: '重新打开终端', exact: true });
     await restart.waitFor();
     await restart.click();
