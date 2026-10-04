@@ -9,7 +9,7 @@ const { createWorkspace, waitForShell, writeInit } = require('./init.cjs');
 
 test('view menu switches plugins and handles empty and closed terminals', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-views-')));
-  const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
+  const env = { ...process.env, HOME: home, WANGCAI_HOME: '', SHELL: '/bin/bash', ELECTRON_RENDERER_URL: '' };
   delete env.ELECTRON_RUN_AS_NODE;
   let desktop;
   try {
@@ -230,7 +230,7 @@ test('view menu switches plugins and handles empty and closed terminals', { time
 
 test('full screen reclaims the window chrome space above the workspaces', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-full-screen-')));
-  const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
+  const env = { ...process.env, HOME: home, WANGCAI_HOME: '', SHELL: '/bin/bash', ELECTRON_RENDERER_URL: '' };
   delete env.ELECTRON_RUN_AS_NODE;
   let desktop;
   try {
@@ -261,7 +261,7 @@ test('full screen reclaims the window chrome space above the workspaces', { time
 
 test('sidebar tabs can be dragged into a new order', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-tab-order-')));
-  const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
+  const env = { ...process.env, HOME: home, WANGCAI_HOME: '', SHELL: '/bin/bash', ELECTRON_RENDERER_URL: '' };
   delete env.ELECTRON_RUN_AS_NODE;
   let desktop;
   let page;

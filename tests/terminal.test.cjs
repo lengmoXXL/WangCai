@@ -12,7 +12,8 @@ test('the terminal view opens its own shell in the sidebar, reattaches it and ki
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-terminal-')));
   const previousHome = process.env.HOME;
   process.env.HOME = home;
-  const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
+  process.env.WANGCAI_HOME = '';
+  const env = { ...process.env, HOME: home, SHELL: '/bin/bash', ELECTRON_RENDERER_URL: '' };
   delete env.ELECTRON_RUN_AS_NODE;
   const binary = join(process.cwd(), 'wangcaicli/dist/debug/wangcai');
   const directory = join(home, '示例 project');

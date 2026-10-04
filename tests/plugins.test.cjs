@@ -8,7 +8,7 @@ const { openWorkspaceMenu, writeInit } = require('./init.cjs');
 
 test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-plugins-'));
-  const env = { ...process.env, HOME: home };
+  const env = { ...process.env, HOME: home, WANGCAI_HOME: '', ELECTRON_RENDERER_URL: '' };
   delete env.ELECTRON_RUN_AS_NODE;
   const plugins = join(home, '.local/share/wangcai/plugins');
   const write = (id, files) => {

@@ -75,7 +75,7 @@ class Client {
 
 test('persistent terminal node lifecycle', { timeout: 150000 }, async (t) => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-node-test-'));
-  const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
+  const env = { ...process.env, HOME: home, WANGCAI_HOME: '', SHELL: '/bin/bash' };
   const cli = (...args) => execFileSync(binary, ['server', ...args], { env, encoding: 'utf8', timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'] });
   const clients = [];
   try {
@@ -173,5 +173,20 @@ test('persistent terminal node lifecycle', { timeout: 150000 }, async (t) => {
     for (const client of clients) await client.close().catch(() => {});
     try { cli('stop'); } catch {}
     rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the agent keeps its state where WANGCAI_HOME points, not under HOME', () => {
+  const home = mkdtempSync(join(tmpdir(), 'wangcai-home-'));
+  const override = mkdtempSync(join(tmpdir(), 'wangcai-override-'));
+  const env = { ...process.env, HOME: home, WANGCAI_HOME: override };
+  try {
+    execFileSync(binary, ['server', 'start'], { env, stdio: 'ignore', timeout: 30000 });
+    assert.equal(existsSync(join(override, '.local/share/wangcai/server.json')), true);
+    assert.equal(existsSync(join(home, '.local/share/wangcai')), false);
+  } finally {
+    try { execFileSync(binary, ['server', 'stop'], { env, stdio: 'ignore', timeout: 15000 }); } catch {}
+    rmSync(home, { recursive: true, force: true });
+    rmSync(override, { recursive: true, force: true });
   }
 });

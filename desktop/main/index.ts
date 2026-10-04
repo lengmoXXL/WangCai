@@ -3,7 +3,7 @@ import { join, resolve, relative, isAbsolute, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { loadPlugins } from './plugins';
-import { loadConfig, storageDirectory } from './config';
+import { homeDirectory, homeOverride, loadConfig, storageDirectory } from './config';
 import { installPlugin } from './install';
 import type { TabRecord } from '@wangcai/sdk/channel';
 import { previewMessage, previewScheme, previewUrl, uiFont, type InstallStatus } from '../shared';
@@ -24,6 +24,9 @@ let window: BrowserWindow | undefined;
 // A plugin event can outlive the window that would show it.
 const send = (channel: string, ...args: unknown[]) => { if (window && !window.isDestroyed()) window.webContents.send(channel, ...args); };
 
+// Electron keeps the instance lock in its user data, which an installed app is holding, so a
+// development run takes its own.
+if (homeOverride) app.setPath('userData', join(homeDirectory, 'electron'));
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => { window?.show(); window?.focus(); });

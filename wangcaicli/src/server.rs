@@ -204,6 +204,7 @@ impl Node {
                 }
                 path
             }
+            // A session opens in the real home: the profile decides where the agent keeps its own files, not where a terminal starts.
             None => std::env::var("HOME").context("HOME is not set")?.into(),
         });
         command.env("TERM", "xterm-256color");

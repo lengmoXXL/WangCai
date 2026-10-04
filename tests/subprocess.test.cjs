@@ -21,6 +21,7 @@ test('SDK subprocess: binary output, argv, cwd, environment, limits and cancella
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-subprocess-')));
   const previousHome = process.env.HOME;
   process.env.HOME = home;
+  process.env.WANGCAI_HOME = '';
   const binary = resolve('wangcaicli/dist/debug/wangcai');
   let machine;
   try {

@@ -5,6 +5,8 @@ const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
+const { buildSync } = require('esbuild');
+const { Module } = require('node:module');
 const { connect } = require('../sdk/dist/index.cjs');
 
 async function until(check) {
@@ -12,10 +14,20 @@ async function until(check) {
   throw new Error('Timed out waiting for SDK output');
 }
 
+const sdkAgent = new Module('sdk-agent');
+sdkAgent._compile(buildSync({ entryPoints: ['sdk/agent.ts'], bundle: true, platform: 'node', write: false }).outputFiles[0].text, 'sdk-agent.cjs');
+const { agentCommand } = sdkAgent.exports;
+
+test('the command the SDK runs on a machine carries the home a development profile uses', () => {
+  process.env.WANGCAI_HOME = "/tmp/a b'c";
+  assert.equal(agentCommand('wangcai server start --json'), "export WANGCAI_HOME='/tmp/a b'\\''c'; export PATH=\"$HOME/.local/bin:$PATH\"; wangcai server start --json");
+});
+
 test('Node SDK: local PTYs, binary files, detach and reconnect', { timeout: 90000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-sdk-'));
   const previousHome = process.env.HOME;
   process.env.HOME = home;
+  process.env.WANGCAI_HOME = '';
   const binary = resolve('wangcaicli/dist/debug/wangcai');
   let machine;
   try {

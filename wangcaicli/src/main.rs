@@ -56,7 +56,11 @@ pub struct ServerInfo {
 }
 
 fn data_dir() -> Result<PathBuf> {
-    let home = std::env::var_os("HOME").context("HOME is not set")?;
+    // A development profile keeps its own agent state: the app hands this to every machine it reaches.
+    let home = std::env::var_os("WANGCAI_HOME")
+        .filter(|home| !home.is_empty())
+        .or_else(|| std::env::var_os("HOME"))
+        .context("neither WANGCAI_HOME nor HOME is set")?;
     Ok(PathBuf::from(home).join(".local/share/wangcai"))
 }
 

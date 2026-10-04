@@ -9,7 +9,7 @@ const { createWorkspace, openWorkspaceMenu, waitForShell } = require('./init.cjs
 
 test('user config: init.ts drives the plugins, the UI theme, their own config and the terminal', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-config-')));
-  const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
+  const env = { ...process.env, HOME: home, WANGCAI_HOME: '', SHELL: '/bin/bash', ELECTRON_RENDERER_URL: '' };
   delete env.ELECTRON_RUN_AS_NODE;
   const init = join(home, '.config/wangcai/init.ts');
   let desktop;

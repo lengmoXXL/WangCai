@@ -4,7 +4,7 @@ import { promisify } from 'node:util';
 import WebSocket from 'ws';
 import type { ConnectionOptions, MachineState, Session, Size, DirectoryEntry, ExecOptions, ExecResult } from './types';
 import { Pty } from './pty';
-import { ensureAgent } from './agent';
+import { agentCommand, ensureAgent } from './agent';
 
 const exec = promisify(execFile);
 interface Info { pid: number; port: number; instance_id: string; protocol: number }
@@ -149,7 +149,7 @@ export class MachineConnection {
         if (this.options.agent) await ensureAgent(this.options.host, { ...this.options.agent, signal: this.options.signal });
         const { stdout } = await exec('ssh', [
           '-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', this.options.host,
-          'export PATH="$HOME/.local/bin:$PATH"; wangcai server start --json',
+          agentCommand('wangcai server start --json'),
         ], { timeout: 15_000, maxBuffer: 64 * 1024 });
         info = JSON.parse(stdout);
         if (!Number.isInteger(info.port) || info.port < 1 || info.port > 65535) throw new Error('Node returned an invalid port.');

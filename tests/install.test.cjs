@@ -25,7 +25,7 @@ test('a GitHub repository lists mirrors to retry through, and other repositories
 
 test('repository plugins are cloned, built and rebuilt when their commit moves', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-install-')));
-  const env = { ...process.env, HOME: home };
+  const env = { ...process.env, HOME: home, WANGCAI_HOME: '', ELECTRON_RENDERER_URL: '' };
   delete env.ELECTRON_RUN_AS_NODE;
   const good = makePluginRepo(home, 'good');
   const plugin = join(home, '.local/share/wangcai/plugins/good');
@@ -87,7 +87,7 @@ test('repository plugins are cloned, built and rebuilt when their commit moves',
 
 test('the plugin page is styled by the app theme while a plugin is still installing', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-install-page-')));
-  const env = { ...process.env, HOME: home };
+  const env = { ...process.env, HOME: home, WANGCAI_HOME: '', ELECTRON_RENDERER_URL: '' };
   delete env.ELECTRON_RUN_AS_NODE;
   const slow = makePluginRepo(home, 'slow', 4000);
   writeInit(home, { tabs: [{ id: 'slow', repo: slow.directory, commit: slow.commit }] });

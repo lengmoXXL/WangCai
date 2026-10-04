@@ -9,7 +9,7 @@ const { execFileSync } = require('node:child_process');
 
 test('packaged app carries its plugins, previews files and prefers plugins from the user\'s plugin directory', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-package-'));
-  const env = { ...process.env, HOME: home, PATH: '/usr/bin:/bin' };
+  const env = { ...process.env, HOME: home, WANGCAI_HOME: '', PATH: '/usr/bin:/bin', ELECTRON_RENDERER_URL: '' };
   delete env.ELECTRON_RUN_AS_NODE;
   let desktop;
   // electron-builder names the directory after the architecture it was told to build, and the plain

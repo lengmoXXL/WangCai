@@ -18,7 +18,7 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
   if (!sshd) { t.skip('OpenSSH server is not installed'); return; }
   const home = mkdtempSync(join(tmpdir(), 'wangcai-ssh-test-'));
   const binary = resolve('wangcaicli/dist/debug/wangcai');
-  const env = { ...process.env, HOME: home, SHELL: '/bin/bash' };
+  const env = { ...process.env, HOME: home, WANGCAI_HOME: '', SHELL: '/bin/bash' };
   const cli = (...args) => execFileSync(binary, ['server', ...args], { env, encoding: 'utf8', timeout: 30000 });
   let server;
   let connection;
@@ -54,6 +54,7 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     mkdirSync(join(home, 'bin'));
     writeFileSync(join(home, 'bin/ssh'), `#!/bin/sh\nexec /usr/bin/ssh -F ${quote(join(home, 'ssh_config'))} "$@"\n`, { mode: 0o700 });
     process.env.PATH = `${join(home, 'bin')}:${originalPath}`;
+    process.env.WANGCAI_HOME = '';
     connection = await connect({ type: 'ssh', host: 'wangcai-test' });
     const info = JSON.parse(cli('status', '--json'));
     let state;

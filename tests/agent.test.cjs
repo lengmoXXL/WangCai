@@ -30,6 +30,7 @@ async function remote(platform, assets) {
     install: async (version) => {
       const environment = { HOME: process.env.HOME, PATH: process.env.PATH };
       process.env.HOME = home;
+      process.env.WANGCAI_HOME = '';
       process.env.PATH = `${bin}:/bin:/usr/bin`;
       try { await ensureAgent('stub', { version, prefix }); }
       finally { Object.assign(process.env, environment); }

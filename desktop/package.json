@@ -42,9 +42,9 @@
     }
   },
   "scripts": {
-    "dev": "node tools/fetch-node.mjs && node tools/build-plugins.mjs && electron-vite dev",
+    "dev": "export WANGCAI_HOME=${WANGCAI_HOME:-$HOME/.wangcai-dev} && node tools/fetch-node.mjs && node tools/build-plugins.mjs && electron-vite dev",
     "build": "node tools/fetch-node.mjs && node tools/build-plugins.mjs && electron-vite build",
-    "start": "electron .",
+    "start": "export WANGCAI_HOME=${WANGCAI_HOME:-$HOME/.wangcai-dev} && electron .",
     "package": "npm run build && electron-builder --mac dir",
     "typecheck": "tsc"
   },

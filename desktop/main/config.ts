@@ -35,8 +35,12 @@ const DEFAULT_PROFILE: Profile = {
   agent: { downloadPrefix: 'https://github.com/lengmoXXL/WangCai/releases/download' },
 };
 
-const configDirectory = join(homedir(), '.config/wangcai');
-export const storageDirectory = join(homedir(), '.local/share/wangcai');
+// Where this run keeps the config it loads and the data it writes. A development run can be pointed
+// somewhere else, so it cannot change the files an installed app is using.
+export const homeOverride = process.env.WANGCAI_HOME || undefined;
+export const homeDirectory = homeOverride ?? homedir();
+const configDirectory = join(homeDirectory, '.config/wangcai');
+export const storageDirectory = join(homeDirectory, '.local/share/wangcai');
 
 export type PluginSpec = { id: string; workspaces: boolean; repo?: string; commit?: string; directory?: string; config?: Record<string, unknown> };
 
@@ -108,9 +112,9 @@ const PRESET = `// 旺财的启动入口：启动时由 app 直接加载，只�
 // 插件条目的字段：
 //   id        插件 id，也就是插件目录名
 //   repo      插件仓库：clone 并在这里构建（app 自带 node 与 npm）；不写 directory 时 clone 到
-//             ~/.local/share/wangcai/plugins/<id>/；GitHub 连不上时会自动换国内镜像重试
+//             数据目录（默认为 ~/.local/share/wangcai）下的 plugins/<id>/；GitHub 连不上时会自动换国内镜像重试
 //   commit    仓库里的 commit 或分支；换一个就重新 checkout 并重建
-//   directory 改用别的插件目录（相对路径相对本文件）；不写 repo 时用 ~/.local/share/wangcai/plugins/<id>/，
+//   directory 改用别的插件目录（相对路径相对本文件）；不写 repo 时用数据目录下的 plugins/<id>/，
 //             那里也没有就用 app 自带的那份
 //   config    这个插件自己的配置，能写哪些字段由插件说了算（schema 在插件的 main.cjs 里），不写的用插件给的默认值
 // 插件就是一个目录，里面是编译好的 main.cjs（主进程）和可选的 ui.js / ui.css（界面文件）。
