@@ -1,9 +1,11 @@
+import type { WorkspaceMenuItem, WorkspaceRow } from '@wangcai/sdk';
 import type { Channel, Context } from '@wangcai/sdk/channel';
 import { denied, previewMessage, previewUrl, uiFont, type Dispose, type InstallStage, type InstallStatus, type TabRecord } from '../shared';
 import './style.css';
 
 type TabContent = { dispose: Dispose; onSelect?(): void };
 type TabOptions = { id: string; title: string; tooltip?: string; workspaceId?: string; onClose?(): void; mount(container: HTMLElement): TabContent };
+type MenuAnchor = { left: number; top: number };
 
 const root = document.getElementById('root')!;
 const disposers: Dispose[] = [];
@@ -83,8 +85,6 @@ async function start() {
   if (!plugins.length) root.textContent = '未安装插件';
   const left = document.createElement('aside');
   left.className = 'desktop-sidebar sidebar-left';
-  left.setAttribute('aria-label', '左侧边栏');
-  left.hidden = true;
   const main = document.createElement('main');
   main.className = 'desktop-main';
   const right = document.createElement('aside');
@@ -214,50 +214,260 @@ async function start() {
     show();
     refresh();
   };
-  disposers.push(window.wangcai.subscribe('workspace:list', (value) => {
-    const workspaceIds = new Set(value as string[]);
-    for (const [key, tab] of [...tabs]) {
-      if (tab.workspaceId === undefined || workspaceIds.has(tab.workspaceId)) continue;
-      if (activeWorkspaceId === tab.workspaceId) activeWorkspaceId = undefined;
-      removeTab(key);
+  // The workspace view: a flat list of the workspaces the providers hold, and a "+" of what they can create.
+  const providers = plugins.filter((plugin) => plugin.workspaces && !plugin.error).map((plugin) => plugin.id);
+  const grouped = new Map(providers.map((id) => [id, [] as WorkspaceRow[]]));
+  const listed = () => providers.flatMap((provider) => grouped.get(provider)!);
+  const providerOf = (id: string) => providers.find((provider) => grouped.get(provider)!.some((row) => row.id === id));
+  let draggingRow: string | undefined;
+  const workspaceHeader = document.createElement('header');
+  workspaceHeader.className = 'workspace-header';
+  const workspaceTitle = document.createElement('span');
+  workspaceTitle.textContent = '工作区';
+  const workspaceAdd = document.createElement('button');
+  workspaceAdd.className = 'workspace-add';
+  workspaceAdd.textContent = '+';
+  workspaceAdd.setAttribute('aria-label', '新增工作区');
+  // The button opens the menu a right-click on the list opens.
+  workspaceAdd.onclick = () => {
+    const box = workspaceAdd.getBoundingClientRect();
+    showRowMenu({ left: box.left, top: box.bottom + 2 }, undefined);
+  };
+  workspaceHeader.append(workspaceTitle, workspaceAdd);
+  const workspaceList = document.createElement('nav');
+  workspaceList.className = 'workspaces';
+  workspaceList.setAttribute('role', 'tablist');
+  workspaceList.setAttribute('aria-label', '工作区');
+  workspaceList.setAttribute('aria-orientation', 'vertical');
+  left.append(workspaceHeader, workspaceList);
+  // The menu carries what to open, and how to close the workspace it was opened on.
+  const rowMenu = document.createElement('div');
+  rowMenu.id = 'workspace-row-menu';
+  rowMenu.className = 'view-menu';
+  rowMenu.setAttribute('role', 'menu');
+  rowMenu.setAttribute('aria-label', '工作区');
+  const rowBackdrop = document.createElement('div');
+  rowBackdrop.className = 'menu-scrim';
+  rowBackdrop.hidden = true;
+  rowBackdrop.append(rowMenu);
+  root.append(rowBackdrop);
+  let menuRow: string | undefined;
+  const hideRowMenu = () => { rowBackdrop.hidden = true; menuRow = undefined; };
+  // A click on an entry belongs to the entry, which decides for itself when the menu goes away.
+  rowBackdrop.onclick = (event) => { if (!rowMenu.contains(event.target as Node)) hideRowMenu(); };
+  const escapeRowMenu = (event: KeyboardEvent) => { if (event.key === 'Escape') hideRowMenu(); };
+  document.addEventListener('keydown', escapeRowMenu);
+  disposers.push(() => document.removeEventListener('keydown', escapeRowMenu));
+  // A menu is as large as its entries, so where it fits is only known once they are in the DOM.
+  const clampMenu = (menu: HTMLElement, at: MenuAnchor) => {
+    menu.style.left = `${Math.max(4, Math.min(at.left, window.innerWidth - menu.offsetWidth - 4))}px`;
+    menu.style.top = `${Math.max(4, Math.min(at.top, window.innerHeight - menu.offsetHeight - 4))}px`;
+  };
+  const showRowMenu = (at: MenuAnchor, row: string | undefined) => {
+    menuRow = row;
+    // The anchor is set before the menu is on screen.
+    rowMenu.replaceChildren();
+    rowMenu.style.left = `${at.left}px`;
+    rowMenu.style.top = `${at.top}px`;
+    rowBackdrop.hidden = false;
+    void fillRowMenu(at);
+  };
+
+  const fillRowMenu = async (at: MenuAnchor) => {
+    const entries: { provider: string; item: WorkspaceMenuItem }[] = [];
+    for (const provider of providers) {
+      try {
+        for (const item of await window.wangcai.request<WorkspaceMenuItem[]>(provider, 'workspace-menu')) entries.push({ provider, item });
+      } catch (error) {
+        if (!closing) console.error(error);
+      }
     }
-    settle();
-  }));
-  disposers.push(window.wangcai.subscribe('terminal:active', (value) => {
-    const next = (value as { workspaceId?: string } | null)?.workspaceId;
-    if (next === undefined || next === activeWorkspaceId) return;
-    activeWorkspaceId = next;
+    const closeId = menuRow;
+    const items: HTMLElement[] = [];
+    if (closeId !== undefined) {
+      const button = document.createElement('button');
+      button.setAttribute('role', 'menuitem');
+      button.textContent = '关闭工作区';
+      button.onclick = () => {
+        const provider = providerOf(closeId);
+        hideRowMenu();
+        if (provider) void window.wangcai.request(provider, 'workspace-close', { id: closeId }).then(refreshRows).catch(console.error);
+      };
+      items.push(button);
+    }
+    for (const { provider, item } of entries) {
+      const button = document.createElement('button');
+      button.setAttribute('role', 'menuitem');
+      button.textContent = item.label;
+      const hint = document.createElement('span');
+      hint.textContent = item.hint ?? '';
+      button.append(hint);
+      button.disabled = Boolean(item.error);
+      if (item.error) button.title = item.error;
+      button.onclick = async () => {
+        button.disabled = true;
+        hint.textContent = '连接中…';
+        try {
+          const created = await window.wangcai.request<{ id: string }>(provider, 'workspace-create', { key: item.key });
+          hideRowMenu();
+          await refreshRows();
+          selectWorkspace(created.id);
+        } catch (error) {
+          // A failed attempt keeps the entry listed, greyed out, with the reason in the hint and on hover.
+          hint.textContent = error instanceof Error ? error.message : String(error);
+          button.title = hint.textContent;
+        }
+      };
+      items.push(button);
+    }
+    if (!items.length) {
+      const empty = document.createElement('p');
+      empty.className = 'menu-empty';
+      empty.textContent = '没有可用的工作区';
+      items.push(empty);
+    }
+    rowMenu.replaceChildren(...items);
+    clampMenu(rowMenu, at);
+  };
+  workspaceList.oncontextmenu = (event) => {
+    event.preventDefault();
+    const row = (event.target as Element).closest<HTMLElement>('.workspace');
+    showRowMenu({ left: event.clientX, top: event.clientY }, row?.dataset.workspace);
+  };
+
+  const selectWorkspace = (id: string) => {
+    const provider = providerOf(id);
+    if (!provider) return;
+    activeWorkspaceId = id;
+    // Tabs opened before any workspace existed belong to the one now in front.
     for (const [key, tab] of [...tabs]) {
       if (tab.workspaceId !== undefined) continue;
       const record = records.get(key)!;
-      const moved = tabKey(record.plugin, record.id, next);
+      const moved = tabKey(record.plugin, record.id, id);
       tabs.delete(key);
-      tab.workspaceId = next;
+      tab.workspaceId = id;
       tab.key = moved;
       tabs.set(moved, tab);
       records.delete(key);
-      records.set(moved, { ...record, workspaceId: next });
-      if (selected.get(group()) === key) selected.set(group(next), moved);
+      records.set(moved, { ...record, workspaceId: id });
+      if (selected.get(group()) === key) selected.set(group(id), moved);
     }
+    showRows();
     settle();
-  }));
-  const picker = document.createElement('button');
-  picker.className = 'view-picker';
-  picker.textContent = '+';
-  picker.setAttribute('aria-label', '新建侧栏标签页');
-  const menu = document.createElement('div');
-  menu.id = 'view-menu';
-  menu.className = 'view-menu';
-  menu.popover = 'auto';
-  menu.setAttribute('aria-label', '视图');
-  picker.popoverTargetElement = menu;
-  menu.addEventListener('beforetoggle', (event) => {
+    void window.wangcai.request(provider, 'workspace-select', { id }).catch(console.error);
+  };
+
+  const refreshRows = async () => {
+    // The window is going away: a plugin that already disposed itself is not a failed refresh.
+    if (closing) return;
+    for (const provider of providers) {
+      try {
+        grouped.set(provider, await window.wangcai.request<WorkspaceRow[]>(provider, 'workspaces'));
+      } catch (error) {
+        // A provider that cannot answer keeps the rows it had: a lost reply must not close its workspaces.
+        if (!closing) console.error(error);
+      }
+    }
+    if (closing) return;
+    const served = new Set(listed().map((row) => row.id));
+    // A workspace that is gone takes its tabs with it.
+    for (const [key, tab] of [...tabs]) {
+      if (tab.workspaceId === undefined || served.has(tab.workspaceId)) continue;
+      if (activeWorkspaceId === tab.workspaceId) activeWorkspaceId = undefined;
+      removeTab(key);
+    }
+    if (activeWorkspaceId === undefined || !served.has(activeWorkspaceId)) {
+      const first = listed()[0];
+      if (first) {
+        selectWorkspace(first.id);
+        return;
+      }
+    }
+    showRows();
+    settle();
+  };
+
+  // A drag cancelled with Escape never reaches dragleave or drop, so the target keeps its marker.
+  const clearDrop = (container: HTMLElement) => {
+    for (const node of container.querySelectorAll<HTMLElement>('[data-drop]')) delete node.dataset.drop;
+  };
+
+  const showRows = () => {
+    workspaceList.replaceChildren(...listed().map((row) => {
+      const element = document.createElement('div');
+      element.className = `workspace${row.id === activeWorkspaceId ? ' selected' : ''}${row.running ? ' running' : ''}`;
+      element.setAttribute('role', 'tab');
+      element.setAttribute('aria-selected', String(row.id === activeWorkspaceId));
+      element.setAttribute('aria-label', `${row.label} · ${row.machine}`);
+      element.dataset.workspace = row.id;
+      element.tabIndex = 0;
+      element.draggable = true;
+      element.innerHTML = '<svg class="glyph" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M1.6 3.2c0-.6.5-1.1 1.1-1.1h3l1.1 1.4h5.5c.6 0 1.1.5 1.1 1.1v6.2c0 .6-.5 1.1-1.1 1.1H2.7c-.6 0-1.1-.5-1.1-1.1z"/></svg>';
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = row.label;
+      element.append(name);
+      element.onclick = () => selectWorkspace(row.id);
+      element.onkeydown = (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        selectWorkspace(row.id);
+      };
+      element.ondragstart = (event) => {
+        draggingRow = row.id;
+        event.dataTransfer!.effectAllowed = 'move';
+      };
+      element.ondragend = () => {
+        draggingRow = undefined;
+        clearDrop(workspaceList);
+      };
+      element.ondragover = (event) => {
+        const source = draggingRow;
+        if (source === undefined || source === row.id || providerOf(source) !== providerOf(row.id)) return;
+        event.preventDefault();
+        const box = element.getBoundingClientRect();
+        element.dataset.drop = event.clientY > box.top + box.height / 2 ? 'after' : 'before';
+      };
+      element.ondragleave = () => { delete element.dataset.drop; };
+      element.ondrop = (event) => {
+        event.preventDefault();
+        const moved = draggingRow!;
+        const after = element.dataset.drop === 'after';
+        draggingRow = undefined;
+        clearDrop(workspaceList);
+        const rows = listed();
+        const before = after ? rows[rows.findIndex((item) => item.id === row.id) + 1]?.id : row.id;
+        const provider = providerOf(moved);
+        if (provider) void window.wangcai.request(provider, 'workspace-move', { id: moved, before }).catch(console.error);
+      };
+      return element;
+    }));
+  };
+
+  const viewPicker = document.createElement('button');
+  viewPicker.className = 'view-picker';
+  viewPicker.textContent = '+';
+  viewPicker.setAttribute('aria-label', '新建侧栏标签页');
+  const viewMenu = document.createElement('div');
+  viewMenu.id = 'view-menu';
+  viewMenu.className = 'view-menu';
+  viewMenu.popover = 'auto';
+  viewPicker.popoverTargetElement = viewMenu;
+  const pickerAnchor = (): MenuAnchor => {
+    const bounds = viewPicker.getBoundingClientRect();
+    return { left: bounds.left, top: bounds.bottom + 4 };
+  };
+  viewMenu.addEventListener('beforetoggle', (event) => {
     if (event.newState !== 'open') return;
-    const bounds = picker.getBoundingClientRect();
-    menu.style.top = `${bounds.bottom + 4}px`;
-    menu.style.left = `${Math.min(bounds.left, window.innerWidth - 132)}px`;
+    const at = pickerAnchor();
+    viewMenu.style.left = `${at.left}px`;
+    viewMenu.style.top = `${at.top}px`;
   });
-  header.append(picker);
+  viewMenu.addEventListener('toggle', (event) => {
+    if (event.newState !== 'open') return;
+    clampMenu(viewMenu, pickerAnchor());
+  });
+  header.append(viewPicker);
   const toggle = document.createElement('button');
   toggle.className = 'sidebar-toggle';
   toggle.textContent = '◧';
@@ -267,9 +477,11 @@ async function start() {
     right.hidden = !right.hidden;
     toggle.setAttribute('aria-expanded', String(!right.hidden));
     if (!right.hidden) refresh();
-    menu.hidePopover();
+    viewMenu.hidePopover();
   };
-  root.append(toggle, menu);
+  root.append(toggle, viewMenu);
+  disposers.push(window.wangcai.subscribe('workspaces', () => void refreshRows()));
+  void refreshRows();
   const restores = new Map<string, (record: TabRecord) => Promise<void>>();
   for (const plugin of plugins) {
     if (!plugin.error && !plugin.ui) continue;
@@ -301,16 +513,6 @@ async function start() {
         document.head.append(stylesheet);
         await loaded;
       }
-      let sidebar: HTMLElement | undefined;
-      const sidebarSlot = () => {
-        if (sidebar) return sidebar;
-        sidebar = document.createElement('section');
-        sidebar.className = 'sidebar-slot';
-        sidebar.dataset.plugin = plugin.id;
-        left.append(sidebar);
-        left.hidden = false;
-        return sidebar;
-      };
       const openTab = (options: TabOptions) => {
         const workspaceId = options.workspaceId ?? activeWorkspaceId;
         const key = tabKey(plugin.id, options.id, workspaceId);
@@ -355,10 +557,9 @@ async function start() {
           dragging = tab.key;
           event.dataTransfer!.effectAllowed = 'move';
         };
-        // A drag cancelled with Escape never reaches dragleave or drop, so the target keeps its marker.
         element.ondragend = () => {
           dragging = undefined;
-          for (const node of header.querySelectorAll<HTMLElement>('.sidebar-tab[data-drop]')) delete node.dataset.drop;
+          clearDrop(header);
         };
         element.ondragover = (event) => {
           if (dragging === undefined || dragging === tab.key) return;
@@ -375,10 +576,10 @@ async function start() {
           const before = after ? visible[visible.findIndex(([item]) => item === tab.key) + 1]?.[0] : tab.key;
           reorder(tabs, source, before);
           reorder(records, source, before);
-          header.insertBefore(tabs.get(source)!.element, before === undefined ? picker : tabs.get(before)!.element);
+          header.insertBefore(tabs.get(source)!.element, before === undefined ? viewPicker : tabs.get(before)!.element);
           persist();
         };
-        header.insertBefore(element, picker);
+        header.insertBefore(element, viewPicker);
         content.append(panel);
         tabs.set(key, tab);
         select(key);
@@ -408,7 +609,6 @@ async function start() {
           publish: denied('host', 'publish'),
           subscribe: denied('host', 'subscribe'),
           request: (async (topic: string, params?: unknown) => {
-            if (topic === 'sidebar') return sidebarSlot();
             if (topic === 'config') return { ...profile, ...plugin.config };
             if (topic === 'tabs') return openTab(params as TabOptions);
             if (topic === 'preview') return { url: previewUrl, message: previewMessage };
@@ -426,15 +626,14 @@ async function start() {
       if (module.open) {
         const item = document.createElement('button');
         item.textContent = module.title ?? plugin.id;
-        item.onclick = () => { module.open(context); menu.hidePopover(); };
-        menu.append(item);
+        item.onclick = () => { module.open(context); viewMenu.hidePopover(); };
+        viewMenu.append(item);
       }
       const cleanup = async () => {
         for (const off of subscriptions) off();
         await dispose?.();
         stylesheet?.remove();
         container.remove();
-        sidebar?.remove();
       };
       if (closing) await cleanup(); else disposers.push(cleanup);
     } catch (error) {

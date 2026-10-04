@@ -67,17 +67,16 @@ test('repository plugins are cloned, built and rebuilt when their commit moves',
 
     // A commit the repository does not have stops that plugin and is reported with the reason.
     writeInit(home, [
-      { id: 'workspace' },
+      { id: 'terminal-agent' },
       { id: 'good', repo: good.directory, commit: moved },
       { id: 'broken', repo: good.directory, commit: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef' },
     ]);
     await launch();
-    assert.deepEqual(await stages(), [['workspace', 'ready'], ['good', 'ready'], ['broken', 'failed']]);
+    assert.deepEqual(await stages(), [['terminal-agent', 'ready'], ['good', 'ready'], ['broken', 'failed']]);
     assert.match(await page.locator('.installs .install-message').innerText(), /deadbeef/);
     // The plugin that did not install is not loaded at all: no error panel, and the rest of the app runs.
-    assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map(({ id, error }) => [id, Boolean(error)])), [['good', false], ['workspace', false]]);
+    assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map(({ id, error }) => [id, Boolean(error)])), [['good', false], ['terminal-agent', false]]);
     assert.equal(await page.locator('.plugin-error').count(), 0);
-    await page.locator('.sidebar-slot[data-plugin=workspace]').waitFor();
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });

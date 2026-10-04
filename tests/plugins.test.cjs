@@ -4,7 +4,7 @@ const { _electron: electron } = require('playwright');
 const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { writeInit } = require('./init.cjs');
+const { openWorkspaceMenu, writeInit } = require('./init.cjs');
 
 test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-plugins-'));
@@ -115,6 +115,9 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     await page.getByText('missing: Plugin is not installed', { exact: true }).waitFor();
     await page.getByText('files: Plugin is not installed', { exact: true }).waitFor();
     assert.equal(await page.locator('.plugin-error[data-plugin=syntax]').count(), 1);
+    // None of these plugins provides workspaces, so the "+" has nothing to offer.
+    await openWorkspaceMenu(page);
+    await page.locator('#workspace-row-menu').getByText('没有可用的工作区', { exact: true }).waitFor();
     await desktop.close(); desktop = undefined;
     for (const name of ['alpha', 'beta']) {
       assert.equal(readFileSync(join(home, '.local/shared/wangcai/data', name, 'cleaned'), 'utf8'), 'yes');

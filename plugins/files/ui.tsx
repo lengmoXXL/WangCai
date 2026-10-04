@@ -7,9 +7,9 @@ import 'monaco-editor/basic-languages/monaco.contribution.js';
 import 'monaco-editor/languages/features/json/jsonMode.js';
 import { jsonDefaults } from 'monaco-editor/languages/features/json/register.js';
 import 'monaco-editor/editor/contrib/find/browser/findController.js';
-import type { DirectoryEntry, Theme } from '@wangcai/sdk';
+import type { DirectoryEntry, Theme, WorkspaceActive } from '@wangcai/sdk';
 import type { Context } from '@wangcai/sdk/channel';
-import type { ActiveTerminal, FileClick, Font, Settings } from './shared';
+import type { FileClick, Font, Settings } from './shared';
 import './style.css';
 
 export const title = '文件';
@@ -138,13 +138,13 @@ function Directory({ context, location }: { context: Context; location: { machin
 }
 
 function DirectoryView({ context, workspaceId }: { context: Context; workspaceId?: string }) {
-  const [terminal, setTerminal] = useState<ActiveTerminal | null>(null);
+  const [terminal, setTerminal] = useState<WorkspaceActive | null>(null);
   useEffect(() => {
-    const off = context.global.subscribe<ActiveTerminal | null>('terminal:active', (value) => {
+    const off = context.global.subscribe<WorkspaceActive | null>('workspace:active', (value) => {
       if (workspaceId !== undefined && value !== null && value.workspaceId !== workspaceId) return;
       setTerminal(value);
     });
-    void context.global.publish('terminal:query', null);
+    void context.global.publish('workspace:query', null);
     return off;
   }, [context, workspaceId]);
   return <Directory key={`${terminal?.machine.id}:${terminal?.sessionId}`} context={context} location={terminal} />;
@@ -208,8 +208,8 @@ export async function mount(_container: HTMLElement, context: Context) {
     workers.add(worker);
     return worker;
   } };
-  const offActive = context.global.subscribe<ActiveTerminal | null>('terminal:active', (value) => { activeWorkspaceId = value?.workspaceId; });
-  void context.global.publish('terminal:query', null);
+  const offActive = context.global.subscribe<WorkspaceActive | null>('workspace:active', (value) => { activeWorkspaceId = value?.workspaceId; });
+  void context.global.publish('workspace:query', null);
   const off = context.global.subscribe<FileClick>('onclick', (file) => {
     if (file.type !== 'file' && file.type !== 'directory') return;
     void context.host.request('tabs', {

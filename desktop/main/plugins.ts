@@ -9,6 +9,7 @@ import { denied, type Dispose, type PluginInfo } from '../shared';
 import { pluginDirectory, type PluginSpec } from './config';
 
 // A schema is an object of leaves, each naming the type it takes and the default to use without one.
+// An 'array' leaf takes whatever list init.ts holds and leaves its entries to the plugin to check.
 // Only keys the schema lists survive, so a plugin decides for itself which config it accepts.
 function resolveConfig(schema: unknown, values: unknown): Record<string, unknown> {
   const settings: Record<string, unknown> = {};
@@ -17,8 +18,9 @@ function resolveConfig(schema: unknown, values: unknown): Record<string, unknown
   for (const [key, entry] of Object.entries(schema as Record<string, unknown>)) {
     if (typeof entry !== 'object' || entry === null) continue;
     const declared = entry as { type?: unknown; default?: unknown };
-    if (typeof declared.type === 'string') {
-      const value = typeof given[key] === declared.type ? given[key] : declared.default;
+    if (declared.type === 'array' || typeof declared.type === 'string') {
+      const matches = declared.type === 'array' ? Array.isArray(given[key]) : typeof given[key] === declared.type;
+      const value = matches ? given[key] : declared.default;
       if (value !== undefined) settings[key] = value;
       continue;
     }
@@ -64,12 +66,14 @@ export async function loadPlugins(sdkPath: string, resourcesDirectory: string, b
       const localRequire = createRequire(filename);
       // Prebuilt plugins use the host SDK so its connection pool stays shared across plugins.
       const pluginRequire = Object.assign((name: string) => name === '@wangcai/sdk' ? requirePlugin(sdkPath) : localRequire(name), localRequire);
-      const module = { exports: {} as { activate(context: Context): void | Dispose | Promise<void | Dispose>; config?: unknown } };
+      const module = { exports: {} as { activate(context: Context): void | Dispose | Promise<void | Dispose>; config?: unknown; workspaces?: unknown } };
       compileFunction(readFileSync(filename, 'utf8'), ['require', 'module', 'exports', '__filename', '__dirname'], { filename })
         .call(module.exports, pluginRequire, module, module.exports, filename, dirname(filename));
       // The app knows nothing about the fields a plugin takes.
       const settings = resolveConfig(module.exports.config, spec.config);
       info.config = settings;
+      // The window asks a plugin that claims workspaces what "+" can open.
+      info.workspaces = module.exports.workspaces === true;
       const dataDirectory = join(homedir(), '.local/shared/wangcai/data', id);
       const logDirectory = join(homedir(), '.local/shared/wangcai/logs', id);
       mkdirSync(dataDirectory, { recursive: true });

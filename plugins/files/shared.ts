@@ -11,9 +11,3 @@ export interface FileClick {
   line?: number;
   column?: number;
 }
-
-export interface ActiveTerminal {
-  machine: FileClick['machine'];
-  sessionId: string;
-  workspaceId?: string;
-}

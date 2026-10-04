@@ -1,4 +1,31 @@
 export interface AgentInfo { version: string; prefix: string }
+
+/**
+ * The workspace protocol. A plugin whose main module declares `export const workspaces = true` is a
+ * workspace provider, and the app drives it through these `ui` methods:
+ *
+ *   workspaces()              -> WorkspaceRow[]        one flat row per workspace, in draw order
+ *   workspace-menu()          -> WorkspaceMenuItem[]   what "+" offers to open; an entry that carries
+ *                                                      an error stays listed but is not clickable
+ *   workspace-create({ key }) -> { id: string }        the id of the workspace it made
+ *   workspace-select({ id })
+ *   workspace-close({ id })
+ *   workspace-move({ id, before? })
+ *
+ * Every view that follows the workspace in front shares these channel topics, whatever the provider
+ * behind it is:
+ *
+ *   'workspaces'       a provider published that its rows changed
+ *   'workspace:active' the workspace in front, or null; published by its provider
+ *   'workspace:query'  a view asks for 'workspace:active' again
+ */
+export interface WorkspaceRow { id: string; label: string; machine: string; running: boolean }
+export interface WorkspaceMenuItem { key: string; label: string; hint?: string; error?: string }
+export interface WorkspaceActive {
+  machine: { id: string; name: string; host?: string };
+  sessionId: string;
+  workspaceId: string;
+}
 export type ConnectionOptions = { type: 'local'; binary?: string; signal?: AbortSignal } | { type: 'ssh'; host: string; agent?: AgentInfo; signal?: AbortSignal };
 export interface Size { rows: number; cols: number }
 export interface Session extends Size { id: string; title: string; pid: number; exit_code: number | null }

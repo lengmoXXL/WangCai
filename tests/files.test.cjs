@@ -6,7 +6,7 @@ const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
-const { writeInit } = require('./init.cjs');
+const { createWorkspace, waitForShell, writeInit } = require('./init.cjs');
 
 test('view picker browses current terminal directory; file links preview code, Markdown and HTML', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-files-')));
@@ -31,13 +31,12 @@ test('view picker browses current terminal directory; file links preview code, M
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-    await page.locator('.machine.connected').click({ button: 'right' });
-    await page.getByRole('menuitem', { name: /新建工作区/ }).click();
-    const sessionId = await page.waitForFunction(async () => (await window.wangcai.request('workspace', 'config')).workspaces[0]?.sessionId).then((handle) => handle.jsonValue());
+    await createWorkspace(page);
+    const sessionId = await page.evaluate(async () => (await window.wangcai.request('terminal-agent', 'config')).workspaces[0].sessionId);
     const clickLink = async (link, label = link, cwd = home) => {
       const output = label === link ? link : `\\033]8;;${link}\\007${label}\\033]8;;\\007`;
       const command = `cd '${cwd}'; printf '\\033[2J\\033[H%b\\n' '${output}'\r`;
-      await page.evaluate(({ id, command }) => window.wangcai.request('workspace', 'pty', { id: 'local', op: 'input', params: { session_id: id, data: command } }), { id: sessionId, command });
+      await page.evaluate(({ id, command }) => window.wangcai.request('terminal-agent', 'pty', { id: 'local', op: 'input', params: { session_id: id, data: command } }), { id: sessionId, command });
       const row = page.locator('.terminal-pane.active .xterm-rows > div').filter({ hasText: label }).first();
       await page.waitForFunction(label => document.querySelector('.terminal-pane.active .xterm-rows > div')?.textContent.trim() === label, label);
       const point = await row.evaluate((element, label) => {
@@ -182,7 +181,7 @@ test('view picker browses current terminal directory; file links preview code, M
     const beforeMissing = await fileTabs.getByRole('tab').count();
     await page.evaluate(() => { window.missingClicks = []; window.wangcai.subscribe('onclick', data => window.missingClicks.push(data)); });
     await clickLink(pathToFileURL(join(home, 'missing.ts')).href, 'MISSING_LINK');
-    await page.evaluate(({ sessionId, path }) => window.wangcai.request('workspace', 'click', { id: 'local', sessionId, location: { path } }), { sessionId, path: 'missing.ts' });
+    await page.evaluate(({ sessionId, path }) => window.wangcai.request('terminal-agent', 'click', { id: 'local', sessionId, location: { path } }), { sessionId, path: 'missing.ts' });
     assert.deepEqual(await page.evaluate(() => window.missingClicks), []);
     assert.equal(await fileTabs.getByRole('tab').count(), beforeMissing);
     assert.equal(await page.getByRole('alert').filter({ hasText: 'No such file' }).count(), 0);
@@ -203,21 +202,20 @@ test('view picker browses current terminal directory; file links preview code, M
     await page.locator('#view-menu').getByRole('button', { name: '文件', exact: true }).click();
     await directory.getByRole('button', { name: 'sample.ts', exact: true }).waitFor();
     await page.screenshot({ path: 'tests/dist/screenshots/files-browser.png' });
-    await page.evaluate(({ id, path }) => window.wangcai.request('workspace', 'pty', { id: 'local', op: 'input', params: { session_id: id, data: `cd '${path}'\r` } }), { id: sessionId, path: join(home, 'sub') });
+    await page.evaluate(({ id, path }) => window.wangcai.request('terminal-agent', 'pty', { id: 'local', op: 'input', params: { session_id: id, data: `cd '${path}'\r` } }), { id: sessionId, path: join(home, 'sub') });
     await page.waitForFunction(async ({ id, path }) => {
       const result = await window.wangcai.request('files', 'list', { machine: { id: 'local', name: '本机' }, sessionId: id });
       return result.path === path;
     }, { id: sessionId, path: join(home, 'sub') });
-    await page.getByRole('tablist', { name: '本机 工作区' }).getByRole('tab').filter({ hasText: 'sub' }).waitFor();
+    await page.getByRole('tablist', { name: '工作区' }).getByRole('tab').filter({ hasText: 'sub' }).waitFor();
     await page.getByRole('button', { name: '新建侧栏标签页' }).click();
     await page.locator('#view-menu').getByRole('button', { name: '文件', exact: true }).click();
     await page.getByText('空目录', { exact: true }).waitFor();
-    await page.locator('.machine.connected').click({ button: 'right' });
-    await page.getByRole('menuitem', { name: /新建工作区/ }).click();
+    await createWorkspace(page);
     await page.getByRole('button', { name: '新建侧栏标签页' }).click();
     await page.locator('#view-menu').getByRole('button', { name: '文件', exact: true }).click();
     await directory.getByRole('button', { name: 'sample.ts', exact: true }).waitFor();
-    await page.getByRole('tablist', { name: '本机 工作区' }).getByRole('tab').first().click();
+    await page.getByRole('tablist', { name: '工作区' }).getByRole('tab').first().click();
     await page.getByText('空目录', { exact: true }).waitFor();
     await page.screenshot({ path: 'tests/dist/screenshots/files-directory.png' });
     writeFileSync(join(home, 'sub', 'inside.md'), '# Directory link preview');
@@ -230,7 +228,7 @@ test('view picker browses current terminal directory; file links preview code, M
     await page.getByRole('navigation', { name: '当前目录文件' }).getByRole('button', { name: 'inside.md', exact: true }).waitFor();
     await fileTabs.getByRole('tab', { name: '文件', exact: true }).click();
     await page.getByRole('navigation', { name: '当前目录文件' }).getByRole('button', { name: 'sample.ts', exact: true }).waitFor();
-    assert.equal((await page.evaluate(() => window.wangcai.request('workspace', 'config'))).workspaces[0].sessionId, sessionId);
+    assert.equal((await page.evaluate(() => window.wangcai.request('terminal-agent', 'config'))).workspaces[0].sessionId, sessionId);
     assert.deepEqual(errors, []);
     assert.equal(await page.evaluate(() => document.documentElement.scrollTop), 0);
     await desktop.close(); desktop = undefined;
@@ -242,9 +240,14 @@ test('view picker browses current terminal directory; file links preview code, M
     env.ELECTRON_RENDERER_URL = `http://127.0.0.1:${devServer.httpServer.address().port}`;
     desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
     page = await desktop.firstWindow();
-    await page.locator('.machine.connected').waitFor();
-    await page.evaluate(path => window.wangcai.publish('onclick', { type: 'file', machine: { id: 'local', name: '本机' }, path }), code);
-    await page.locator('.monaco-editor .view-lines').filter({ hasText: 'CODE_PREVIEW' }).waitFor();
+    await waitForShell(page);
+    // A plugin subscribes to clicks as it mounts, so the click is repeated until its preview answers.
+    const preview = page.locator('.monaco-editor .view-lines').filter({ hasText: 'CODE_PREVIEW' });
+    for (let attempt = 0; attempt < 100 && !await preview.count(); attempt++) {
+      await page.evaluate(path => window.wangcai.publish('onclick', { type: 'file', machine: { id: 'local', name: '本机' }, path }), code);
+      await page.waitForTimeout(100);
+    }
+    await preview.waitFor();
   } finally {
     await desktop?.close();
     await devServer?.close();

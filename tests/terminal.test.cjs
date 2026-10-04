@@ -6,7 +6,7 @@ const { mkdtempSync, mkdirSync, readFileSync, rmSync, realpathSync } = require('
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { writeInit } = require('./init.cjs');
+const { createWorkspace, waitForShell, writeInit } = require('./init.cjs');
 
 test('the terminal view opens its own shell in the sidebar, reattaches it and kills it when closed', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-terminal-')));
@@ -28,7 +28,7 @@ test('the terminal view opens its own shell in the sidebar, reattaches it and ki
   const launch = async () => {
     desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
     const page = await desktop.firstWindow();
-    await page.locator('.machine.connected').waitFor();
+    await waitForShell(page);
     return page;
   };
   const openView = async (page, name) => {
@@ -56,10 +56,9 @@ test('the terminal view opens its own shell in the sidebar, reattaches it and ki
     assert.equal(await notice.textContent(), '请先打开一个工作区终端', 'without a workspace terminal the view explains itself');
     await page.getByRole('button', { name: '关闭 终端' }).click();
 
-    await page.locator('.machine.connected').click({ button: 'right' });
-    await page.getByRole('menuitem', { name: /新建工作区/ }).click();
-    const workspaceSession = await page.waitForFunction(async () => (await window.wangcai.request('workspace', 'config')).workspaces[0]?.sessionId).then((handle) => handle.jsonValue());
-    await typeUntil(page, '.terminal-pane.active .xterm-helper-textarea', `cd '${directory}'`, async () => await page.getByRole('tablist', { name: '本机 工作区', exact: true }).getByRole('tab').filter({ hasText: '示例 project' }).count() > 0);
+    await createWorkspace(page);
+    const workspaceSession = await page.evaluate(async () => (await window.wangcai.request('terminal-agent', 'config')).workspaces[0].sessionId);
+    await typeUntil(page, '.terminal-pane.active .xterm-helper-textarea', `cd '${directory}'`, async () => await page.getByRole('tablist', { name: '工作区', exact: true }).getByRole('tab').filter({ hasText: '示例 project' }).count() > 0);
 
     await openView(page, '终端');
     const panel = '.sidebar-panel[data-plugin=terminal]:visible';
@@ -99,7 +98,7 @@ test('the terminal view opens its own shell in the sidebar, reattaches it and ki
     await desktop.close(); desktop = undefined;
 
     page = await launch();
-    await page.getByRole('tablist', { name: '本机 工作区', exact: true }).getByRole('tab').waitFor();
+    await page.getByRole('tablist', { name: '工作区', exact: true }).getByRole('tab').waitFor();
     assert.equal(await page.locator('.sidebar-panel[data-plugin=terminal]').count(), 0, 'a closed tab is not restored');
   } finally {
     await desktop?.close();

@@ -8,7 +8,7 @@ export const previewScheme = 'wangcai-preview';
 export const previewUrl = `${previewScheme}://preview/`;
 export const previewMessage = 'wangcai-preview';
 
-export interface PluginInfo { id: string; config: Record<string, unknown>; ui?: string; css?: string; error?: string }
+export interface PluginInfo { id: string; config: Record<string, unknown>; ui?: string; css?: string; error?: string; workspaces?: boolean }
 
 // What a plugin init.ts lists is doing, as the manager page reports it.
 export type InstallStage = 'cloning' | 'installing' | 'building' | 'ready' | 'failed';

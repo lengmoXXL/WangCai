@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { _electron: electron } = require('playwright');
-const { writeInit } = require('./init.cjs');
+const { createWorkspace, waitForShell, writeInit } = require('./init.cjs');
 const { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
@@ -19,14 +19,14 @@ test('packaged app carries its plugins, previews files and prefers plugins from 
     return desktop.firstWindow();
   };
   try {
-    writeInit(home, [{ id: 'workspace' }, { id: 'files' }, { id: 'terminal' }]);
+    writeInit(home, [{ id: 'terminal-agent' }, { id: 'files' }, { id: 'terminal' }]);
     assert.equal(execFileSync('plutil', ['-extract', 'CFBundleName', 'raw', join(bundle, 'Info.plist')], { encoding: 'utf8' }).trim(), '旺财');
     page = await launch();
-    await page.locator('.machine.connected').waitFor();
-    const baseSpacing = await page.locator('.wangcai-workspace .sidebar-header').evaluate((element) => getComputedStyle(element).letterSpacing);
+    await waitForShell(page);
+    const baseSpacing = await page.locator('.desktop-main .plugin[data-plugin=terminal-agent]').evaluate((element) => getComputedStyle(element).letterSpacing);
     // The app carries prebuilt plugins and never installs or compiles them into the user's home.
     assert.equal(existsSync(join(home, '.local/shared/wangcai/plugins')), false);
-    for (const id of ['workspace', 'files', 'terminal']) {
+    for (const id of ['terminal-agent', 'files', 'terminal']) {
       assert.equal(existsSync(join(bundle, 'Resources/plugins', id, 'main.cjs')), true);
       assert.equal(existsSync(join(bundle, 'Resources/plugins', id, 'ui.js')), true);
     }
@@ -49,15 +49,13 @@ test('packaged app carries its plugins, previews files and prefers plugins from 
     await page.getByRole('button', { name: '关闭 packaged.ts' }).click();
     await desktop.close(); desktop = undefined;
     // A plugin in the config directory wins over the one the app ships.
-    const override = join(home, '.config/wangcai/plugins/workspace');
-    cpSync(join(bundle, 'Resources/plugins/workspace'), override, { recursive: true });
-    writeFileSync(join(override, 'ui.css'), `${readFileSync(join(override, 'ui.css'), 'utf8')}\n.wangcai-workspace .sidebar-header { letter-spacing: 7px; }\n`);
+    const override = join(home, '.config/wangcai/plugins/terminal-agent');
+    cpSync(join(bundle, 'Resources/plugins/terminal-agent'), override, { recursive: true });
+    writeFileSync(join(override, 'ui.css'), `${readFileSync(join(override, 'ui.css'), 'utf8')}\n.desktop-main .plugin[data-plugin=terminal-agent] { letter-spacing: 7px; }\n`);
     page = await launch();
-    assert.equal(await page.locator('.wangcai-workspace .sidebar-header').evaluate((element) => getComputedStyle(element).letterSpacing), '7px');
+    assert.equal(await page.locator('.desktop-main .plugin[data-plugin=terminal-agent]').evaluate((element) => getComputedStyle(element).letterSpacing), '7px');
     assert.equal(existsSync(join(home, '.cache/wangcai')), false);
-    await page.locator('.machine.connected').click({ button: 'right' });
-    await page.getByRole('menuitem', { name: /新建工作区/ }).click();
-    await page.getByRole('tablist', { name: '本机 工作区' }).getByRole('tab').waitFor();
+    await createWorkspace(page);
     await page.locator('.terminal-pane.active .xterm-helper-textarea').focus();
     await page.keyboard.type("printf 'PACKAGED_%s\\n' success");
     await page.keyboard.press('Enter');
@@ -66,15 +64,15 @@ test('packaged app carries its plugins, previews files and prefers plugins from 
     await desktop.close(); desktop = undefined;
     rmSync(override, { recursive: true });
     page = await launch();
-    await page.locator('.machine.connected').waitFor();
-    assert.equal(await page.locator('.wangcai-workspace .sidebar-header').evaluate((element) => getComputedStyle(element).letterSpacing), baseSpacing);
+    await waitForShell(page);
+    assert.equal(await page.locator('.desktop-main .plugin[data-plugin=terminal-agent]').evaluate((element) => getComputedStyle(element).letterSpacing), baseSpacing);
     await desktop.close(); desktop = undefined;
     // A fresh install has no init.ts: the app writes the default one and loads its own plugins with it.
     rmSync(join(home, '.config/wangcai/init.ts'));
     page = await launch();
-    await page.locator('.machine.connected').waitFor();
-    assert.match(readFileSync(join(home, '.config/wangcai/init.ts'), 'utf8'), /plugins: \[\n    \{ id: 'workspace' \}/);
-    assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)), ['files', 'terminal', 'workspace']);
+    await waitForShell(page);
+    assert.match(readFileSync(join(home, '.config/wangcai/init.ts'), 'utf8'), /plugins: \[\n    \{ id: 'terminal-agent' \}/);
+    assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)), ['files', 'terminal', 'terminal-agent']);
     assert.equal(await page.locator('.plugin-error').count(), 0);
   } finally {
     await desktop?.close();

@@ -4,7 +4,6 @@ export type { Session } from '@wangcai/sdk';
 // The config this plugin accepts: main.ts declares a schema for the same fields.
 export type Font = { family: string; size: number; lineHeight: number };
 export type Settings = Profile & { font: Font };
-
 export interface Machine { id: string; name: string; host?: string }
 export interface FileClick {
   type: 'file' | 'directory';
@@ -24,18 +23,12 @@ export interface TerminalEvent {
   rows?: number;
   cols?: number;
 }
-export interface Config { machines: Machine[]; workspaces: Workspace[]; selected: string }
+export interface Config { workspaces: Workspace[]; active?: string }
 export interface WangcaiAPI {
   click(machineId: string, sessionId: string, location: Pick<FileClick, 'path' | 'line' | 'column'>): Promise<void>;
   config(): Promise<Config>;
-  saveMachine(machine: { id?: string; name: string; host: string }): Promise<Config>;
-  removeMachine(id: string): Promise<Config>;
-  selectMachine(id: string): Promise<void>;
-  connect(id: string): Promise<MachineState>;
-  disconnect(id: string): Promise<void>;
-  openWorkspace(machineId: string, workspaceId?: string): Promise<{ config: Config; workspaceId: string }>;
-  closeWorkspace(id: string): Promise<Config>;
-  moveWorkspace(id: string, before?: string): Promise<Config>;
+  states(): Promise<MachineState[]>;
+  selectWorkspace(id: string): Promise<void>;
   pty(machineId: string, op: string, params?: Record<string, unknown>): Promise<unknown>;
   onConfig(callback: (config: Config) => void): () => void;
   onState(callback: (state: MachineState) => void): () => void;

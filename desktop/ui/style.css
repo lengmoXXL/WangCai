@@ -12,7 +12,27 @@ body { background: var(--wc-background); color: var(--wc-foreground); font-famil
 .sidebar-left { position: relative; padding-top: 36px; background: var(--wc-surface); -webkit-app-region: drag; }
 .sidebar-left::after { content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 1px; background: var(--wc-border); pointer-events: none; }
 html[data-fullscreen] .sidebar-left { padding-top: 0; }
-.sidebar-slot { flex: 1; min-height: 0; -webkit-app-region: no-drag; }
+/* The heading sits a little left of the rows below, so the list reads as one level in. */
+.workspace-header { flex-shrink: 0; display: flex; align-items: center; height: 24px; padding: 0 4px 0 8px; color: var(--wc-muted); font-size: 12px; font-weight: 600; -webkit-app-region: no-drag; }
+.workspace-add { margin-left: auto; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--wc-muted); font-size: 15px; font-weight: 400; line-height: 1; cursor: pointer; }
+.workspace-add:hover { background: var(--wc-overlay); color: var(--wc-foreground); }
+.workspace-add:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: -1px; }
+.workspaces { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 0 8px; -webkit-app-region: no-drag; }
+/* A bar here would take its width out of the rows, which run to the column hairline; the list still scrolls by wheel. */
+.workspaces::-webkit-scrollbar { display: none; }
+.workspace { display: flex; gap: 7px; align-items: center; height: 24px; padding: 0 8px 0 12px; color: var(--wc-muted); font-size: 12px; cursor: pointer; }
+.workspace:hover { background: var(--wc-overlay); }
+/* The hairline cannot be a border (layout), a box-shadow (drag indicator) or an outline (focus ring), so it is a pseudo-element. */
+.workspace.selected { position: relative; color: var(--wc-foreground); background: var(--wc-background); border-radius: 6px 0 0 6px; }
+.workspace.selected::after { content: ''; position: absolute; inset: 0; border: 1px solid var(--wc-border); border-radius: inherit; pointer-events: none; }
+.workspace .glyph { flex-shrink: 0; color: var(--wc-muted); fill: none; stroke: currentColor; stroke-width: 1.1; }
+.workspace.running .glyph { color: var(--wc-foreground); }
+.workspace .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace[data-drop=before] { box-shadow: inset 0 2px 0 var(--wc-accent); }
+.workspace[data-drop=after] { box-shadow: inset 0 -2px 0 var(--wc-accent); }
+.workspace[data-drop=before]::after { border-top-color: transparent; }
+.workspace[data-drop=after]::after { border-bottom-color: transparent; }
+.workspace:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: -2px; }
 /* A bar in the tab strip would take its height out of the tabs, so the strip scrolls with no bar of its own. */
 .sidebar-tabs::-webkit-scrollbar { display: none; }
 .sidebar-right .sidebar-content ::-webkit-scrollbar { width: 10px; height: 12px; }
@@ -52,9 +72,14 @@ html[data-fullscreen] .sidebar-left { padding-top: 0; }
 .view-picker, .sidebar-toggle { width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent; color: var(--wc-muted); cursor: pointer; -webkit-app-region: no-drag; }
 .view-picker { flex-shrink: 0; align-self: center; margin: 0 4px; font-size: 20px; }
 .sidebar-toggle { position: fixed; top: 4px; right: 6px; z-index: 4; background: var(--wc-surface); }
-.view-menu { position: fixed; inset: auto; margin: 0; padding: 4px; min-width: 120px; border: 1px solid var(--wc-border); border-radius: 5px; background: var(--wc-overlay); color: var(--wc-foreground); }
-.view-menu button { display: block; width: 100%; border: 0; border-radius: 3px; padding: 7px 10px; background: transparent; color: inherit; text-align: left; font-size: 12px; cursor: pointer; }
-.view-menu button:hover, .view-picker:hover, .sidebar-toggle:hover { background: var(--wc-overlay); }
+/* A menu that a right-click opens carries a scrim, because the click that opened it would dismiss a popover. */
+.menu-scrim { position: fixed; inset: 0; z-index: 5; -webkit-app-region: no-drag; }
+.view-menu { position: fixed; inset: auto; margin: 0; padding: 4px; min-width: 120px; border: 1px solid var(--wc-border); border-radius: 5px; background: var(--wc-background); color: var(--wc-foreground); }
+.view-menu button { display: flex; gap: 12px; width: 100%; border: 0; border-radius: 3px; padding: 7px 10px; background: transparent; color: inherit; text-align: left; font-size: 12px; cursor: pointer; }
+.view-menu button span { margin-left: auto; color: var(--wc-muted); font-size: 11px; }
+.view-menu button:disabled { color: var(--wc-muted); cursor: default; }
+.view-menu .menu-empty { margin: 0; padding: 7px 10px; color: var(--wc-muted); font-size: 12px; }
+.view-menu button:hover:not(:disabled), .view-picker:hover, .sidebar-toggle:hover { background: var(--wc-overlay); }
 .view-menu button:focus-visible, .view-picker:focus-visible, .sidebar-toggle:focus-visible { outline: 2px solid var(--wc-accent); }
 
 .installs { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; gap: 12px; padding: 32px 24px 20px; background: var(--wc-background); overflow: auto; }

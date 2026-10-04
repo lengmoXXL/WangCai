@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { connect, type AgentInfo, type MachineConnection, type Pty } from '@wangcai/sdk';
+import { connect, type AgentInfo, type MachineConnection, type Pty, type WorkspaceActive } from '@wangcai/sdk';
 import type { Context } from '@wangcai/sdk/channel';
-import type { ActiveTerminal, Machine, TerminalRef } from './shared';
+import type { Machine, TerminalRef } from './shared';
 
 // Which fields this plugin takes from init.ts, and the default each one falls back to.
 export const config = {
@@ -54,7 +54,7 @@ export async function activate(context: Context) {
     return { machine, sessionId, label: await label(machine, node, cwd) };
   }
 
-  handlers.push(context.ui.handle('open', async ({ machine, sessionId }: ActiveTerminal) => {
+  handlers.push(context.ui.handle('open', async ({ machine, sessionId }: WorkspaceActive) => {
     const node = await connection(machine);
     const session = await node.pty.create({ rows: 24, cols: 80 }, await node.pty.cwd(sessionId));
     sessions[session.id] = machine;
@@ -66,7 +66,7 @@ export async function activate(context: Context) {
     if (!machine) throw new Error('这个终端已经找不到了');
     return ref(machine, sessionId);
   }));
-  handlers.push(context.ui.handle('attach', async ({ machine, sessionId }: ActiveTerminal) => {
+  handlers.push(context.ui.handle('attach', async ({ machine, sessionId }: WorkspaceActive) => {
     const terminal = await (await connection(machine)).pty.attach(sessionId);
     terminals.set(sessionId, terminal);
     terminal.onSnapshot((event) => { void context.ui.publish('terminal', { ...event, event: 'snapshot', session_id: terminal.id }); });

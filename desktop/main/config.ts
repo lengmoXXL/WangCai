@@ -81,7 +81,7 @@ function mergePlugins(input: unknown): PluginSpec[] {
 
 // What a fresh install starts with: the plugins the app ships.
 export const DEFAULT_PLUGINS: PluginSpec[] = [
-  { id: 'workspace' },
+  { id: 'terminal-agent' },
   { id: 'files' },
   { id: 'terminal' },
 ];

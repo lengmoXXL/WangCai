@@ -2,16 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { TerminalEvent } from '@wangcai/sdk';
+import type { TerminalEvent, WorkspaceActive } from '@wangcai/sdk';
 import type { Context } from '@wangcai/sdk/channel';
-import type { ActiveTerminal, Machine, Settings, TerminalRef } from './shared';
+import type { Machine, Settings, TerminalRef } from './shared';
 import '@xterm/xterm/css/xterm.css';
 import './style.css';
 
 export const title = '终端';
 
 let profile: Settings;
-let activeTerminal: ActiveTerminal | null = null;
+let activeTerminal: WorkspaceActive | null = null;
 
 function TerminalPane({ context, machine, sessionId, activation }: { context: Context; machine: Machine; sessionId: string; activation: number }) {
   const element = useRef<HTMLDivElement>(null);
@@ -142,7 +142,7 @@ export async function restore(context: Context, record: { id: string; workspaceI
 
 export async function mount(_container: HTMLElement, context: Context) {
   profile = await context.host.request<Settings>('config');
-  const off = context.global.subscribe<ActiveTerminal | null>('terminal:active', (value) => { activeTerminal = value; });
-  void context.global.publish('terminal:query', null);
+  const off = context.global.subscribe<WorkspaceActive | null>('workspace:active', (value) => { activeTerminal = value; });
+  void context.global.publish('workspace:query', null);
   return off;
 }
