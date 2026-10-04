@@ -12,7 +12,9 @@ test('packaged app carries its plugins, previews files and prefers plugins from 
   const env = { ...process.env, HOME: home, PATH: '/usr/bin:/bin' };
   delete env.ELECTRON_RUN_AS_NODE;
   let desktop;
-  const bundle = resolve('desktop/dist/package/mac/旺财.app/Contents');
+  // electron-builder names the directory after the architecture it was told to build, and the plain
+  // `mac` one only when it was told nothing.
+  const bundle = resolve(process.env.WANGCAI_APP_DIR ?? 'desktop/dist/package/mac', '旺财.app/Contents');
   let page;
   const launch = async () => {
     desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/旺财'), args: [`--user-data-dir=${join(home, 'electron')}`], env });

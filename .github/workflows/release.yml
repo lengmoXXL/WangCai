@@ -86,6 +86,8 @@ jobs:
       # The runner is arm64, so this leg starts the app it just built; the x64 app cannot run here.
       - name: Check the packaged app itself
         if: matrix.arch == 'arm64'
+        env:
+          WANGCAI_APP_DIR: desktop/dist/package/mac-arm64
         run: node --test tests/package.cjs
       - uses: actions/upload-artifact@v4
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
