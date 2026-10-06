@@ -9,7 +9,7 @@ import { jsonDefaults } from 'monaco-editor/languages/features/json/register.js'
 import 'monaco-editor/editor/contrib/find/browser/findController.js';
 import type { DirectoryEntry, Theme, WorkspaceActive } from '@wangcai/sdk';
 import type { TabRecord, UiContext } from '@wangcai/sdk/channel';
-import type { FileClick, Font, Settings } from './shared';
+import { imageMime, type FileClick, type Font, type Settings } from './shared';
 import './style.css';
 
 export const title = '文件';
@@ -161,7 +161,8 @@ function FileView({ context, file }: { context: UiContext; file: FileClick }) {
   }, [context, file]);
   const markdown = /\.(md|markdown)$/i.test(file.path);
   const html = /\.html?$/i.test(file.path);
-  const modes: Mode[] = ['text', ...(markdown ? ['markdown' as const] : []), ...(html ? ['html' as const] : [])];
+  const image = imageMime(file.path);
+  const modes: Mode[] = image ? [] : ['text', ...(markdown ? ['markdown' as const] : []), ...(html ? ['html' as const] : [])];
   const [mode, setMode] = useState<Mode>(html ? 'html' : markdown ? 'markdown' : 'text');
   return <section className="file-preview" aria-label="文件预览">
     <header className="preview-header">
@@ -170,6 +171,7 @@ function FileView({ context, file }: { context: UiContext; file: FileClick }) {
     </header>
     {error ? <div className="file-message" role="alert">{error}</div>
       : text === undefined ? <div className="file-message">正在读取…</div>
+      : image ? <div className="image-preview"><img src={text} alt={file.path} /></div>
       : <Preview file={file} text={text} mode={mode} />}
   </section>;
 }

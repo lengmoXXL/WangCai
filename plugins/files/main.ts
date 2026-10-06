@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { connect, type MachineConnection } from '@wangcai/sdk';
 import type { MainContext } from '@wangcai/sdk/channel';
-import type { FileClick } from './shared';
+import { imageMime, type FileClick } from './shared';
 
 // Which fields this plugin takes from init.ts, and the default each one falls back to.
 export const config = {
@@ -32,6 +32,8 @@ export function activate(context: MainContext) {
         return { path: directory, entries };
       }
       const bytes = await connection.fs.readFile(path!);
+      const image = imageMime(path!);
+      if (image) return `data:${image};base64,${Buffer.from(bytes).toString('base64')}`;
       let text: string;
       try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
       catch { throw new Error('暂不支持二进制或非 UTF-8 文件'); }

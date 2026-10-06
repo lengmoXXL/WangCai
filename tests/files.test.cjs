@@ -8,7 +8,7 @@ const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
 const { createWorkspace, waitForShell, writeInit } = require('./init.cjs');
 
-test('view picker browses current terminal directory; file links preview code, Markdown and HTML', { timeout: 180000 }, async () => {
+test('view picker browses current terminal directory; file links preview code, Markdown, HTML and images', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-files-')));
   const env = { ...process.env, HOME: home, WANGCAI_HOME: '', SHELL: '/bin/bash', ELECTRON_RENDERER_URL: '' };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -20,12 +20,14 @@ test('view picker browses current terminal directory; file links preview code, M
     const markdown = join(home, '说明 file.md');
     const binary = join(home, 'binary.bin');
     const html = join(home, 'page.html');
+    const image = join(home, 'photo.png');
     const json = join(home, 'settings.json');
     writeFileSync(json, '{"ready":true}');
     writeFileSync(code, 'const first = 1;\nconst second = "CODE_PREVIEW";\n');
     writeFileSync(markdown, '# Markdown preview\n\n**Rendered content**\n\n| Key | Value |\n| --- | --- |\n| a | b |\n\n```\n' + 'wide code block '.repeat(80) + '\n```\n\n<script>window.previewScriptRan = true</script>');
     writeFileSync(html, '<!doctype html>\n<!-- HTML_SOURCE -->\n<h1 id="heading">Rendered page</h1>\n<script>document.getElementById("heading").dataset.scripted = "yes"</script>\n');
     writeFileSync(binary, Buffer.from([0, 1, 255, 2]));
+    writeFileSync(image, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64'));
     desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
     let page = await desktop.firstWindow();
     const errors = [];
@@ -222,6 +224,13 @@ test('view picker browses current terminal directory; file links preview code, M
     await page.getByRole('heading', { name: 'Markdown preview' }).waitFor();
     await fileTabs.getByRole('tab', { name: '文件', exact: true }).click();
     await directory.getByRole('button', { name: 'sample.ts', exact: true }).waitFor();
+    await directory.getByRole('button', { name: 'photo.png', exact: true }).click();
+    const imagePanel = page.getByRole('tabpanel', { name: 'photo.png' });
+    const shownImage = imagePanel.locator('.image-preview img');
+    await shownImage.waitFor();
+    assert.match(await shownImage.getAttribute('src'), /^data:image\/png;base64,/);
+    assert.deepEqual(await shownImage.evaluate(async (element) => { await element.decode(); return [element.naturalWidth, element.naturalHeight]; }), [1, 1]);
+    assert.equal(await imagePanel.locator('.preview-mode').count(), 0);
     await page.getByRole('button', { name: '切换右侧栏' }).click();
     assert.equal(await page.locator('.sidebar-right').isVisible(), false);
     await page.getByRole('button', { name: '切换右侧栏' }).click();
