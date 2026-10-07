@@ -41,11 +41,16 @@ export const homeOverride = process.env.WANGCAI_HOME || undefined;
 export const homeDirectory = homeOverride ?? homedir();
 const configDirectory = join(homeDirectory, '.config/wangcai');
 export const storageDirectory = join(homeDirectory, '.local/share/wangcai');
+export const userDataDirectory = join(homeDirectory, 'electron');
+export const installsPath = join(storageDirectory, 'installs.json');
+export const tabsPath = join(storageDirectory, 'tabs.json');
+export const windowStatePath = join(storageDirectory, 'window-state.json');
 
 export type PluginSpec = { id: string; workspaces: boolean; repo?: string; commit?: string; directory?: string; config?: Record<string, unknown> };
 
 /** The directory a spec lives in: what init.ts names, else the user's plugin directory. */
 export const pluginDirectory = (spec: PluginSpec) => spec.directory ?? join(storageDirectory, 'plugins', spec.id);
+export const pluginDataDirectory = (id: string) => join(storageDirectory, 'data', id);
 
 type ProfileInput = {
   theme?: Record<string, unknown>;

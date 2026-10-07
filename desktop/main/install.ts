@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { pluginDirectory, type PluginSpec } from './config';
+import { installsPath, pluginDirectory, type PluginSpec } from './config';
 import type { InstallStage } from '../shared';
 
 // How far a repository got: the commit it was built from, so the next start rebuilds only what moved.
@@ -50,7 +50,7 @@ async function throughMirrors(repository: string, attempt: (url: string) => Prom
  * `node` is the runtime the app carries; the plugin's own build script decides what a build is.
  * Answers whether that changed anything about the checkout or its build.
  */
-export async function installPlugin(spec: PluginSpec, node: string, installsPath: string, onStage: (stage: InstallStage, message?: string) => void) {
+export async function installPlugin(spec: PluginSpec, node: string, onStage: (stage: InstallStage, message?: string) => void) {
   const directory = pluginDirectory(spec);
   const repository = spec.repo;
   if (!repository) return;

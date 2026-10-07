@@ -5,7 +5,7 @@ import { compileFunction } from 'node:vm';
 import type { AgentInfo, Profile } from '@lengmoxxl/sdk';
 import type { Dispose, MainContext } from '@lengmoxxl/sdk/channel';
 import type { PluginInfo } from '../shared';
-import { pluginDirectory, storageDirectory, type PluginSpec } from './config';
+import { pluginDataDirectory, pluginDirectory, type PluginSpec } from './config';
 import { connect } from './machines';
 
 // A schema is an object of leaves, each naming the type it takes and the default to use without one.
@@ -74,7 +74,7 @@ export async function loadPlugins(options: {
       const settings = resolveConfig(module.exports.config, spec.config);
       info.config = settings;
       info.workspaces = spec.workspaces;
-      const dataDirectory = join(storageDirectory, 'data', id);
+      const dataDirectory = pluginDataDirectory(id);
       mkdirSync(dataDirectory, { recursive: true });
       const context: MainContext = {
         connect: connectMachine,
