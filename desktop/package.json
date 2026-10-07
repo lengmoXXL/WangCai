@@ -1,6 +1,6 @@
 {
   "name": "wangcai-desktop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "旺财 — persistent terminals, local and remote",
   "main": "dist/main/index.js",
