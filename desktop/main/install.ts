@@ -60,7 +60,7 @@ export async function installPlugin(spec: PluginSpec, node: string, installsPath
   // A build of the commit init.ts pins is what the app is meant to run, so it starts from it without a
   // network at all.
   if (spec.commit && builtFrom(spec.commit)) {
-    onStage('ready');
+    onStage('ready', '无需更新');
     return false;
   }
   let worked = false;
@@ -108,6 +108,6 @@ export async function installPlugin(spec: PluginSpec, node: string, installsPath
     installs[spec.id] = { repo: repository, commit };
     writeFileSync(installsPath, JSON.stringify(installs, null, 2));
   }
-  onStage('ready');
+  onStage('ready', worked ? undefined : '无需更新');
   return worked;
 }

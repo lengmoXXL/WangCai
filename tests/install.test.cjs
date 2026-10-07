@@ -71,7 +71,7 @@ test('repository plugins are cloned, built and rebuilt when their commit moves',
     });
     await launch();
     assert.deepEqual(await stages(), [['terminal-agent', 'ready'], ['good', 'ready'], ['broken', 'failed']]);
-    assert.match(await page.locator('.installs .install-message').innerText(), /deadbeef/);
+    assert.match(await page.locator('.installs li[data-stage=failed] .install-message').innerText(), /deadbeef/);
     // The plugin that did not install is not loaded at all: no error panel, and the rest of the app runs.
     assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map(({ id, error }) => [id, Boolean(error)])), [['good', false], ['terminal-agent', false]]);
     assert.equal(await page.locator('.plugin-error').count(), 0);
@@ -119,6 +119,28 @@ test('a plugin that failed is installed again from the entry its row offers', { 
     await page.locator('[data-plugin=later]').waitFor();
     assert.equal(await page.locator('[data-plugin=later]').getAttribute('data-revision'), 'later one');
     assert.equal(await page.locator('.installs').isVisible(), false);
+  } finally {
+    await desktop?.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a plugin already at the commit init.ts pins reports that there is nothing to do', { timeout: 180000 }, async () => {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-pinned-')));
+  const env = testEnv(home);
+  const pinned = makePluginRepo(home, 'pinned');
+  // The commit is what makes this entry a pinned one.
+  writeInit(home, { tabs: [{ id: 'pinned', repo: pinned.directory, commit: pinned.commit }] });
+  let desktop;
+  try {
+    desktop = await launchApp(home, env);
+    const page = await desktop.firstWindow();
+    await page.locator('[data-plugin=pinned]').waitFor();
+    await desktop.evaluate(({ Menu }) => Menu.getApplicationMenu().items.flatMap((item) => item.submenu.items).find((item) => item.label === '插件').click());
+    const row = page.locator('.installs li[data-stage=ready]');
+    await row.waitFor();
+    await row.getByRole('button', { name: '更新' }).click();
+    await row.locator('.install-message').filter({ hasText: '无需更新' }).waitFor();
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });
