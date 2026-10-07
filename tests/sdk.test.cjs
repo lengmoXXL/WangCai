@@ -7,7 +7,7 @@ const { execFileSync } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
 const { buildSync } = require('esbuild');
 const { Module } = require('node:module');
-const { connect } = require('../sdk/dist/index.cjs');
+const { openMachine } = require('../sdk/dist/index.cjs');
 
 async function until(check) {
   for (let i = 0; i < 150; i++) { if (check()) return; await delay(40); }
@@ -31,27 +31,17 @@ test('Node SDK: local PTYs, binary files, detach and reconnect', { timeout: 9000
   const binary = resolve('wangcaicli/dist/debug/wangcai');
   let machine;
   try {
-    await assert.rejects(connect({ type: 'local', binary: join(home, 'absent') }), /ENOENT/);
+    await assert.rejects(openMachine({ type: 'local', binary: join(home, 'absent') }), /ENOENT/);
     const abort = new AbortController();
-    const opening = connect({ type: 'local', binary, signal: abort.signal });
+    const opening = openMachine({ type: 'local', binary, signal: abort.signal });
     abort.abort();
     await assert.rejects(opening, /cancelled/);
-    machine = await connect({ type: 'local', binary });
-    assert.equal(machine.state.status, 'connected');
-    const controller = new AbortController();
-    const second = await connect({ type: 'local', binary, signal: controller.signal });
-    assert.equal(second, machine);
-    controller.abort();
-    second.disconnect();
+    machine = await openMachine({ type: 'local', binary });
     assert.equal(machine.state.status, 'connected');
     assert.deepEqual(await machine.pty.list(), []);
     machine.disconnect();
     assert.equal(machine.state.status, 'disconnected');
-    const afterRelease = await connect({ type: 'local', binary });
-    assert.notEqual(afterRelease, machine);
-    afterRelease.disconnect();
-    await assert.rejects(connect({ type: 'local', binary: join(home, 'absent') }), /ENOENT/);
-    machine = await connect({ type: 'local', binary });
+    machine = await openMachine({ type: 'local', binary });
     const bytes = Buffer.from([0, 128, 255, 13, 10]);
     const path = join(home, 'binary');
     writeFileSync(path, bytes);
@@ -94,7 +84,7 @@ test('Node SDK: local PTYs, binary files, detach and reconnect', { timeout: 9000
     await next.resize({ rows: 30, cols: 100 });
     machine.disconnect();
     await delay(500);
-    machine = await connect({ type: 'local', binary });
+    machine = await openMachine({ type: 'local', binary });
     const restored = await machine.pty.attach(session.id);
     let snapshot = '';
     restored.onSnapshot((event) => { snapshot = Buffer.from(event.data).toString(); });

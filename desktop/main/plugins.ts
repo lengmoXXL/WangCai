@@ -6,6 +6,7 @@ import type { AgentInfo, Profile } from '@lengmoxxl/sdk';
 import type { Dispose, MainContext } from '@lengmoxxl/sdk/channel';
 import type { PluginInfo } from '../shared';
 import { pluginDirectory, storageDirectory, type PluginSpec } from './config';
+import { connect } from './machines';
 
 // A schema is an object of leaves, each naming the type it takes and the default to use without one.
 // An 'array' leaf takes whatever list init.ts holds and leaves its entries to the plugin to check.
@@ -30,10 +31,13 @@ function resolveConfig(schema: unknown, values: unknown): Record<string, unknown
 }
 
 export async function loadPlugins(options: {
-  sdkPath: string; resourcesDirectory: string; agent: AgentInfo; profile: Profile;
+  resourcesDirectory: string; agent: AgentInfo; profile: Profile;
   specs: PluginSpec[]; broadcast: (event: string, data: unknown) => void;
 }) {
-  const { sdkPath, resourcesDirectory, agent, profile, specs, broadcast } = options;
+  const { resourcesDirectory, agent, profile, specs, broadcast } = options;
+  const connectMachine = (machine: { host?: string }, signal?: AbortSignal) => connect(machine.host
+    ? { type: 'ssh', host: machine.host, agent, signal }
+    : { type: 'local', binary: join(resourcesDirectory, 'wangcai'), signal });
   const plugins: PluginInfo[] = [];
   const directories = new Map<string, string>();
   const handlers = new Map<string, Map<string, (params: any) => unknown>>();
@@ -45,7 +49,6 @@ export async function loadPlugins(options: {
       try { await callback(data); } catch (error) { console.error(`Plugin event ${event}:`, error); }
     })));
   }
-  const requirePlugin = createRequire(__filename);
   // Plugins mount in id order, not in the order init.ts lists them: a plugin publishes events as it
   // mounts, so what one plugin observes must not depend on the config file.
   for (const spec of [...specs].sort((a, b) => a.id.localeCompare(b.id))) {
@@ -64,14 +67,9 @@ export async function loadPlugins(options: {
         info.ui = `wangcai-plugin://plugins/${encodeURIComponent(id)}/ui.js`;
         if (existsSync(join(directory, 'ui.css'))) info.css = `wangcai-plugin://plugins/${encodeURIComponent(id)}/ui.css`;
       }
-      const localRequire = createRequire(filename);
-      // Prebuilt plugins use the host SDK so its connection pool stays shared across plugins. A plugin pinned by an
-      // older release still imports the name the SDK had before it moved to npm, so that name reaches it too.
-      const sdkNames = ['@lengmoxxl/sdk', '@wangcai/sdk'];
-      const pluginRequire = Object.assign((name: string) => sdkNames.includes(name) ? requirePlugin(sdkPath) : localRequire(name), localRequire);
       const module = { exports: {} as { activate(context: MainContext): void | Dispose | Promise<void | Dispose>; config?: unknown } };
       compileFunction(readFileSync(filename, 'utf8'), ['require', 'module', 'exports', '__filename', '__dirname'], { filename })
-        .call(module.exports, pluginRequire, module, module.exports, filename, dirname(filename));
+        .call(module.exports, createRequire(filename), module, module.exports, filename, dirname(filename));
       // The app knows nothing about the fields a plugin takes.
       const settings = resolveConfig(module.exports.config, spec.config);
       info.config = settings;
@@ -79,6 +77,7 @@ export async function loadPlugins(options: {
       const dataDirectory = join(storageDirectory, 'data', id);
       mkdirSync(dataDirectory, { recursive: true });
       const context: MainContext = {
+        connect: connectMachine,
         global: {
           publish,
           subscribe(topic, callback) {
@@ -97,7 +96,7 @@ export async function loadPlugins(options: {
             return () => { methods.delete(topic); };
           },
         },
-        host: { dataDirectory, resourcesDirectory, agent, config: { ...profile, ...settings } },
+        host: { dataDirectory, config: { ...profile, ...settings } },
       };
       const dispose = await module.exports.activate(context);
       if (dispose) disposers.push(dispose);

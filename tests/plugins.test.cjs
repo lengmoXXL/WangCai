@@ -16,12 +16,11 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
   const main = (name) => `
     const { writeFileSync } = require('node:fs');
     const { join } = require('node:path');
-    const { connect } = require('@lengmoxxl/sdk');
     // A plugin states the fields it accepts; the app only checks the types and fills in the defaults.
     exports.config = { font: { family: { type: 'string', default: '${name} Font' }, size: { type: 'number', default: 10 } } };
     exports.activate = (context) => {
-      globalThis.fixtureConnect ??= connect;
-      context.ui.handle('sharedSDK', () => globalThis.fixtureConnect === require('@lengmoxxl/sdk').connect);
+      globalThis.fixtureConnect ??= context.connect;
+      context.ui.handle('sharedConnect', () => globalThis.fixtureConnect === context.connect);
       writeFileSync(join(context.host.dataDirectory, 'name.txt'), '${name}');
       const settings = context.host.config;
       writeFileSync(join(context.host.dataDirectory, 'settings.json'), JSON.stringify(settings));
@@ -84,8 +83,8 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     // Only the listed plugins load, in id order; the ones that fail are reported rather than dropped.
     assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)),
       ['absent', 'alpha', 'beta', 'broken', 'failed-ui', 'missing', 'syntax']);
-    assert.equal(await page.evaluate(() => window.wangcai.request('alpha', 'sharedSDK')), true);
-    assert.equal(await page.evaluate(() => window.wangcai.request('beta', 'sharedSDK')), true);
+    assert.equal(await page.evaluate(() => window.wangcai.request('alpha', 'sharedConnect')), true);
+    assert.equal(await page.evaluate(() => window.wangcai.request('beta', 'sharedConnect')), true);
     // The schema keeps a value of the type it names, defaults what init.ts leaves out and drops the rest.
     await page.waitForFunction(() => document.querySelector('[data-plugin=alpha]')?.dataset.font);
     assert.equal(await page.locator('[data-plugin=alpha]').getAttribute('data-font'), '{"family":"alpha Font","size":30}');

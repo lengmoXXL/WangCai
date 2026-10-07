@@ -42,9 +42,6 @@ test('repository plugins are cloned, built and rebuilt when their commit moves',
     // The clone and its build land in the user's plugin directory.
     assert.equal(existsSync(join(plugin, 'main.cjs')), true);
     assert.match(readFileSync(join(plugin, 'main.cjs'), 'utf8'), /good one/);
-    // The plugin's build gets the SDK's types, at the path the SDK itself declares.
-    assert.equal(existsSync(join(plugin, 'node_modules/@lengmoxxl/sdk/package.json')), true);
-    assert.equal(existsSync(join(plugin, 'node_modules/@lengmoxxl/sdk/dist/index.d.ts')), true);
     assert.equal(await page.locator('[data-plugin=good]').getAttribute('data-revision'), 'good one');
     assert.equal(await page.locator('.installs').isVisible(), true);
     await desktop.close(); desktop = undefined;

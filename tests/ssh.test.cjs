@@ -6,7 +6,7 @@ const { tmpdir, userInfo } = require('node:os');
 const { join, resolve } = require('node:path');
 const { spawn, execFileSync } = require('node:child_process');
 const { createServer } = require('node:net');
-const { connect } = require('../sdk/dist/index.cjs');
+const { openMachine } = require('../sdk/dist/index.cjs');
 const { testEnv } = require('./init.cjs');
 
 async function until(check, diagnostic) {
@@ -56,18 +56,14 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     writeFileSync(join(home, 'bin/ssh'), `#!/bin/sh\nexec /usr/bin/ssh -F ${quote(join(home, 'ssh_config'))} "$@"\n`, { mode: 0o700 });
     process.env.PATH = `${join(home, 'bin')}:${originalPath}`;
     process.env.WANGCAI_HOME = '';
-    connection = await connect({ type: 'ssh', host: 'wangcai-test' });
+    connection = await openMachine({ type: 'ssh', host: 'wangcai-test' });
     const info = JSON.parse(cli('status', '--json'));
     let state;
     connection.onState((value) => { state = value; });
     const localPort = Number(new URL(connection.ws.url).port);
     assert.ok(localPort > 0);
     assert.notEqual(localPort, info.port);
-    const shared = await connect({ type: 'ssh', host: 'wangcai-test' });
-    assert.equal(shared, connection);
-    connection.disconnect();
-    assert.equal(connection.state.status, 'connected');
-    assert.deepEqual(await shared.pty.list(), []);
+    assert.deepEqual(await connection.pty.list(), []);
     const bytes = Buffer.from([0, 255, 1, 128, 10]);
     writeFileSync(join(home, 'remote.bin'), bytes);
     assert.deepEqual(Buffer.from(await connection.fs.readFile(join(home, 'remote.bin'))), bytes);
@@ -79,7 +75,7 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     await terminal.write("sleep 0.3; printf 'SSH_%s\\n' survived\r");
     connection.disconnect();
     await delay(500);
-    connection = await connect({ type: 'ssh', host: 'wangcai-test' });
+    connection = await openMachine({ type: 'ssh', host: 'wangcai-test' });
     connection.onState((value) => { state = value; });
     assert.equal(state.sessions[0].id, session.id);
     terminal = await connection.pty.attach(session.id);

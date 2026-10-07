@@ -5,18 +5,10 @@ export type { MachineConnection } from './connection';
 export type { Pty } from './pty';
 export { ensureAgent } from './agent';
 
-const connections = new Map<string, MachineConnection>();
-
-export async function connect(options: ConnectionOptions) {
+/** Opens one connection to a machine and waits for it to be ready. */
+export async function openMachine(options: ConnectionOptions) {
   options.signal?.throwIfAborted();
-  const target = options.type === 'ssh' ? `ssh:${options.host}` : `local:${options.binary ?? 'wangcai'}`;
-  const shared = connections.get(target);
-  const machine = shared ?? new MachineConnection(options);
-  if (shared) machine.retain();
-  else {
-    connections.set(target, machine);
-    machine.onState((state) => { if (state.status === 'disconnected' && connections.get(target) === machine) connections.delete(target); });
-  }
+  const machine = new MachineConnection(options);
   const aborted = new Promise<never>((_, reject) => {
     options.signal?.addEventListener('abort', () => reject(new Error('Connection cancelled')), { once: true });
   });

@@ -2,8 +2,8 @@
 The client SDK for [WangCai](https://github.com/lengmoXXL/WangCai), the terminal app. It reaches a machine, the one
 the app runs on or one over SSH, and drives its terminals, files and subprocesses through a single connection.
 
-A WangCai plugin compiles against this package, but at load time the app injects its own copy of this module, so a
-plugin never carries its own connection pool.
+A WangCai plugin compiles against this package for the types it uses; the machines belong to the app, which keeps
+one connection per machine and hands it to every plugin that asks for one.
 
 ## Install
 
@@ -16,9 +16,9 @@ npm install @lengmoxxl/sdk
 ## Use
 
 ```ts
-import { connect } from '@lengmoxxl/sdk';
+import { openMachine } from '@lengmoxxl/sdk';
 
-const connection = await connect({ type: 'local', binary: '/path/to/wangcai' });
+const connection = await openMachine({ type: 'local', binary: '/path/to/wangcai' });
 
 const sessions = await connection.pty.list();
 const session = await connection.pty.create({ rows: 24, cols: 80 }, '/repo');
@@ -30,9 +30,10 @@ const { stdout } = await connection.subprocess.exec('git', ['status'], { cwd: '/
 connection.disconnect();
 ```
 
-`connect` returns a `MachineConnection`. Connections are shared per target and reference counted, so two callers
-asking for the same SSH host drive one tunnel; the last `disconnect()` tears it down. `connect({ type: 'ssh', host,
-agent })` installs the carrier agent on the host first when `agent` is given.
+`openMachine` returns a `MachineConnection`; every call opens its own. Sharing one belongs to the caller: a
+connection is reference counted, so callers that hand the same one around keep it alive until the last
+`disconnect()`. `openMachine({ type: 'ssh', host, agent })` installs the carrier agent on the host first when
+`agent` is given.
 
 - `connection.pty` - `list`, `cwd`, `create`, `attach`, `close`
 - `connection.fs` - `stat`, `readDirectory`, `readFile`

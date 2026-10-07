@@ -1,4 +1,4 @@
-import type { AgentInfo } from './types';
+import type { MachineConnection } from './connection';
 
 export type Dispose = () => void | Promise<void>;
 
@@ -22,10 +22,11 @@ export interface MainContext {
     // Reaches this plugin's own ui as '<id>:<topic>'.
     publish(topic: string, data: unknown): void;
   };
+  // A machine is what the plugin knows of it: `host` names an SSH one, nothing means the app's own. Which
+  // way one is reached, and the connection kept for it, belongs to the app.
+  connect(machine: { host?: string }, signal?: AbortSignal): Promise<MachineConnection>;
   host: {
     dataDirectory: string;
-    resourcesDirectory: string;
-    agent: AgentInfo;
     // The app's profile with this plugin's settings resolved on top: its schema says what is in it.
     config: any;
   };

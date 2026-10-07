@@ -1,6 +1,6 @@
 {
   "name": "@lengmoxxl/sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Client SDK for WangCai: connect to a local or remote machine and drive its pty, files and git",
   "license": "MIT",
   "repository": {

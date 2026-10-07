@@ -46,7 +46,6 @@ else {
     // The page installs a plugin again on request, so which ones are out is kept between runs.
     const failed = new Set<string>();
     const load = () => loadPlugins({
-      sdkPath: require.resolve('@lengmoxxl/sdk'),
       resourcesDirectory: app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug'),
       agent: { version: app.getVersion(), prefix: profile.agent.downloadPrefix },
       profile,

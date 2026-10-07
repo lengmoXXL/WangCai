@@ -5,7 +5,7 @@ const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
-const { connect } = require('../sdk/dist/index.cjs');
+const { openMachine } = require('../sdk/dist/index.cjs');
 
 async function until(check) {
   for (let i = 0; i < 150; i++) { if (check()) return; await delay(40); }
@@ -25,7 +25,7 @@ test('SDK subprocess: binary output, argv, cwd, environment, limits and cancella
   const binary = resolve('wangcaicli/dist/debug/wangcai');
   let machine;
   try {
-    machine = await connect({ type: 'local', binary });
+    machine = await openMachine({ type: 'local', binary });
     const cwd = join(home, "directory with 'quote");
     mkdirSync(cwd);
     const literal = "$(touch unwanted); 'quoted'\nargument";
