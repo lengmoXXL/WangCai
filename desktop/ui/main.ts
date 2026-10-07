@@ -1,5 +1,5 @@
-import type { WorkspaceMenuItem, WorkspaceRow } from '@wangcai/sdk';
-import type { Dispose, TabContent, TabOptions, TabRecord, UiContext } from '@wangcai/sdk/channel';
+import type { WorkspaceMenuItem, WorkspaceRow } from '@lengmoxxl/sdk';
+import type { Dispose, TabContent, TabOptions, TabRecord, UiContext } from '@lengmoxxl/sdk/channel';
 import { previewMessage, previewUrl, uiFont, type InstallStage, type InstallStatus } from '../shared';
 import './style.css';
 

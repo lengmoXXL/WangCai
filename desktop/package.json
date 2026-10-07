@@ -5,7 +5,7 @@
   "description": "旺财 — persistent terminals, local and remote",
   "main": "dist/main/index.js",
   "dependencies": {
-    "@wangcai/sdk": "file:../sdk"
+    "@lengmoxxl/sdk": "file:../sdk"
   },
   "build": {
     "appId": "dev.wangcai.desktop",

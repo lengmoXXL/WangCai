@@ -1,5 +1,5 @@
-import type { Profile } from '@wangcai/sdk';
-import type { TabRecord } from '@wangcai/sdk/channel';
+import type { Profile } from '@lengmoxxl/sdk';
+import type { TabRecord } from '@lengmoxxl/sdk/channel';
 
 // The shell's own font: the app decides this, plugins decide theirs.
 export const uiFont = '"DejaVuSansM Nerd Font Mono", monospace';

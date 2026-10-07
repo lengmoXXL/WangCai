@@ -97,14 +97,17 @@ export async function installPlugin(spec: PluginSpec, node: string, installsPath
       // The SDK a plugin compiles against: the app injects its implementation at load time, so only the
       // types travel. Where they are is the SDK's own declaration, and they are copied after npm install,
       // which would otherwise prune this directory.
-      const sdk = dirname(require.resolve('@wangcai/sdk/package.json'));
+      const sdk = dirname(require.resolve('@lengmoxxl/sdk/package.json'));
       const { types } = JSON.parse(readFileSync(join(sdk, 'package.json'), 'utf8')) as { types: string };
       const from = dirname(join(sdk, types));
-      const dev = join(directory, 'node_modules/@wangcai/sdk');
-      const to = join(dev, dirname(types));
-      mkdirSync(to, { recursive: true });
-      copyFileSync(join(sdk, 'package.json'), join(dev, 'package.json'));
-      for (const entry of readdirSync(from)) if (entry.endsWith('.d.ts')) copyFileSync(join(from, entry), join(to, entry));
+      // A plugin names the SDK in its imports, and one pinned by an older release still names the old one.
+      for (const name of ['@lengmoxxl/sdk', '@wangcai/sdk']) {
+        const dev = join(directory, 'node_modules', name);
+        const to = join(dev, dirname(types));
+        mkdirSync(to, { recursive: true });
+        copyFileSync(join(sdk, 'package.json'), join(dev, 'package.json'));
+        for (const entry of readdirSync(from)) if (entry.endsWith('.d.ts')) copyFileSync(join(from, entry), join(to, entry));
+      }
     }
     if (scripts.build) {
       onStage('building', 'npm run build');

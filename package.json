@@ -14,8 +14,8 @@
     "package": "cargo build --release && npm run build:sdk && npm run typecheck:app && npm run package --workspace wangcai-desktop",
     "package:mac:x64": "node desktop/tools/package-mac.mjs x64",
     "package:mac:arm64": "node desktop/tools/package-mac.mjs arm64",
-    "build:sdk": "npm run build --workspace @wangcai/sdk",
-    "typecheck": "npm run typecheck --workspace @wangcai/sdk && npm run typecheck:app",
+    "build:sdk": "npm run build --workspace @lengmoxxl/sdk",
+    "typecheck": "npm run typecheck --workspace @lengmoxxl/sdk && npm run typecheck:app",
     "typecheck:app": "npm run typecheck --workspace wangcai-desktop",
     "test:package": "npm run package && node --test tests/package.cjs; status=$?; node tests/reap.cjs; exit $status"
   },

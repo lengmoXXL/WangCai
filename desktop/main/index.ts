@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { loadPlugins } from './plugins';
 import { homeDirectory, homeOverride, loadConfig, storageDirectory } from './config';
 import { installPlugin } from './install';
-import type { TabRecord } from '@wangcai/sdk/channel';
+import type { TabRecord } from '@lengmoxxl/sdk/channel';
 import { previewMessage, previewScheme, previewUrl, uiFont, type InstallStatus } from '../shared';
 
 app.setName('旺财');
@@ -58,7 +58,7 @@ else {
         }
       }
       return loadPlugins({
-        sdkPath: require.resolve('@wangcai/sdk'),
+        sdkPath: require.resolve('@lengmoxxl/sdk'),
         resourcesDirectory: app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug'),
         agent: { version: app.getVersion(), prefix: profile.agent.downloadPrefix },
         profile,

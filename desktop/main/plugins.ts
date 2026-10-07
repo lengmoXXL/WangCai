@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { compileFunction } from 'node:vm';
-import type { AgentInfo, Profile } from '@wangcai/sdk';
-import type { Dispose, MainContext } from '@wangcai/sdk/channel';
+import type { AgentInfo, Profile } from '@lengmoxxl/sdk';
+import type { Dispose, MainContext } from '@lengmoxxl/sdk/channel';
 import type { PluginInfo } from '../shared';
 import { pluginDirectory, storageDirectory, type PluginSpec } from './config';
 
@@ -65,8 +65,10 @@ export async function loadPlugins(options: {
         if (existsSync(join(directory, 'ui.css'))) info.css = `wangcai-plugin://plugins/${encodeURIComponent(id)}/ui.css`;
       }
       const localRequire = createRequire(filename);
-      // Prebuilt plugins use the host SDK so its connection pool stays shared across plugins.
-      const pluginRequire = Object.assign((name: string) => name === '@wangcai/sdk' ? requirePlugin(sdkPath) : localRequire(name), localRequire);
+      // Prebuilt plugins use the host SDK so its connection pool stays shared across plugins. A plugin pinned by an
+      // older release still imports the name the SDK had before it moved to npm, so that name reaches it too.
+      const sdkNames = ['@lengmoxxl/sdk', '@wangcai/sdk'];
+      const pluginRequire = Object.assign((name: string) => sdkNames.includes(name) ? requirePlugin(sdkPath) : localRequire(name), localRequire);
       const module = { exports: {} as { activate(context: MainContext): void | Dispose | Promise<void | Dispose>; config?: unknown } };
       compileFunction(readFileSync(filename, 'utf8'), ['require', 'module', 'exports', '__filename', '__dirname'], { filename })
         .call(module.exports, pluginRequire, module, module.exports, filename, dirname(filename));

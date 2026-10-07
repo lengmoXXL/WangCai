@@ -16,12 +16,12 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
   const main = (name) => `
     const { writeFileSync } = require('node:fs');
     const { join } = require('node:path');
-    const { connect } = require('@wangcai/sdk');
+    const { connect } = require('@lengmoxxl/sdk');
     // A plugin states the fields it accepts; the app only checks the types and fills in the defaults.
     exports.config = { font: { family: { type: 'string', default: '${name} Font' }, size: { type: 'number', default: 10 } } };
     exports.activate = (context) => {
       globalThis.fixtureConnect ??= connect;
-      context.ui.handle('sharedSDK', () => globalThis.fixtureConnect === require('@wangcai/sdk').connect);
+      context.ui.handle('sharedSDK', () => globalThis.fixtureConnect === require('@lengmoxxl/sdk').connect);
       writeFileSync(join(context.host.dataDirectory, 'name.txt'), '${name}');
       const settings = context.host.config;
       writeFileSync(join(context.host.dataDirectory, 'settings.json'), JSON.stringify(settings));

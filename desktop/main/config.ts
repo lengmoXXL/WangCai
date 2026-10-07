@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { Profile, Theme } from '@wangcai/sdk';
+import type { Profile, Theme } from '@lengmoxxl/sdk';
 
 const DEFAULT_PROFILE: Profile = {
   theme: {
