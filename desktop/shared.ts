@@ -20,6 +20,7 @@ export interface PluginBridge {
   plugins(): Promise<PluginInfo[]>;
   config(): Promise<Profile>;
   request<T = any>(id: string, method: string, params?: unknown): Promise<T>;
+  install(ids: string[]): Promise<void>;
   installs(): Promise<InstallStatus[]>;
   loadTabs(): Promise<TabRecord[]>;
   saveTabs(tabs: TabRecord[]): Promise<void>;

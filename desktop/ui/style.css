@@ -78,14 +78,20 @@ html[data-fullscreen] .sidebar-left { padding-top: 0; }
 .view-menu button:hover:not(:disabled), .view-picker:hover, .sidebar-toggle:hover { background: var(--wc-overlay); }
 .view-menu button:focus-visible, .view-picker:focus-visible, .sidebar-toggle:focus-visible { outline: 2px solid var(--wc-accent); }
 
-.installs { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; gap: 12px; padding: 32px 24px 20px; background: var(--wc-background); overflow: auto; }
+/* The plugin page is a card the window's own 3px inset leaves a margin for, and it covers the app, so its
+   top carries the window buttons and the whole card drags the window. */
+.installs { position: fixed; inset: 3px; z-index: 20; display: flex; flex-direction: column; padding-top: 36px; border: 1px solid var(--wc-border); border-radius: 8px; background: var(--wc-background); overflow: hidden; -webkit-app-region: drag; }
+html[data-fullscreen] .installs { padding-top: 0; }
 .installs[hidden] { display: none; }
-.installs h1 { margin: 0; font-size: 15px; font-weight: 600; }
-.installs ul { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.installs li { display: grid; grid-template-columns: 132px 1fr; gap: 4px 12px; padding: 8px 10px; border: 1px solid var(--wc-border); border-radius: 6px; background: var(--wc-surface); font-size: 12px; }
+.installs header { flex-shrink: 0; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 8px 0 12px; border-bottom: 1px solid var(--wc-border); -webkit-app-region: no-drag; }
+.installs h1 { margin: 0 auto 0 0; color: var(--wc-muted); font-size: 12px; font-weight: 600; }
+.installs header div { display: flex; gap: 6px; }
+.installs ul { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 12px; list-style: none; overflow-y: auto; -webkit-app-region: no-drag; }
+.installs li { display: grid; grid-template-columns: 132px 1fr auto; gap: 4px 12px; padding: 8px 10px; border: 1px solid var(--wc-border); border-radius: 6px; background: var(--wc-surface); font-size: 12px; }
 .installs li[data-stage=failed] { border-color: var(--wc-red); }
 .installs .install-stage { color: var(--wc-muted); }
 .installs li[data-stage=ready] .install-stage { color: var(--wc-green); }
 .installs li[data-stage=failed] .install-stage { color: var(--wc-red); }
 .installs .install-message { grid-column: 1 / -1; max-height: 180px; margin: 0; overflow: auto; color: var(--wc-muted); font-size: 11px; white-space: pre-wrap; }
-.installs > button { align-self: flex-start; padding: 6px 14px; border: 1px solid var(--wc-border); border-radius: 6px; background: var(--wc-surface); color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+.installs button { padding: 2px 10px; border: 1px solid var(--wc-border); border-radius: 6px; background: var(--wc-surface); color: inherit; font: inherit; font-size: 11px; cursor: pointer; }
+.installs button[disabled] { color: var(--wc-muted); cursor: default; }

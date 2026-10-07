@@ -25,8 +25,8 @@ document.addEventListener('scroll', (event) => {
 
 const stageNames: Record<InstallStage, string> = { cloning: '克隆中', installing: '安装依赖', building: '构建中', ready: '就绪', failed: '失败' };
 
-/** The plugin page: what each plugin init.ts lists is doing, and why one failed. */
-function installsPage() {
+/** The plugin page: a card over the app, one row per plugin init.ts lists, and what to do about it. */
+function installsPage(install: (ids: string[]) => void) {
   const element = document.createElement('section');
   element.className = 'installs';
   element.hidden = true;
@@ -34,31 +34,52 @@ function installsPage() {
   const heading = document.createElement('h1');
   heading.textContent = '插件';
   const list = document.createElement('ul');
-  const close = document.createElement('button');
-  close.type = 'button';
-  close.textContent = '关闭';
-  close.onclick = () => { element.hidden = true; };
-  element.append(heading, list, close);
+  const header = document.createElement('header');
+  const actions = document.createElement('div');
+  let statuses: InstallStatus[] = [];
+  const entries = (stage: InstallStage) => statuses.filter((status) => status.stage === stage).map(({ id }) => id);
+  const idle = (stage: InstallStage) => stage === 'ready' || stage === 'failed';
+  const busy = () => statuses.some(({ stage }) => !idle(stage));
+  const button = (label: string, action: () => void) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.textContent = label;
+    item.onclick = action;
+    return item;
+  };
+  const updateAll = button('全部更新', () => install(entries('ready')));
+  const retryAll = button('全部重试', () => install(entries('failed')));
+  const close = button('关闭', () => { element.hidden = true; });
+  actions.append(updateAll, retryAll, close);
+  header.append(heading, actions);
+  element.append(header, list);
+  const row = ({ id, stage, message }: InstallStatus) => {
+    const item = document.createElement('li');
+    item.dataset.stage = stage;
+    const name = document.createElement('span');
+    name.className = 'install-id';
+    name.textContent = id;
+    const state = document.createElement('span');
+    state.className = 'install-stage';
+    state.textContent = stageNames[stage];
+    item.append(name, state);
+    // A plugin that is ready can be moved to the version init.ts pins or to the latest one, and one that
+    // failed can be tried again.
+    if (idle(stage)) item.append(button(stage === 'ready' ? '更新' : '重试', () => install([id])));
+    if (message) {
+      const detail = document.createElement('p');
+      detail.className = 'install-message';
+      detail.textContent = message;
+      item.append(detail);
+    }
+    return item;
+  };
   // A plugin with something left to do opens the page; it stays until it is closed, so a failure is read.
-  const update = (statuses: InstallStatus[]) => {
-    list.replaceChildren(...statuses.map(({ id, stage, message }) => {
-      const row = document.createElement('li');
-      row.dataset.stage = stage;
-      const name = document.createElement('span');
-      name.className = 'install-id';
-      name.textContent = id;
-      const state = document.createElement('span');
-      state.className = 'install-stage';
-      state.textContent = stageNames[stage];
-      row.append(name, state);
-      if (message) {
-        const detail = document.createElement('p');
-        detail.className = 'install-message';
-        detail.textContent = message;
-        row.append(detail);
-      }
-      return row;
-    }));
+  const update = (next: InstallStatus[]) => {
+    statuses = next;
+    updateAll.disabled = busy() || !entries('ready').length;
+    retryAll.disabled = busy() || !entries('failed').length;
+    list.replaceChildren(...statuses.map(row));
     if (statuses.some(({ stage }) => stage !== 'ready')) element.hidden = false;
   };
   return { element, update };
@@ -73,18 +94,20 @@ async function start() {
   const [r, g, b] = getComputedStyle(document.body).backgroundColor.match(/\d+/g)!.map(Number);
   document.documentElement.style.colorScheme = r * 299 + g * 587 + b * 114 > 128_000 ? 'light' : 'dark';
   window.wangcai.subscribe('fullscreen', (value) => document.documentElement.toggleAttribute('data-fullscreen', value === true));
-  const installs = installsPage();
+  const installs = installsPage((ids) => { void window.wangcai.install(ids).catch(console.error); });
   window.wangcai.subscribe('plugin-page', () => { installs.element.hidden = false; });
   window.wangcai.subscribe('install-statuses', (statuses) => installs.update(statuses as InstallStatus[]));
   installs.update(await window.wangcai.installs());
   root.append(installs.element);
-  // This resolves once every repository has been installed and every plugin has loaded.
-  const plugins = await window.wangcai.plugins();
-  if (!plugins.length) root.textContent = '未安装插件';
   const left = document.createElement('aside');
   left.className = 'desktop-sidebar sidebar-left';
   const main = document.createElement('main');
   main.className = 'desktop-main';
+  // This resolves once every repository has been installed and every plugin has loaded.
+  const plugins = await window.wangcai.plugins();
+  // Nothing to load fills the pane rather than the window: the page above it is what reported the plugins
+  // that are out.
+  if (!plugins.length) main.textContent = '未安装插件';
   const right = document.createElement('aside');
   right.className = 'desktop-sidebar sidebar-right';
   right.setAttribute('aria-label', '右侧边栏');

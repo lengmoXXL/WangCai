@@ -3,7 +3,7 @@ import { join, resolve, relative, isAbsolute, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { loadPlugins } from './plugins';
-import { homeDirectory, homeOverride, loadConfig, storageDirectory } from './config';
+import { homeDirectory, homeOverride, loadConfig, storageDirectory, type PluginSpec } from './config';
 import { installPlugin } from './install';
 import type { TabRecord } from '@lengmoxxl/sdk/channel';
 import { previewMessage, previewScheme, previewUrl, uiFont, type InstallStatus } from '../shared';
@@ -43,29 +43,36 @@ else {
       statuses[statuses.findIndex((entry) => entry.id === status.id)] = status;
       send('wangcai:channel', 'install-statuses', statuses);
     };
-    // Everything that needs a plugin waits for this.
-    const loading = (async () => {
-      const failed = new Set<string>();
-      for (const spec of specs) {
+    // The page installs a plugin again on request, so which ones are out is kept between runs.
+    const failed = new Set<string>();
+    const load = () => loadPlugins({
+      sdkPath: require.resolve('@lengmoxxl/sdk'),
+      resourcesDirectory: app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug'),
+      agent: { version: app.getVersion(), prefix: profile.agent.downloadPrefix },
+      profile,
+      // A plugin that did not install is left out rather than activated from half a checkout: the rest of
+      // the app runs without it, and the page says what went wrong.
+      specs: specs.filter((spec) => !failed.has(spec.id)),
+      broadcast: (event, data) => send('wangcai:channel', event, data),
+    });
+    /** Answers whether any of the targets had work left to do. */
+    const install = async (targets: PluginSpec[]) => {
+      let worked = false;
+      for (const spec of targets) {
         if (!spec.repo) continue;
         try {
-          await installPlugin(spec, node, installsPath, (stage, message) => announce({ id: spec.id, stage, message }));
+          const changed = await installPlugin(spec, node, installsPath, (stage, message) => announce({ id: spec.id, stage, message }));
+          if (changed) worked = true;
+          failed.delete(spec.id);
         } catch (error) {
-          // A plugin that did not install is left out rather than activated from half a checkout: the rest
-          // of the app runs without it, and the page says what went wrong.
           failed.add(spec.id);
           announce({ id: spec.id, stage: 'failed', message: error instanceof Error ? error.message : String(error) });
         }
       }
-      return loadPlugins({
-        sdkPath: require.resolve('@lengmoxxl/sdk'),
-        resourcesDirectory: app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug'),
-        agent: { version: app.getVersion(), prefix: profile.agent.downloadPrefix },
-        profile,
-        specs: specs.filter((spec) => !failed.has(spec.id)),
-        broadcast: (event, data) => send('wangcai:channel', event, data),
-      });
-    })();
+      return worked;
+    };
+    // Everything that needs a plugin waits for this.
+    let loading = install(specs).then(load);
     // Serves a loaded plugin's files to the renderer; the directories exist once loading is done.
     protocol.handle('wangcai-plugin', async (request) => {
       const url = new URL(request.url);
@@ -79,6 +86,9 @@ else {
       const response = await net.fetch(pathToFileURL(path).toString());
       const headers = new Headers(response.headers);
       headers.set('Access-Control-Allow-Origin', '*');
+      // A plugin's files are read from disk, so nothing about them is worth keeping: a plugin that was
+      // built again under the same URL is what the next load has to see.
+      headers.set('Cache-Control', 'no-store');
       return new Response(response.body, { status: response.status, headers });
     });
     protocol.handle(previewScheme, (request) => request.url === previewUrl
@@ -89,6 +99,16 @@ else {
     ipcMain.handle('wangcai:request', async (_, id: string, method: string, params: unknown) => (await loading).request(id, method, params));
     ipcMain.handle('wangcai:config', () => profile);
     ipcMain.handle('wangcai:installs', () => statuses);
+    // What the page's update and retry entries ask for.
+    ipcMain.handle('wangcai:install', async (_, ids: string[]) => {
+      const worked = await install(specs.filter(({ id }) => ids.includes(id)));
+      // A run that did work moved plugin files, so the loader is rebuilt and the window reloaded: what the
+      // plugins mounted are the files of the build before it, and only a fresh mount shows the new ones.
+      if (!worked) return;
+      await (await loading).dispose();
+      loading = load();
+      window?.webContents.reload();
+    });
     const tabsPath = join(storageDirectory, 'tabs.json');
     ipcMain.handle('wangcai:tabs', () => existsSync(tabsPath) ? JSON.parse(readFileSync(tabsPath, 'utf8')) as TabRecord[] : []);
     ipcMain.handle('wangcai:save-tabs', (_: unknown, tabs: TabRecord[]) => {

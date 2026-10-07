@@ -48,6 +48,7 @@ async function throughMirrors(repository: string, attempt: (url: string) => Prom
 /**
  * Brings a repository plugin up to date and builds it, so the loader finds the files it expects.
  * `node` is the runtime the app carries; the plugin's own build script decides what a build is.
+ * Answers whether that changed anything about the checkout or its build.
  */
 export async function installPlugin(spec: PluginSpec, node: string, installsPath: string, onStage: (stage: InstallStage, message?: string) => void) {
   const directory = pluginDirectory(spec);
@@ -60,8 +61,9 @@ export async function installPlugin(spec: PluginSpec, node: string, installsPath
   // network at all.
   if (spec.commit && builtFrom(spec.commit)) {
     onStage('ready');
-    return;
+    return false;
   }
+  let worked = false;
   const git = (args: string[]) => run('git', args, directory);
   if (!existsSync(join(directory, '.git'))) {
     const entries = existsSync(directory) ? readdirSync(directory) : [];
@@ -71,6 +73,7 @@ export async function installPlugin(spec: PluginSpec, node: string, installsPath
       onStage('cloning', `git clone ${url}`);
       await run('git', [...TRANSFER_LIMITS, 'clone', url, directory], dirname(directory));
     });
+    worked = true;
   }
   // A commit that is already here needs no network: an offline start rebuilds what it has.
   const hasCommit = spec.commit ? await run('git', ['cat-file', '-e', `${spec.commit}^{commit}`], directory).then(() => true, () => false) : false;
@@ -80,12 +83,14 @@ export async function installPlugin(spec: PluginSpec, node: string, installsPath
       await git(['remote', 'set-url', 'origin', url]);
       await git([...TRANSFER_LIMITS, 'fetch', 'origin']);
     });
+    worked = true;
   }
   if (spec.commit) await git(['checkout', '--force', spec.commit]);
   else await git(['pull', '--ff-only']);
   const commit = (await git(['rev-parse', 'HEAD'])).trim();
 
   if (!builtFrom(commit)) {
+    worked = true;
     const scripts = existsSync(join(directory, 'package.json')) ? (JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')).scripts ?? {}) : {};
     // npm and its own directory come first on PATH, so a plugin's build script and the tools it runs
     // resolve to the runtime the app carries rather than whatever the user happens to have installed.
@@ -118,4 +123,5 @@ export async function installPlugin(spec: PluginSpec, node: string, installsPath
     writeFileSync(installsPath, JSON.stringify(installs, null, 2));
   }
   onStage('ready');
+  return worked;
 }

@@ -11,6 +11,7 @@ const api: PluginBridge = {
   plugins: () => ipcRenderer.invoke('wangcai:plugins'),
   config: () => ipcRenderer.invoke('wangcai:config'),
   request: (id, method, params) => ipcRenderer.invoke('wangcai:request', id, method, params),
+  install: (ids) => ipcRenderer.invoke('wangcai:install', ids),
   installs: () => ipcRenderer.invoke('wangcai:installs'),
   loadTabs: () => ipcRenderer.invoke('wangcai:tabs'),
   saveTabs: (tabs) => ipcRenderer.invoke('wangcai:save-tabs', tabs),

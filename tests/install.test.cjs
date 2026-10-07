@@ -102,3 +102,54 @@ test('the plugin page is styled by the app theme while a plugin is still install
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('a plugin that failed is installed again from the entry its row offers', { timeout: 180000 }, async () => {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-retry-')));
+  const env = testEnv(home);
+  // The repository init.ts names is not there yet, so the plugin fails and the page offers to try it again;
+  // nothing but the repository on disk changes before the entry is used.
+  writeInit(home, { tabs: [{ id: 'later', repo: join(home, 'later-repository'), commit: 'main' }] });
+  let desktop;
+  try {
+    desktop = await launchApp(home, env);
+    const page = await desktop.firstWindow();
+    await page.locator('.installs li[data-stage=failed]').waitFor();
+    assert.match(await page.locator('.installs .install-message').innerText(), /later-repository/);
+    // The helper's directory for an id is `<id>-repository`, which is the path the entry names.
+    makePluginRepo(home, 'later');
+    await page.locator('.installs li[data-stage=failed] button').click();
+    // The clone, the build and the reload that follows it bring the plugin in.
+    await page.locator('[data-plugin=later]').waitFor();
+    assert.equal(await page.locator('[data-plugin=later]').getAttribute('data-revision'), 'later one');
+    assert.equal(await page.locator('.installs').isVisible(), false);
+  } finally {
+    await desktop?.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a plugin entry without a commit follows its branch when its row is updated', { timeout: 180000 }, async () => {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-update-')));
+  const env = testEnv(home);
+  const moving = makePluginRepo(home, 'moving');
+  // No commit, so the entry follows the branch: a start installs it, and the page moves it on afterwards.
+  writeInit(home, { tabs: [{ id: 'moving', repo: moving.directory }] });
+  let desktop;
+  try {
+    desktop = await launchApp(home, env);
+    const page = await desktop.firstWindow();
+    await page.locator('[data-plugin=moving]').waitFor();
+    assert.equal(await page.locator('[data-plugin=moving]').getAttribute('data-revision'), 'moving one');
+    // The page opens on its own only while a plugin has something to do, so the menu opens it here.
+    await desktop.evaluate(({ Menu }) => Menu.getApplicationMenu().items.flatMap((item) => item.submenu.items).find((item) => item.label === '插件').click());
+    const update = page.locator('.installs li[data-stage=ready] button');
+    await update.waitFor();
+    assert.equal(await update.innerText(), '更新');
+    moving.revise('moving two');
+    await update.click();
+    await page.waitForFunction(() => document.querySelector('[data-plugin=moving]')?.dataset.revision === 'moving two');
+  } finally {
+    await desktop?.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
