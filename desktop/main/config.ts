@@ -95,9 +95,9 @@ function pluginsFrom(input: ProfileInput): PluginSpec[] {
 // What a fresh install starts with: each plugin is cloned from its repository and built at this commit,
 // so a release ships an app without any plugin inside it.
 const DEFAULT_PLUGINS: PluginSpec[] = [
-  { id: 'terminal-agent', workspaces: true, repo: 'https://github.com/lengmoXXL/WangCai-terminal-agent', commit: '0329c0843232a3fc7622ef0cbce7fbb801718492' },
-  { id: 'files', workspaces: false, repo: 'https://github.com/lengmoXXL/WangCai-files', commit: '5fe08d0a644e5f84649409a9f1e703e933950b61' },
-  { id: 'terminal', workspaces: false, repo: 'https://github.com/lengmoXXL/WangCai-terminal', commit: 'effd1f562de95a4e7fc4672e7f782f88d0e7c29a' },
+  { id: 'terminal-agent', workspaces: true, repo: 'https://github.com/lengmoXXL/WangCai-terminal-agent', commit: '508925fb52533e13d9f2a39eefc94fd4e144150d' },
+  { id: 'files', workspaces: false, repo: 'https://github.com/lengmoXXL/WangCai-files', commit: '9b5328e1b1a2392a5312ff8890a7af8b27977465' },
+  { id: 'terminal', workspaces: false, repo: 'https://github.com/lengmoXXL/WangCai-terminal', commit: '4438fcd9a09b00ce8262d93fd898b96595f6aa41' },
 ];
 
 // Written once, when init.ts is missing; from then on the file belongs to the user.
