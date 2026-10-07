@@ -3,7 +3,6 @@ import type { ConnectionOptions } from './types';
 export type { AgentInfo, ConnectionOptions, FileClick, Machine, MachineState, Session, Size, Output, Snapshot, TerminalEvent, DirectoryEntry, ExecOptions, ExecResult, Profile, Theme, WorkspaceActive, WorkspaceRow, WorkspaceMenuItem } from './types';
 export type { MachineConnection } from './connection';
 export type { Pty } from './pty';
-export { ensureAgent } from './agent';
 
 /** Opens one connection to a machine and waits for it to be ready. */
 export async function openMachine(options: ConnectionOptions) {

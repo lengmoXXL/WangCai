@@ -4,7 +4,12 @@ const { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, w
 const { createServer } = require('node:http');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { ensureAgent } = require('../sdk/dist/index.cjs');
+const { buildSync } = require('esbuild');
+const { Module } = require('node:module');
+
+const sdkAgent = new Module('sdk-agent');
+sdkAgent._compile(buildSync({ entryPoints: ['sdk/agent.ts'], bundle: true, platform: 'node', write: false }).outputFiles[0].text, 'sdk-agent.cjs');
+const { ensureAgent } = sdkAgent.exports;
 
 const agent = '#!/bin/sh\n[ "$1" = --version ] && echo "wangcai 0.1.0"\n';
 
