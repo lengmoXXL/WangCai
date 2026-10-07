@@ -1,6 +1,5 @@
 use crate::ServerInfo;
 use anyhow::{Context, Result, bail};
-use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 use serde_json::{Value, json};
@@ -338,33 +337,7 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                     continue;
                 }
                 if op == "read_file" || op == "read_directory" || op == "stat" {
-                    let stat = op == "stat";
-                    let directory = op == "read_directory";
-                    let path = request["path"].as_str().unwrap_or("").to_owned();
-                    let result = tokio::task::spawn_blocking(move || -> Result<Value> {
-                        if !std::path::Path::new(&path).is_absolute() { bail!("File path must be absolute"); }
-                        if stat {
-                            return match std::fs::metadata(&path) {
-                                Ok(metadata) => Ok(json!({"isDirectory": metadata.is_dir()})),
-                                Err(error) if matches!(error.kind(), std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory) => Ok(Value::Null),
-                                Err(error) => Err(error.into()),
-                            };
-                        }
-                        if directory {
-                            let mut entries = Vec::new();
-                            for entry in std::fs::read_dir(&path)? {
-                                let entry = entry?;
-                                entries.push(json!({"name":entry.file_name().to_string_lossy(),"isDirectory":entry.path().is_dir()}));
-                            }
-                            return Ok(json!(entries));
-                        }
-                        let mut bytes = Vec::new();
-                        // Keep the base64 response within the WebSocket message limit.
-                        std::fs::File::open(&path)?.take(16 * 1024 * 1024 + 1).read_to_end(&mut bytes)?;
-                        if bytes.len() > 16 * 1024 * 1024 { bail!("File exceeds 16 MiB"); }
-                        Ok(json!({"data":base64::engine::general_purpose::STANDARD.encode(bytes)}))
-                    }).await?;
-                    let reply = match result {
+                    let reply = match crate::files::read(op, request["path"].as_str().unwrap_or("")).await {
                         Ok(value) => json!({"id":request["id"],"result":value}),
                         Err(error) => json!({"id":request["id"],"error":error.to_string()}),
                     };
