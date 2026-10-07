@@ -1,6 +1,8 @@
 import type { WorkspaceMenuItem, WorkspaceRow } from '@lengmoxxl/sdk';
 import type { Dispose, TabContent, TabOptions, TabRecord, UiContext } from '@lengmoxxl/sdk/channel';
-import { previewMessage, previewUrl, uiFont, type InstallStage, type InstallStatus } from '../shared';
+import { previewMessage, previewUrl, uiFont } from '../shared';
+import { installsPage } from './installs';
+import { sidebarDividers } from './sidebar';
 import './style.css';
 
 type MenuAnchor = { left: number; top: number };
@@ -23,68 +25,6 @@ document.addEventListener('scroll', (event) => {
   idleTimers.set(target, window.setTimeout(() => delete target.dataset.scrolling, SCROLLBAR_IDLE));
 }, true);
 
-const stageNames: Record<InstallStage, string> = { cloning: '克隆中', installing: '安装依赖', building: '构建中', ready: '就绪', failed: '失败' };
-
-/** The plugin page: a card over the app, one row per plugin init.ts lists, and what to do about it. */
-function installsPage(install: (ids: string[]) => void) {
-  const element = document.createElement('section');
-  element.className = 'installs';
-  element.hidden = true;
-  element.setAttribute('aria-label', '插件');
-  const heading = document.createElement('h1');
-  heading.textContent = '插件';
-  const list = document.createElement('ul');
-  const header = document.createElement('header');
-  const actions = document.createElement('div');
-  let statuses: InstallStatus[] = [];
-  const entries = (stage: InstallStage) => statuses.filter((status) => status.stage === stage).map(({ id }) => id);
-  const idle = (stage: InstallStage) => stage === 'ready' || stage === 'failed';
-  const busy = () => statuses.some(({ stage }) => !idle(stage));
-  const button = (label: string, action: () => void) => {
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.textContent = label;
-    item.onclick = action;
-    return item;
-  };
-  const updateAll = button('全部更新', () => install(entries('ready')));
-  const retryAll = button('全部重试', () => install(entries('failed')));
-  const close = button('关闭', () => { element.hidden = true; });
-  actions.append(updateAll, retryAll, close);
-  header.append(heading, actions);
-  element.append(header, list);
-  const row = ({ id, stage, message }: InstallStatus) => {
-    const item = document.createElement('li');
-    item.dataset.stage = stage;
-    const name = document.createElement('span');
-    name.className = 'install-id';
-    name.textContent = id;
-    const state = document.createElement('span');
-    state.className = 'install-stage';
-    state.textContent = stageNames[stage];
-    item.append(name, state);
-    // A plugin that is ready can be moved to the version init.ts pins or to the latest one, and one that
-    // failed can be tried again.
-    if (idle(stage)) item.append(button(stage === 'ready' ? '更新' : '重试', () => install([id])));
-    if (message) {
-      const detail = document.createElement('p');
-      detail.className = 'install-message';
-      detail.textContent = message;
-      item.append(detail);
-    }
-    return item;
-  };
-  // A plugin with something left to do opens the page; it stays until it is closed, so a failure is read.
-  const update = (next: InstallStatus[]) => {
-    statuses = next;
-    updateAll.disabled = busy() || !entries('ready').length;
-    retryAll.disabled = busy() || !entries('failed').length;
-    list.replaceChildren(...statuses.map(row));
-    if (statuses.some(({ stage }) => stage !== 'ready')) element.hidden = false;
-  };
-  return { element, update };
-}
-
 async function start() {
   // The shell's own theme comes from the app, not from a plugin, so it is set before anything is drawn:
   // the plugin page is styled from its first moment even when a plugin still has to be cloned and built.
@@ -94,11 +34,7 @@ async function start() {
   const [r, g, b] = getComputedStyle(document.body).backgroundColor.match(/\d+/g)!.map(Number);
   document.documentElement.style.colorScheme = r * 299 + g * 587 + b * 114 > 128_000 ? 'light' : 'dark';
   window.wangcai.subscribe('fullscreen', (value) => document.documentElement.toggleAttribute('data-fullscreen', value === true));
-  const installs = installsPage((ids) => { void window.wangcai.install(ids).catch(console.error); });
-  window.wangcai.subscribe('plugin-page', () => { installs.element.hidden = false; });
-  window.wangcai.subscribe('install-statuses', (statuses) => installs.update(statuses as InstallStatus[]));
-  installs.update(await window.wangcai.installs());
-  root.append(installs.element);
+  root.append(installsPage());
   const left = document.createElement('aside');
   left.className = 'desktop-sidebar sidebar-left';
   const main = document.createElement('main');
@@ -120,61 +56,7 @@ async function start() {
   content.className = 'sidebar-content';
   right.append(header, content);
   root.append(left, main, right);
-  const stored = JSON.parse(localStorage.getItem('sidebar-ratios') ?? '{}') as { left?: number; right?: number };
-  const ratios = {
-    left: stored.left ?? 180 / root.clientWidth,
-    right: stored.right ?? Math.min(600, root.clientWidth * .4) / root.clientWidth,
-  };
-  for (const [side, pane, opposite, minimum] of [
-    ['left', left, right, 120], ['right', right, left, 260],
-  ] as const) {
-    const divider = document.createElement('div');
-    divider.className = `sidebar-divider divider-${side}`;
-    divider.setAttribute('role', 'separator');
-    divider.setAttribute('aria-label', side === 'left' ? '调整左侧栏宽度' : '调整右侧栏宽度');
-    divider.setAttribute('aria-orientation', 'vertical');
-    divider.tabIndex = 0;
-    if (side === 'left') left.after(divider); else right.before(divider);
-    let painted: number;
-    const paint = (requested = root.clientWidth * ratios[side]) => {
-      const maximum = Math.max(minimum, root.clientWidth - (opposite.hidden ? 0 : opposite.getBoundingClientRect().width) - 248);
-      painted = Math.round(Math.max(minimum, Math.min(maximum, requested)));
-      pane.style.width = `${painted}px`;
-      divider.hidden = pane.hidden;
-      divider.setAttribute('aria-valuemin', String(minimum));
-      divider.setAttribute('aria-valuemax', String(Math.round(maximum)));
-      divider.setAttribute('aria-valuenow', String(painted));
-      return painted;
-    };
-    const resize = (requested: number) => {
-      ratios[side] = paint(requested) / root.clientWidth;
-      localStorage.setItem('sidebar-ratios', JSON.stringify(ratios));
-    };
-    const observer = new ResizeObserver(() => paint());
-    observer.observe(root);
-    observer.observe(pane);
-    observer.observe(opposite);
-    disposers.push(() => observer.disconnect());
-    let origin: number;
-    let width: number;
-    divider.onpointerdown = (event) => {
-      if (event.button !== 0) return;
-      event.preventDefault();
-      origin = event.clientX;
-      width = painted;
-      divider.setPointerCapture(event.pointerId);
-    };
-    divider.onpointermove = (event) => {
-      if (divider.hasPointerCapture(event.pointerId)) resize(width + (event.clientX - origin) * (side === 'left' ? 1 : -1));
-    };
-    divider.onpointerup = (event) => { if (divider.hasPointerCapture(event.pointerId)) divider.releasePointerCapture(event.pointerId); };
-    divider.onkeydown = (event) => {
-      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-      event.preventDefault();
-      resize(painted + (event.key === 'ArrowRight' ? 20 : -20) * (side === 'left' ? 1 : -1));
-    };
-    paint();
-  }
+  sidebarDividers(root, left, right, disposers);
   type Tab = { key: string; element: HTMLElement; button: HTMLButtonElement; panel: HTMLElement; content: TabContent; workspaceId?: string; onClose?(): void };
   const group = (workspaceId?: string) => workspaceId ?? '';
   let activeWorkspaceId: string | undefined;
