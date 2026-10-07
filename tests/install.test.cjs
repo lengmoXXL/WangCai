@@ -172,3 +172,64 @@ test('a plugin entry without a commit follows its branch when its row is updated
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('naming another repository for an id that is already cloned refuses to install', { timeout: 180000 }, async () => {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-switch-')));
+  const env = testEnv(home);
+  const first = makePluginRepo(home, 'first');
+  const second = makePluginRepo(home, 'second');
+  const init = join(home, '.config/wangcai/init.ts');
+  let desktop;
+  let page;
+  const launch = async () => {
+    desktop = await launchApp(home, env);
+    page = await desktop.firstWindow();
+  };
+  try {
+    writeInit(home, { tabs: [{ id: 'switched', repo: first.directory }] });
+    await launch();
+    await page.waitForFunction(() => document.querySelector('[data-plugin=switched]')?.dataset.revision);
+    assert.equal(await page.locator('[data-plugin=switched]').getAttribute('data-revision'), 'first one');
+    await desktop.close(); desktop = undefined;
+
+    // The directory keeps the id's clone.
+    writeFileSync(init, readFileSync(init, 'utf8').replace(first.directory, second.directory));
+    await launch();
+    const row = page.locator('.installs li[data-stage=failed]');
+    await row.waitFor();
+    assert.match(await row.locator('.install-message').innerText(), /holds a clone of/);
+    assert.equal(await page.locator('[data-plugin=switched]').count(), 0);
+  } finally {
+    await desktop?.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('an entry that drops its commit follows the branch again', { timeout: 180000 }, async () => {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-unpin-')));
+  const env = testEnv(home);
+  const moving = makePluginRepo(home, 'moving');
+  const init = join(home, '.config/wangcai/init.ts');
+  let desktop;
+  let page;
+  const launch = async () => {
+    desktop = await launchApp(home, env);
+    page = await desktop.firstWindow();
+    await page.waitForFunction(() => document.querySelector('[data-plugin=unpinned]')?.dataset.revision);
+  };
+  try {
+    writeInit(home, { tabs: [{ id: 'unpinned', repo: moving.directory, commit: moving.commit }] });
+    await launch();
+    assert.equal(await page.locator('[data-plugin=unpinned]').getAttribute('data-revision'), 'moving one');
+    await desktop.close(); desktop = undefined;
+
+    // The pinned start left the clone detached.
+    moving.revise('moving two');
+    writeFileSync(init, readFileSync(init, 'utf8').replace(/,"commit":"[0-9a-f]+"/, ''));
+    await launch();
+    assert.equal(await page.locator('[data-plugin=unpinned]').getAttribute('data-revision'), 'moving two');
+  } finally {
+    await desktop?.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});

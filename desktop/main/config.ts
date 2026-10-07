@@ -76,7 +76,8 @@ function mergePlugins(entries: unknown, workspaces: boolean, specs: Map<string, 
     specs.set(id, {
       id,
       workspaces,
-      repo: trimmed(repo),
+      // An entry that names no source at all is still a plugin to install: the official repository of the id.
+      repo: trimmed(repo) ?? (relative ? undefined : `https://github.com/lengmoXXL/WangCai-${id}`),
       commit: trimmed(commit),
       directory: relative ? resolve(configDirectory, relative) : undefined,
       config: typeof config === 'object' && config !== null && !Array.isArray(config) ? config as Record<string, unknown> : undefined,
@@ -92,12 +93,12 @@ function pluginsFrom(input: ProfileInput): PluginSpec[] {
   return [...specs.values()];
 }
 
-// What a fresh install starts with: each plugin is cloned from its repository and built at this commit,
-// so a release ships an app without any plugin inside it.
+// What a fresh install starts with: each plugin is cloned from its repository and built, so a release
+// ships an app without any plugin inside it.
 const DEFAULT_PLUGINS: PluginSpec[] = [
-  { id: 'terminal-agent', workspaces: true, repo: 'https://github.com/lengmoXXL/WangCai-terminal-agent', commit: '508925fb52533e13d9f2a39eefc94fd4e144150d' },
-  { id: 'files', workspaces: false, repo: 'https://github.com/lengmoXXL/WangCai-files', commit: '9b5328e1b1a2392a5312ff8890a7af8b27977465' },
-  { id: 'terminal', workspaces: false, repo: 'https://github.com/lengmoXXL/WangCai-terminal', commit: '4438fcd9a09b00ce8262d93fd898b96595f6aa41' },
+  { id: 'terminal-agent', workspaces: true, repo: 'https://github.com/lengmoXXL/WangCai-terminal-agent' },
+  { id: 'files', workspaces: false, repo: 'https://github.com/lengmoXXL/WangCai-files' },
+  { id: 'terminal', workspaces: false, repo: 'https://github.com/lengmoXXL/WangCai-terminal' },
 ];
 
 // Written once, when init.ts is missing; from then on the file belongs to the user.
@@ -112,19 +113,20 @@ const PRESET = `// 旺财的启动入口：启动时由 app 直接加载，只�
 //   tabs       [{ id, repo, commit, directory, config }]  侧栏标签页插件：它导出的视图出现在视图菜单里
 // 插件条目的字段：
 //   id        插件 id，也就是插件目录名
-//   repo      插件仓库：clone 并在这里构建（app 自带 node 与 npm）；不写 directory 时 clone 到
-//             数据目录（默认为 ~/.local/share/wangcai）下的 plugins/<id>/；GitHub 连不上时会自动换国内镜像重试
-//   commit    仓库里的 commit 或分支；换一个就重新 checkout 并重建
-//   directory 改用别的插件目录（相对路径相对本文件）；不写 repo 时用数据目录下的 plugins/<id>/
+//   repo      插件仓库：不写就用官方仓库 https://github.com/lengmoXXL/WangCai-<id>；写了就 clone 并构建
+//             （app 自带 node 与 npm；GitHub 连不上时会自动换国内镜像重试）
+//   commit    写哪个 commit 或分支就 checkout 到它（换一个就重新 checkout 并重建）；不写就跟仓库的分支走
+//   directory 插件放在哪个目录：clone 到这里，也直接读这里的 main.cjs；不写时用数据目录（默认为
+//             ~/.local/share/wangcai）下的 plugins/<id>/；只写 directory 就是用那里的现成插件
 //   config    这个插件自己的配置，能写哪些字段由插件说了算（schema 在插件的 main.cjs 里），不写的用插件给的默认值
 // 插件就是一个目录，里面是编译好的 main.cjs（主进程）和可选的 ui.js / ui.css（界面文件）。
 // 删掉本文件会重新生成这份默认配置。
 export default {
   workspaces: [
-${DEFAULT_PLUGINS.filter((spec) => spec.workspaces).map(({ id, repo, commit }) => `    { id: '${id}', repo: '${repo}', commit: '${commit}' }`).join(',\n')},
+${DEFAULT_PLUGINS.filter((spec) => spec.workspaces).map(({ id, repo }) => `    { id: '${id}', repo: '${repo}' }`).join(',\n')},
   ],
   tabs: [
-${DEFAULT_PLUGINS.filter((spec) => !spec.workspaces).map(({ id, repo, commit }) => `    { id: '${id}', repo: '${repo}', commit: '${commit}' }`).join(',\n')},
+${DEFAULT_PLUGINS.filter((spec) => !spec.workspaces).map(({ id, repo }) => `    { id: '${id}', repo: '${repo}' }`).join(',\n')},
   ],
 };
 `;

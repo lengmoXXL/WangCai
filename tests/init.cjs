@@ -9,24 +9,34 @@ exports.testEnv = (home) => {
   return env;
 };
 
+/** Where an id's plugin directory lives: the entries init.ts holds and the mocks have to name the same one. */
+const pluginDirectory = (home, id) => join(home, '.local/share/wangcai/plugins', id);
+
 /** Launches the app on this home, in the checkout the tests run from. */
 exports.launchApp = (home, env) => electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
 
-/** The app loads only what init.ts lists, so a test that wants plugins writes the file first. */
+/**
+ * The app loads only what init.ts lists, so a test that wants plugins writes the file first. An entry
+ * without a source would be installed from the id's official repository, so here it names the directory
+ * the mock plugins are written into instead.
+ */
 exports.writeInit = (home, lists) => {
   const { workspaces = [], tabs = [] } = lists ?? { workspaces: ['terminal-agent'], tabs: ['files', 'terminal'] };
-  const list = (entries) => entries.map((entry) => JSON.stringify(typeof entry === 'string' ? { id: entry } : entry)).join(', ');
+  const list = (entries) => entries.map((item) => {
+    const spec = typeof item === 'string' ? { id: item } : item;
+    if (spec.repo || spec.directory) return JSON.stringify(spec);
+    return JSON.stringify({ ...spec, directory: pluginDirectory(home, spec.id) });
+  }).join(', ');
   mkdirSync(join(home, '.config/wangcai'), { recursive: true });
   writeFileSync(join(home, '.config/wangcai/init.ts'), `export default { workspaces: [${list(workspaces)}], tabs: [${list(tabs)}] };\n`);
 };
 
 /**
- * A plugin without a repository, in the directory an id is read from when init.ts names neither a
- * repository nor a directory. The app tests mock the plugins they need this way rather than depend on
- * the real ones, which live in their own repositories.
+ * A plugin without a repository, in the directory writeInit points an entry at. The app tests mock the
+ * plugins they need this way rather than depend on the real ones, which live in their own repositories.
  */
 exports.mockPlugin = (home, id, { main = 'exports.activate = () => {};\n', ui, css } = {}) => {
-  const directory = join(home, '.local/share/wangcai/plugins', id);
+  const directory = pluginDirectory(home, id);
   mkdirSync(directory, { recursive: true });
   writeFileSync(join(directory, 'main.cjs'), main);
   if (ui !== undefined) writeFileSync(join(directory, 'ui.js'), ui);
