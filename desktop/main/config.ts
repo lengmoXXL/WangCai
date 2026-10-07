@@ -92,11 +92,12 @@ function pluginsFrom(input: ProfileInput): PluginSpec[] {
   return [...specs.values()];
 }
 
-// What a fresh install starts with: the plugins the app ships.
+// What a fresh install starts with: each plugin is cloned from its repository and built at this commit,
+// so a release ships an app without any plugin inside it.
 const DEFAULT_PLUGINS: PluginSpec[] = [
-  { id: 'terminal-agent', workspaces: true },
-  { id: 'files', workspaces: false },
-  { id: 'terminal', workspaces: false },
+  { id: 'terminal-agent', workspaces: true, repo: 'https://github.com/lengmoXXL/WangCai-terminal-agent', commit: 'dcc1bc0e349f4f4c60e2d60003bb50a396f7c220' },
+  { id: 'files', workspaces: false, repo: 'https://github.com/lengmoXXL/WangCai-files', commit: '6eeb4657e64985bb63a0ee3eceed1b71db95cd9f' },
+  { id: 'terminal', workspaces: false, repo: 'https://github.com/lengmoXXL/WangCai-terminal', commit: '31f990f21cc322de215fa055a4ae4ace6352544f' },
 ];
 
 // Written once, when init.ts is missing; from then on the file belongs to the user.
@@ -114,17 +115,16 @@ const PRESET = `// 旺财的启动入口：启动时由 app 直接加载，只�
 //   repo      插件仓库：clone 并在这里构建（app 自带 node 与 npm）；不写 directory 时 clone 到
 //             数据目录（默认为 ~/.local/share/wangcai）下的 plugins/<id>/；GitHub 连不上时会自动换国内镜像重试
 //   commit    仓库里的 commit 或分支；换一个就重新 checkout 并重建
-//   directory 改用别的插件目录（相对路径相对本文件）；不写 repo 时用数据目录下的 plugins/<id>/，
-//             那里也没有就用 app 自带的那份
+//   directory 改用别的插件目录（相对路径相对本文件）；不写 repo 时用数据目录下的 plugins/<id>/
 //   config    这个插件自己的配置，能写哪些字段由插件说了算（schema 在插件的 main.cjs 里），不写的用插件给的默认值
 // 插件就是一个目录，里面是编译好的 main.cjs（主进程）和可选的 ui.js / ui.css（界面文件）。
 // 删掉本文件会重新生成这份默认配置。
 export default {
   workspaces: [
-${DEFAULT_PLUGINS.filter((spec) => spec.workspaces).map(({ id }) => `    { id: '${id}' }`).join(',\n')},
+${DEFAULT_PLUGINS.filter((spec) => spec.workspaces).map(({ id, repo, commit }) => `    { id: '${id}', repo: '${repo}', commit: '${commit}' }`).join(',\n')},
   ],
   tabs: [
-${DEFAULT_PLUGINS.filter((spec) => !spec.workspaces).map(({ id }) => `    { id: '${id}' }`).join(',\n')},
+${DEFAULT_PLUGINS.filter((spec) => !spec.workspaces).map(({ id, repo, commit }) => `    { id: '${id}', repo: '${repo}', commit: '${commit}' }`).join(',\n')},
   ],
 };
 `;

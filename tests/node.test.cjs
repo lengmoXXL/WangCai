@@ -11,6 +11,7 @@ const WebSocket = require('ws');
 const { Terminal } = require('@xterm/headless');
 
 const binary = resolve('wangcaicli/dist/debug/wangcai');
+const { testEnv } = require('./init.cjs');
 async function until(check, message) {
   const deadline = Date.now() + 6000;
   while (Date.now() < deadline) { if (await check()) return; await delay(30); }
@@ -75,7 +76,7 @@ class Client {
 
 test('persistent terminal node lifecycle', { timeout: 150000 }, async (t) => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-node-test-'));
-  const env = { ...process.env, HOME: home, WANGCAI_HOME: '', SHELL: '/bin/bash' };
+  const env = testEnv(home);
   const cli = (...args) => execFileSync(binary, ['server', ...args], { env, encoding: 'utf8', timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'] });
   const clients = [];
   try {

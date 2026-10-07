@@ -32,7 +32,6 @@ else {
   app.on('second-instance', () => { window?.show(); window?.focus(); });
   void app.whenReady().then(async () => {
     if (!app.isPackaged) app.dock?.setIcon(join(app.getAppPath(), 'build/icon.png'));
-    const bundled = app.isPackaged ? join(process.resourcesPath, 'plugins') : join(app.getAppPath(), 'dist/plugins');
     const { profile, plugins: specs } = await loadConfig();
     // The window opens before the plugins do: a plugin may have to be cloned and built first, and the
     // manager page reports each stage while it happens.
@@ -61,7 +60,6 @@ else {
       return loadPlugins({
         sdkPath: require.resolve('@wangcai/sdk'),
         resourcesDirectory: app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug'),
-        bundled,
         agent: { version: app.getVersion(), prefix: profile.agent.downloadPrefix },
         profile,
         specs: specs.filter((spec) => !failed.has(spec.id)),

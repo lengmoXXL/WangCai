@@ -30,10 +30,10 @@ function resolveConfig(schema: unknown, values: unknown): Record<string, unknown
 }
 
 export async function loadPlugins(options: {
-  sdkPath: string; resourcesDirectory: string; bundled: string; agent: AgentInfo; profile: Profile;
+  sdkPath: string; resourcesDirectory: string; agent: AgentInfo; profile: Profile;
   specs: PluginSpec[]; broadcast: (event: string, data: unknown) => void;
 }) {
-  const { sdkPath, resourcesDirectory, bundled, agent, profile, specs, broadcast } = options;
+  const { sdkPath, resourcesDirectory, agent, profile, specs, broadcast } = options;
   const plugins: PluginInfo[] = [];
   const directories = new Map<string, string>();
   const handlers = new Map<string, Map<string, (params: any) => unknown>>();
@@ -57,9 +57,7 @@ export async function loadPlugins(options: {
     const subscriptions = new Map<string, Set<(data: any) => void | Promise<void>>>();
     channels.add(subscriptions);
     try {
-      // A wrong path must surface as a missing plugin, so an explicit directory is used as it is.
-      const configured = pluginDirectory(spec);
-      const directory = spec.directory ?? (existsSync(configured) ? configured : join(bundled, id));
+      const directory = pluginDirectory(spec);
       const filename = join(directory, 'main.cjs');
       if (!existsSync(filename)) throw new Error('Plugin is not installed');
       if (existsSync(join(directory, 'ui.js'))) {

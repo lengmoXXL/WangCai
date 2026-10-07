@@ -7,6 +7,7 @@ const { join, resolve } = require('node:path');
 const { spawn, execFileSync } = require('node:child_process');
 const { createServer } = require('node:net');
 const { connect } = require('../sdk/dist/index.cjs');
+const { testEnv } = require('./init.cjs');
 
 async function until(check, diagnostic) {
   for (let i = 0; i < 200; i++) { if (check()) return; await delay(50); }
@@ -18,7 +19,7 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
   if (!sshd) { t.skip('OpenSSH server is not installed'); return; }
   const home = mkdtempSync(join(tmpdir(), 'wangcai-ssh-test-'));
   const binary = resolve('wangcaicli/dist/debug/wangcai');
-  const env = { ...process.env, HOME: home, WANGCAI_HOME: '', SHELL: '/bin/bash' };
+  const env = testEnv(home);
   const cli = (...args) => execFileSync(binary, ['server', ...args], { env, encoding: 'utf8', timeout: 30000 });
   let server;
   let connection;
@@ -73,23 +74,6 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     assert.deepEqual(await connection.fs.stat(join(home, 'remote.bin')), { isDirectory: false });
     assert.deepEqual(await connection.fs.stat(home), { isDirectory: true });
     assert.equal(await connection.fs.stat(join(home, 'missing')), null);
-    const { buildSync } = require('esbuild');
-    const { Module } = require('node:module');
-    const filePlugin = new Module(resolve('tests/files-main.cjs'));
-    filePlugin.paths = module.paths;
-    filePlugin._compile(buildSync({ entryPoints: ['plugins/files/main.ts'], bundle: true, platform: 'node', packages: 'external', write: false }).outputFiles[0].text, resolve('tests/files-main.cjs'));
-    const handlers = {};
-    const host = { request: async () => undefined };
-    const disposeFiles = filePlugin.exports.activate({ host, ui: { handle: (name, handler) => { handlers[name] = handler; return () => {}; } } });
-    const remoteText = join(home, 'remote.md');
-    writeFileSync(remoteText, '# Remote Markdown\n');
-    try {
-      const directory = await handlers.list({ machine: { host: 'wangcai-test' }, path: home });
-      assert.equal(directory.path, home);
-      assert.ok(directory.entries.some(entry => entry.name === 'remote.md' && !entry.isDirectory));
-      assert.equal(await handlers.read({ machine: { id: 'remote', name: 'Remote', host: 'wangcai-test' }, path: remoteText }), '# Remote Markdown\n');
-      await assert.rejects(handlers.read({ machine: { host: 'wangcai-test' }, path: join(home, 'remote.bin') }), /二进制/);
-    } finally { disposeFiles(); }
     const session = await connection.pty.create();
     let terminal = await connection.pty.attach(session.id);
     await terminal.write("sleep 0.3; printf 'SSH_%s\\n' survived\r");

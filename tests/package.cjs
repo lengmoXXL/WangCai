@@ -1,81 +1,64 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { _electron: electron } = require('playwright');
-const { createWorkspace, waitForShell, writeInit } = require('./init.cjs');
-const { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } = require('node:fs');
+const { mockPlugin, testEnv, waitForShell, writeInit } = require('./init.cjs');
+const { existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
 
-test('packaged app carries its plugins, previews files and prefers plugins from the user\'s plugin directory', { timeout: 180000 }, async () => {
+test('packaged app loads the plugins its config names and carries the node they build with', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-package-'));
-  const env = { ...process.env, HOME: home, WANGCAI_HOME: '', PATH: '/usr/bin:/bin', ELECTRON_RENDERER_URL: '' };
-  delete env.ELECTRON_RUN_AS_NODE;
+  const env = testEnv(home);
   let desktop;
   // electron-builder names the directory after the architecture it was told to build, and the plain
   // `mac` one only when it was told nothing.
   const bundle = resolve(process.env.WANGCAI_APP_DIR ?? 'desktop/dist/package/mac', '旺财.app/Contents');
   let page;
-  const launch = async () => {
-    desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/旺财'), args: [`--user-data-dir=${join(home, 'electron')}`], env });
+  const launch = async (environment = env) => {
+    desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/旺财'), args: [`--user-data-dir=${join(home, 'electron')}`], env: environment });
     return desktop.firstWindow();
   };
+  const spacing = () => page.locator('[data-plugin=terminal-agent] .probe').evaluate((element) => getComputedStyle(element).letterSpacing);
   try {
-    writeInit(home);
+    // The plugin the config names, with a stylesheet of its own, in the directory an id is read from.
+    const directory = mockPlugin(home, 'terminal-agent', {
+      main: "exports.activate = ({ ui }) => { ui.handle('workspaces', () => []); };\n",
+      ui: "export function mount(container) { const probe = document.createElement('div'); probe.className = 'probe'; probe.textContent = '插件'; container.append(probe); }\n",
+      css: '.probe { letter-spacing: 3px; }\n',
+    });
+    writeInit(home, { workspaces: ['terminal-agent'], tabs: [] });
     assert.equal(execFileSync('plutil', ['-extract', 'CFBundleName', 'raw', join(bundle, 'Info.plist')], { encoding: 'utf8' }).trim(), '旺财');
+    // The app carries no plugin at all: init.ts names what to load, and nothing the app ships is a copy
+    // of one.
+    assert.equal(existsSync(join(bundle, 'Resources/plugins')), false);
     page = await launch();
     await waitForShell(page);
-    const baseSpacing = await page.locator('.desktop-main .plugin[data-plugin=terminal-agent]').evaluate((element) => getComputedStyle(element).letterSpacing);
-    // The app carries prebuilt plugins and never installs or compiles them into the user's home.
-    assert.equal(existsSync(join(home, '.local/share/wangcai/plugins')), false);
-    for (const id of ['terminal-agent', 'files', 'terminal']) {
-      assert.equal(existsSync(join(bundle, 'Resources/plugins', id, 'main.cjs')), true);
-      assert.equal(existsSync(join(bundle, 'Resources/plugins', id, 'ui.js')), true);
-    }
-    // Repository plugins build with the node and npm the app carries.
+    await page.locator('[data-plugin=terminal-agent] .probe').waitFor();
+    assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)), ['terminal-agent']);
+    assert.equal(await spacing(), '3px');
+    // The app carries the node and npm a repository plugin builds with.
     assert.equal(existsSync(join(bundle, 'Resources/node/bin/node')), true);
     assert.equal(existsSync(join(bundle, 'Resources/node/lib/node_modules/npm/bin/npm-cli.js')), true);
-    const code = join(home, 'packaged.ts');
-    writeFileSync(code, 'const packaged = "PACKAGED_PREVIEW";\n');
-    await page.evaluate(path => window.wangcai.publish('onclick', { type: 'file', machine: { id: 'local', name: '本机' }, path }), code);
-    await page.locator('.monaco-editor .view-lines').filter({ hasText: 'PACKAGED_PREVIEW' }).waitFor();
-    await page.getByRole('button', { name: '新建侧栏标签页' }).click();
-    await page.locator('#view-menu').getByRole('button', { name: '文件', exact: true }).click();
-    const workerReady = page.waitForEvent('worker');
-    await page.evaluate(() => { window.MonacoEnvironment.getWorker('', 'editorWorkerService'); });
-    const worker = await workerReady;
-    assert.equal(await Promise.race([
-      worker.evaluate(() => typeof self.onmessage),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Packaged worker failed to initialize')), 10000)),
-    ]), 'function');
-    await page.getByRole('button', { name: '关闭 packaged.ts' }).click();
+    // A plugin is read from its directory on every start: what changes there is what runs.
+    writeFileSync(join(directory, 'ui.css'), '.probe { letter-spacing: 7px; }\n');
     await desktop.close(); desktop = undefined;
-    // A plugin in the user's plugin directory wins over the one the app ships.
-    const override = join(home, '.local/share/wangcai/plugins/terminal-agent');
-    cpSync(join(bundle, 'Resources/plugins/terminal-agent'), override, { recursive: true });
-    writeFileSync(join(override, 'ui.css'), `${readFileSync(join(override, 'ui.css'), 'utf8')}\n.desktop-main .plugin[data-plugin=terminal-agent] { letter-spacing: 7px; }\n`);
     page = await launch();
-    assert.equal(await page.locator('.desktop-main .plugin[data-plugin=terminal-agent]').evaluate((element) => getComputedStyle(element).letterSpacing), '7px');
+    await waitForShell(page);
+    await page.locator('[data-plugin=terminal-agent] .probe').waitFor();
+    assert.equal(await spacing(), '7px');
     assert.equal(existsSync(join(home, '.cache/wangcai')), false);
-    await createWorkspace(page);
-    await page.locator('.terminal-pane.active .xterm-helper-textarea').focus();
-    await page.keyboard.type("printf 'PACKAGED_%s\\n' success");
-    await page.keyboard.press('Enter');
-    await page.waitForFunction(() => document.querySelector('.terminal-pane.active .xterm-rows')?.textContent.includes('PACKAGED_success'));
-    assert.ok(JSON.parse(readFileSync(join(home, '.local/share/wangcai/server.json'))).port > 0);
     await desktop.close(); desktop = undefined;
-    rmSync(override, { recursive: true });
-    page = await launch();
-    await waitForShell(page);
-    assert.equal(await page.locator('.desktop-main .plugin[data-plugin=terminal-agent]').evaluate((element) => getComputedStyle(element).letterSpacing), baseSpacing);
-    await desktop.close(); desktop = undefined;
-    // A fresh install has no init.ts: the app writes the default one and loads its own plugins with it.
+    // A fresh install has no init.ts: the app writes the default one, which names each plugin's repository
+    // and the commit to build. GitHub is pointed at a path that is not there, so what runs here is the
+    // config file alone rather than three clones.
     rmSync(join(home, '.config/wangcai/init.ts'));
-    page = await launch();
-    await waitForShell(page);
-    assert.match(readFileSync(join(home, '.config/wangcai/init.ts'), 'utf8'), /workspaces: \[\n    \{ id: 'terminal-agent' \}/);
-    assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)), ['files', 'terminal', 'terminal-agent']);
-    assert.equal(await page.locator('.plugin-error').count(), 0);
+    writeFileSync(join(home, 'gitconfig'), '[url "file:///nonexistent/"]\n\tinsteadOf = https://github.com/\n');
+    page = await launch({ ...env, GIT_CONFIG_GLOBAL: join(home, 'gitconfig') });
+    const preset = readFileSync(join(home, '.config/wangcai/init.ts'), 'utf8');
+    assert.match(preset, /workspaces: \[\n    \{ id: 'terminal-agent', repo: 'https:\/\/github\.com\/lengmoXXL\/WangCai-terminal-agent', commit: '[0-9a-f]{40}' \},\n  \],\n  tabs: \[\n    \{ id: 'files', repo: 'https:\/\/github\.com\/lengmoXXL\/WangCai-files', commit: '[0-9a-f]{40}' \},\n    \{ id: 'terminal', repo: 'https:\/\/github\.com\/lengmoXXL\/WangCai-terminal', commit: '[0-9a-f]{40}' \},\n  \],/);
+    // The preset never mentions a font: a plugin's schema and its entry's config decide those alone.
+    assert.doesNotMatch(preset, /font/);
   } finally {
     await desktop?.close();
     try { execFileSync(join(bundle, 'Resources/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 15000 }); } catch {}

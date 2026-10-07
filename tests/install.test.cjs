@@ -1,12 +1,11 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { _electron: electron } = require('playwright');
 const { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { buildSync } = require('esbuild');
 const { Module } = require('node:module');
-const { writeInit } = require('./init.cjs');
+const { launchApp, mockWorkspace, testEnv, writeInit } = require('./init.cjs');
 const { makePluginRepo } = require('./plugin-repo.cjs');
 
 const compiled = new Module('install');
@@ -25,15 +24,14 @@ test('a GitHub repository lists mirrors to retry through, and other repositories
 
 test('repository plugins are cloned, built and rebuilt when their commit moves', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-install-')));
-  const env = { ...process.env, HOME: home, WANGCAI_HOME: '', ELECTRON_RENDERER_URL: '' };
-  delete env.ELECTRON_RUN_AS_NODE;
+  const env = testEnv(home);
   const good = makePluginRepo(home, 'good');
   const plugin = join(home, '.local/share/wangcai/plugins/good');
   const init = join(home, '.config/wangcai/init.ts');
   let desktop;
   let page;
   const launch = async () => {
-    desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
+    desktop = await launchApp(home, env);
     page = await desktop.firstWindow();
     await page.waitForFunction(() => document.querySelector('[data-plugin=good]')?.dataset.revision);
   };
@@ -66,6 +64,7 @@ test('repository plugins are cloned, built and rebuilt when their commit moves',
     await desktop.close(); desktop = undefined;
 
     // A commit the repository does not have stops that plugin and is reported with the reason.
+    mockWorkspace(home);
     writeInit(home, {
       workspaces: [{ id: 'terminal-agent' }],
       tabs: [
@@ -87,13 +86,12 @@ test('repository plugins are cloned, built and rebuilt when their commit moves',
 
 test('the plugin page is styled by the app theme while a plugin is still installing', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-install-page-')));
-  const env = { ...process.env, HOME: home, WANGCAI_HOME: '', ELECTRON_RENDERER_URL: '' };
-  delete env.ELECTRON_RUN_AS_NODE;
+  const env = testEnv(home);
   const slow = makePluginRepo(home, 'slow', 4000);
   writeInit(home, { tabs: [{ id: 'slow', repo: slow.directory, commit: slow.commit }] });
   let desktop;
   try {
-    desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
+    desktop = await launchApp(home, env);
     const page = await desktop.firstWindow();
     // The shell's theme is the app's, so the page has it before any plugin has loaded.
     await page.locator('.installs li[data-stage=building]').waitFor();

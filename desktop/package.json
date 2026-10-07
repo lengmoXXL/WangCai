@@ -23,10 +23,6 @@
         "to": "wangcai"
       },
       {
-        "from": "dist/plugins",
-        "to": "plugins"
-      },
-      {
         "from": "node",
         "to": "node"
       }
@@ -42,8 +38,8 @@
     }
   },
   "scripts": {
-    "dev": "export WANGCAI_HOME=${WANGCAI_HOME:-$HOME/.wangcai-dev} && node tools/fetch-node.mjs && node tools/build-plugins.mjs && electron-vite dev",
-    "build": "node tools/fetch-node.mjs && node tools/build-plugins.mjs && electron-vite build",
+    "dev": "export WANGCAI_HOME=${WANGCAI_HOME:-$HOME/.wangcai-dev} && node tools/fetch-node.mjs && electron-vite dev",
+    "build": "node tools/fetch-node.mjs && electron-vite build",
     "start": "export WANGCAI_HOME=${WANGCAI_HOME:-$HOME/.wangcai-dev} && electron .",
     "package": "npm run build && electron-builder --mac dir",
     "typecheck": "tsc"
@@ -53,7 +49,6 @@
     "electron": "41.10.7",
     "electron-builder": "^26.0.0",
     "electron-vite": "^5.0.0",
-    "esbuild": "^0.25.0",
     "typescript": "^5.9.0",
     "vite": "^7.0.0"
   }

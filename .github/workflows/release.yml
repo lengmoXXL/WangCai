@@ -65,12 +65,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install the workspaces and the plugins
-        run: |
-          npm ci
-          npm ci --prefix plugins/terminal-agent
-          npm ci --prefix plugins/files
-          npm ci --prefix plugins/terminal
+      - name: Install the workspaces
+        run: npm ci
       - name: Add the target
         run: rustup target add ${{ matrix.target }}
       - name: Package the ad-hoc signed app for ${{ matrix.arch }}

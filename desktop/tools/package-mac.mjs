@@ -22,6 +22,5 @@ const agent = join(root, 'wangcaicli/dist/release/wangcai');
 mkdirSync(dirname(agent), { recursive: true });
 cpSync(join(root, 'wangcaicli/dist', target, 'release/wangcai'), agent);
 run('node', ['tools/fetch-node.mjs', arch], desktop);
-run('node', ['tools/build-plugins.mjs'], desktop);
 run('npx', ['electron-vite', 'build'], desktop);
 run('npx', ['electron-builder', '--mac', 'dmg', 'zip', `--${arch}`], desktop);

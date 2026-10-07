@@ -4,7 +4,6 @@
 .DS_Store
 
 /sdk/dist/
-/plugins/*/node_modules/
 
 /desktop/dist/
 /desktop/node/

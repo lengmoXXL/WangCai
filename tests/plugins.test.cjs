@@ -1,15 +1,13 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { _electron: electron } = require('playwright');
 const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { openWorkspaceMenu, writeInit } = require('./init.cjs');
+const { launchApp, openWorkspaceMenu, testEnv, writeInit } = require('./init.cjs');
 
 test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-plugins-'));
-  const env = { ...process.env, HOME: home, WANGCAI_HOME: '', ELECTRON_RENDERER_URL: '' };
-  delete env.ELECTRON_RUN_AS_NODE;
+  const env = testEnv(home);
   const plugins = join(home, '.local/share/wangcai/plugins');
   const write = (id, files) => {
     mkdirSync(join(plugins, id), { recursive: true });
@@ -55,7 +53,7 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
   `;
   let desktop;
   const launch = async () => {
-    desktop = await electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
+    desktop = await launchApp(home, env);
     return desktop.firstWindow();
   };
   try {
@@ -78,15 +76,14 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
       tabs: [
         { id: 'alpha', config: { font: { size: 30 }, junk: 'dropped' } },
         { id: 'beta', config: { font: { family: 42, size: 'thirty' } } },
-        // files is one the app ships: a wrong directory must be an error, not a fall back to that copy.
-        { id: 'files', directory: join(home, 'not-a-plugin') },
+        { id: 'absent', directory: join(home, 'not-a-plugin') },
         'broken', 'failed-ui', 'syntax', 'missing',
       ],
     });
     let page = await launch();
     // Only the listed plugins load, in id order; the ones that fail are reported rather than dropped.
     assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)),
-      ['alpha', 'beta', 'broken', 'failed-ui', 'files', 'missing', 'syntax']);
+      ['absent', 'alpha', 'beta', 'broken', 'failed-ui', 'missing', 'syntax']);
     assert.equal(await page.evaluate(() => window.wangcai.request('alpha', 'sharedSDK')), true);
     assert.equal(await page.evaluate(() => window.wangcai.request('beta', 'sharedSDK')), true);
     // The schema keeps a value of the type it names, defaults what init.ts leaves out and drops the rest.
@@ -115,7 +112,7 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     await page.getByText('broken: intentional failure', { exact: true }).waitFor();
     await page.getByText('failed-ui: UI failure', { exact: true }).waitFor();
     await page.getByText('missing: Plugin is not installed', { exact: true }).waitFor();
-    await page.getByText('files: Plugin is not installed', { exact: true }).waitFor();
+    await page.getByText('absent: Plugin is not installed', { exact: true }).waitFor();
     assert.equal(await page.locator('.plugin-error[data-plugin=syntax]').count(), 1);
     // None of these plugins is listed for workspaces, so the menu has nothing to offer.
     await openWorkspaceMenu(page);
