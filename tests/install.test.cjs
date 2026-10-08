@@ -12,16 +12,15 @@ const { makePluginRepo } = require('./plugin-repo.cjs');
 
 const compiled = new Module('install');
 compiled._compile(buildSync({ entryPoints: ['desktop/main/install.ts'], bundle: true, platform: 'node', packages: 'external', write: false }).outputFiles[0].text, 'install.cjs');
-const { repositoryUrls } = compiled.exports;
+const { mirroredUrls } = compiled.exports;
 
-test('a GitHub repository lists mirrors to retry through, and other repositories are used as they are', () => {
-  const urls = repositoryUrls('https://github.com/lengmoXXL/WangCai-git');
+test('a GitHub URL lists mirrors to retry through, and other URLs are used as they are', () => {
+  const urls = mirroredUrls('https://github.com/lengmoXXL/WangCai-git');
   assert.equal(urls[0], 'https://github.com/lengmoXXL/WangCai-git');
   assert.match(urls[1], /^https:\/\/ghfast\.top\//);
   for (const url of urls.slice(1)) assert.match(url, /^https:\/\/[^/]+\/https:\/\/github\.com\/lengmoXXL\/WangCai-git$/);
-  // Only an https GitHub URL has mirrors to prefix it: a local path and an ssh remote are used as they are.
-  assert.deepEqual(repositoryUrls('/Users/someone/plugin'), ['/Users/someone/plugin']);
-  assert.deepEqual(repositoryUrls('git@github.com:owner/repo.git'), ['git@github.com:owner/repo.git']);
+  assert.deepEqual(mirroredUrls('/Users/someone/plugin'), ['/Users/someone/plugin']);
+  assert.deepEqual(mirroredUrls('git@github.com:owner/repo.git'), ['git@github.com:owner/repo.git']);
 });
 
 test('repository plugins are cloned, built and rebuilt when their commit moves', { timeout: 180000 }, async () => {

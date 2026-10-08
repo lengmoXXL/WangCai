@@ -1,4 +1,4 @@
-export interface AgentInfo { version: string; prefix: string }
+export interface AgentInfo { version: string; prefixes: string[] }
 
 /**
  * The workspace protocol. A plugin that init.ts lists under `workspaces` is a workspace provider, and
@@ -79,7 +79,4 @@ export interface Theme {
   brightWhite: string;
 }
 
-export interface Profile {
-  theme: Theme;
-  agent: { downloadPrefix: string };
-}
+export interface Profile { theme: Theme }

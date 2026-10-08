@@ -3,9 +3,13 @@ import { join, resolve, relative, isAbsolute, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { pluginManager } from './manager';
+import { mirroredUrls } from './install';
 import { homeOverride, loadConfig, storageDirectory, tabsPath, userDataDirectory, windowStatePath } from './config';
 import type { TabRecord } from '@lengmoxxl/sdk/channel';
 import { previewMessage, previewScheme, previewUrl, uiFont } from '../shared';
+
+// The release the app belongs to: its agent binaries live under this GitHub URL.
+const AGENT_RELEASES = 'https://github.com/lengmoXXL/WangCai/releases/download';
 
 app.setName('旺财');
 protocol.registerSchemesAsPrivileged([
@@ -38,7 +42,7 @@ else {
     const node = app.isPackaged ? join(process.resourcesPath, 'node/bin/node') : join(app.getAppPath(), 'node/bin/node');
     const manager = pluginManager({
       resourcesDirectory: app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug'),
-      agent: { version: app.getVersion(), prefix: profile.agent.downloadPrefix },
+      agent: { version: app.getVersion(), prefixes: mirroredUrls(AGENT_RELEASES) },
       profile, specs, node,
       broadcast: (event, data) => send('wangcai:channel', event, data),
     });

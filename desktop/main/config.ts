@@ -32,7 +32,6 @@ const DEFAULT_PROFILE: Profile = {
     brightCyan: '#a9dbe0',
     brightWhite: '#eef3f8',
   },
-  agent: { downloadPrefix: 'https://github.com/lengmoXXL/WangCai/releases/download' },
 };
 
 // Where this run keeps the config it loads and the data it writes. A development run can be pointed
@@ -54,7 +53,6 @@ export const pluginDataDirectory = (id: string) => join(storageDirectory, 'data'
 
 type ProfileInput = {
   theme?: Record<string, unknown>;
-  agent?: { downloadPrefix?: unknown };
   workspaces?: unknown;
   tabs?: unknown;
 };
@@ -65,10 +63,7 @@ const trimmed = (value: unknown) => typeof value === 'string' && value.trim() ? 
 function mergeProfile(input: ProfileInput): Profile {
   const theme = { ...DEFAULT_PROFILE.theme };
   for (const token of Object.keys(theme) as (keyof Theme)[]) theme[token] = text(input.theme?.[token], theme[token]);
-  return {
-    theme,
-    agent: { downloadPrefix: text(input.agent?.downloadPrefix, DEFAULT_PROFILE.agent.downloadPrefix) },
-  };
+  return { theme };
 }
 
 // A relative directory is taken from the config directory. The first entry for an id wins.
@@ -113,7 +108,6 @@ const PRESET = `// 旺财的启动入口：启动时由 app 直接加载，只�
 //             black, red, green, yellow, blue, magenta, cyan, white, brightBlack, brightRed,
 //             brightGreen, brightYellow, brightBlue, brightMagenta, brightCyan, brightWhite }
 //           界面与终端配色，值写 '#rrggbb'；终端调色板是 black 到 brightWhite
-//   agent   { downloadPrefix }            下载 agent 的地址前缀
 //   workspaces [{ id, repo, commit, directory, config }]  工作区插件：窗口从这里取工作区列表，以及菜单里能开什么
 //   tabs       [{ id, repo, commit, directory, config }]  侧栏标签页插件：它导出的视图出现在视图菜单里
 // 插件条目的字段：

@@ -1,4 +1,4 @@
-import type { Profile } from '@lengmoxxl/sdk';
+import type { AgentInfo, Profile } from '@lengmoxxl/sdk';
 import type { InstallStatus } from '../shared';
 import type { PluginSpec } from './config';
 import { installPlugin } from './install';
@@ -6,7 +6,7 @@ import { loadPlugins } from './plugins';
 
 /** The plugins init.ts lists: what still has to be installed, and the loader the window reads them from. */
 export function pluginManager(options: {
-  resourcesDirectory: string; agent: { version: string; prefix: string }; profile: Profile;
+  resourcesDirectory: string; agent: AgentInfo; profile: Profile;
   specs: PluginSpec[]; node: string; broadcast: (event: string, data: unknown) => void;
 }) {
   const { resourcesDirectory, agent, profile, specs, node, broadcast } = options;

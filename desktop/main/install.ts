@@ -7,13 +7,12 @@ import type { InstallStage } from '../shared';
 // How far a repository got: the commit it was built from, so the next start rebuilds only what moved.
 type Installs = Record<string, { repo: string; commit: string }>;
 
-// GitHub is not reachable from every network the app runs on, so a clone or a fetch that fails is retried
-// through the mirrors that serve it. The repository itself comes first: a network that reaches GitHub never
-// pays for them, and whichever URL answers becomes the remote the checkout keeps.
-const GITHUB_MIRRORS = ['https://ghfast.top/', 'https://ghproxy.net/', 'https://gh-proxy.com/', 'https://gh.llkk.cc/'];
-export const repositoryUrls = (repository: string) => /^https:\/\/github\.com\//.test(repository)
-  ? [repository, ...GITHUB_MIRRORS.map((mirror) => mirror + repository)]
-  : [repository];
+// GitHub is not reachable from every network the app runs on, so a URL on GitHub is retried through the
+// mirrors that serve it. A network that reaches GitHub never pays for them.
+const GITHUB_MIRRORS = ['https://ghfast.top/', 'https://ghproxy.net/', 'https://gh-proxy.com/'];
+export const mirroredUrls = (url: string) => /^https:\/\/github\.com\//.test(url)
+  ? [url, ...GITHUB_MIRRORS.map((mirror) => mirror + url)]
+  : [url];
 
 // A blocked host can leave a connection hanging, so a transfer that stalls fails instead of never ending.
 const TRANSFER_LIMITS = ['-c', 'http.lowSpeedLimit=1000', '-c', 'http.lowSpeedTime=20'];
@@ -34,7 +33,7 @@ function run(command: string, args: string[], cwd: string, environment = process
 /** Clones or fetches through whichever of the repository's URLs answers first. */
 async function throughMirrors(repository: string, attempt: (url: string) => Promise<void>) {
   const failures: string[] = [];
-  for (const url of repositoryUrls(repository)) {
+  for (const url of mirroredUrls(repository)) {
     try {
       await attempt(url);
       return;
