@@ -3,7 +3,7 @@ body { background: var(--wc-background); color: var(--wc-foreground); font-famil
 #root { display: flex; overflow: hidden; padding: 3px; box-sizing: border-box; }
 .desktop-main, .sidebar-left, .sidebar-right { border: 1px solid var(--wc-border); border-radius: 8px; overflow: hidden; }
 /* The list and the main pane merge at their contact face; only the outer three sides are outlined. */
-.sidebar-left { border-radius: 8px 0 0 0; border-right: 0; }
+.sidebar-left { border-radius: 8px 0 0 8px; border-right: 0; }
 .desktop-main { display: flex; flex: 1; min-width: 240px; border-radius: 0 8px 8px 0; border-left: 0; }
 .plugin { flex: 1; min-width: 0; height: 100%; }
 .plugin-error { flex: 1; min-width: 0; padding: 48px 16px 16px; white-space: pre-wrap; overflow: auto; color: var(--wc-red); }
