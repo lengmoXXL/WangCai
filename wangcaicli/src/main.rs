@@ -14,7 +14,7 @@ use std::{
     os::unix::process::CommandExt,
     path::PathBuf,
     process::{Command, Stdio},
-    time::Duration,
+    time::{Duration, UNIX_EPOCH},
 };
 use tokio_tungstenite::tungstenite::{self, Message};
 
@@ -54,6 +54,10 @@ pub struct ServerInfo {
     port: u16,
     instance_id: String,
     protocol: u32,
+    // Which agent owns the node, and the build of it that is running: a node an older build wrote carries
+    // neither, and a node that was built again carries the file it was started from.
+    version: Option<String>,
+    build: Option<String>,
 }
 
 fn data_dir() -> Result<PathBuf> {
@@ -96,6 +100,25 @@ fn running_info() -> Result<ServerInfo> {
     Ok(actual)
 }
 
+/// The binary this command runs, as it looks now: a node that reports another one started from another file.
+fn build_stamp() -> Option<String> {
+    let binary = fs::metadata(std::env::current_exe().ok()?).ok()?;
+    let since_epoch = binary.modified().ok()?.duration_since(UNIX_EPOCH).ok()?;
+    Some(format!("{}-{}", binary.len(), since_epoch.as_secs()))
+}
+
+/// Stops the node this info names and waits for its state file to go.
+fn stop_node(info: &ServerInfo) -> Result<()> {
+    rpc(info, "stop")?;
+    for _ in 0..50 {
+        if running_info().is_err() {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    bail!("Node did not stop within 5 seconds")
+}
+
 fn main() -> Result<()> {
     let Cli {
         command: RootCommand::Server { command },
@@ -106,20 +129,17 @@ fn main() -> Result<()> {
             if as_json {
                 println!("{}", serde_json::to_string(&info)?);
             } else {
-                println!("Wangcai running: pid {}, 127.0.0.1:{}", info.pid, info.port);
+                println!(
+                    "Wangcai running: pid {}, 127.0.0.1:{}, version {}",
+                    info.pid,
+                    info.port,
+                    info.version.as_deref().unwrap_or("unknown")
+                );
             }
         }
         ServerCommand::Stop => {
-            let info = running_info()?;
-            rpc(&info, "stop")?;
-            for _ in 0..50 {
-                if running_info().is_err() {
-                    println!("Wangcai stopped");
-                    return Ok(());
-                }
-                std::thread::sleep(Duration::from_millis(100));
-            }
-            bail!("Node did not stop within 5 seconds");
+            stop_node(&running_info()?)?;
+            println!("Wangcai stopped");
         }
         ServerCommand::Start {
             foreground: false,
@@ -135,12 +155,22 @@ fn main() -> Result<()> {
                 .open(dir.join("startup.lock"))?;
             startup.lock_exclusive()?;
             if let Ok(info) = running_info() {
-                if as_json {
-                    println!("{}", serde_json::to_string(&info)?);
-                } else {
-                    println!("Wangcai already running on 127.0.0.1:{}", info.port);
+                // A node another build started is replaced: the app asks for the build it ships, and a
+                // development run for the one it just built.
+                if info.version.as_deref() == Some(env!("CARGO_PKG_VERSION"))
+                    && info.build == build_stamp()
+                {
+                    if as_json {
+                        println!("{}", serde_json::to_string(&info)?);
+                    } else {
+                        println!("Wangcai already running on 127.0.0.1:{}", info.port);
+                    }
+                    return Ok(());
                 }
-                return Ok(());
+                if !as_json {
+                    println!("Replacing the node that another build started");
+                }
+                stop_node(&info)?;
             }
             let log = fs::OpenOptions::new()
                 .create(true)
@@ -202,6 +232,8 @@ fn main() -> Result<()> {
                     port: listener.local_addr()?.port(),
                     instance_id: uuid::Uuid::new_v4().to_string(),
                     protocol: 1,
+                    version: Some(env!("CARGO_PKG_VERSION").to_string()),
+                    build: build_stamp(),
                 };
                 let tmp = dir.join("server.json.tmp");
                 let mut file = fs::File::create(&tmp)?;
