@@ -12,7 +12,7 @@ export const previewMessage = 'wangcai-preview';
 export interface PluginInfo { id: string; config: Record<string, unknown>; ui?: string; css?: string; error?: string; workspaces?: boolean }
 
 // What a plugin init.ts lists is doing, as the manager page reports it.
-export type InstallStage = 'cloning' | 'installing' | 'building' | 'ready' | 'failed';
+export type InstallStage = 'cloning' | 'updating' | 'installing' | 'building' | 'ready' | 'failed';
 export interface InstallStatus { id: string; stage: InstallStage; message?: string }
 export interface PluginBridge {
   publish(event: string, data: unknown): Promise<void>;

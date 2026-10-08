@@ -64,7 +64,7 @@ export async function installPlugin(spec: PluginSpec, node: string, onStage: (st
     return false;
   }
   let worked = false;
-  const git = (args: string[]) => run('git', args, directory);
+  const git = (args: string[], cwd = directory) => run('git', [...TRANSFER_LIMITS, ...args], cwd);
   // The directory holds one clone for the id.
   if (stamp?.repo && stamp.repo !== repository) throw new Error(`${directory} holds a clone of ${stamp.repo}, not of ${repository}`);
   if (!existsSync(join(directory, '.git'))) {
@@ -73,7 +73,7 @@ export async function installPlugin(spec: PluginSpec, node: string, onStage: (st
     mkdirSync(dirname(directory), { recursive: true });
     await throughMirrors(repository, async (url) => {
       onStage('cloning', `git clone ${url}`);
-      await run('git', [...TRANSFER_LIMITS, 'clone', url, directory], dirname(directory));
+      await git(['clone', url, directory], dirname(directory));
     });
     worked = true;
   }
@@ -83,7 +83,7 @@ export async function installPlugin(spec: PluginSpec, node: string, onStage: (st
     await throughMirrors(repository, async (url) => {
       onStage('cloning', `git fetch ${url} ${spec.commit}`);
       await git(['remote', 'set-url', 'origin', url]);
-      await git([...TRANSFER_LIMITS, 'fetch', 'origin']);
+      await git(['fetch', 'origin']);
     });
     worked = true;
   }
@@ -92,7 +92,11 @@ export async function installPlugin(spec: PluginSpec, node: string, onStage: (st
     // A pinned entry leaves the clone detached.
     const branch = (await git(['rev-parse', '--abbrev-ref', 'origin/HEAD'])).trim().replace(/^origin\//, '');
     await git(['checkout', '--force', branch]);
-    await git(['pull', '--ff-only']);
+    await throughMirrors(repository, async (url) => {
+      onStage('updating', `git pull ${url}`);
+      await git(['remote', 'set-url', 'origin', url]);
+      await git(['pull', '--ff-only']);
+    });
   }
   const commit = (await git(['rev-parse', 'HEAD'])).trim();
 

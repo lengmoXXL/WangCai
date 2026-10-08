@@ -1,6 +1,6 @@
 import type { InstallStage, InstallStatus } from '../shared';
 
-const stageNames: Record<InstallStage, string> = { cloning: '克隆中', installing: '安装依赖', building: '构建中', ready: '就绪', failed: '失败' };
+const stageNames: Record<InstallStage, string> = { cloning: '克隆中', updating: '同步中', installing: '安装依赖', building: '构建中', ready: '就绪', failed: '失败' };
 
 /** The plugin page: a card over the app, one row per plugin init.ts lists, and what to do about it. */
 export function installsPage() {

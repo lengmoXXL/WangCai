@@ -1,6 +1,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } = require('node:fs');
+const { execFileSync } = require('node:child_process');
+const { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } = require('node:fs');
+const { createServer } = require('node:net');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { buildSync } = require('esbuild');
@@ -230,6 +232,36 @@ test('an entry that drops its commit follows the branch again', { timeout: 18000
     assert.equal(await page.locator('[data-plugin=unpinned]').getAttribute('data-revision'), 'moving two');
   } finally {
     await desktop?.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('an update that stalls shows the plugin page first and reports the failure in it', { timeout: 180000 }, async () => {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-stall-')));
+  const env = testEnv(home);
+  const source = makePluginRepo(home, 'stalling');
+  const plugin = join(home, '.local/share/wangcai/plugins/stalling');
+  // A server that takes the connection and never answers: the pull only ends at the transfer limit.
+  const server = createServer(() => {});
+  await new Promise((done) => server.listen(0, '127.0.0.1', done));
+  const repository = `http://127.0.0.1:${server.address().port}/stalling.git`;
+  mkdirSync(join(home, '.local/share/wangcai/plugins'), { recursive: true });
+  execFileSync('git', ['clone', '-q', source.directory, plugin]);
+  execFileSync('git', ['-C', plugin, 'remote', 'set-url', 'origin', repository]);
+  writeInit(home, { tabs: [{ id: 'stalling', repo: repository }] });
+  let desktop;
+  try {
+    desktop = await launchApp(home, env);
+    const page = await desktop.firstWindow();
+    const updating = page.locator('.installs li[data-stage=updating]');
+    await updating.waitFor();
+    assert.match(await updating.locator('.install-message').innerText(), /git pull http:\/\/127\.0\.0\.1/);
+    const failed = page.locator('.installs li[data-stage=failed]');
+    await failed.waitFor({ timeout: 120000 });
+    assert.match(await failed.locator('.install-message').innerText(), /too slow/);
+  } finally {
+    await desktop?.close();
+    server.close();
     rmSync(home, { recursive: true, force: true });
   }
 });
