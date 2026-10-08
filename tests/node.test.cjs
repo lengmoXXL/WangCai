@@ -117,10 +117,13 @@ test('persistent terminal node lifecycle', { timeout: 150000 }, async (t) => {
       await observer.rpc('close', { session_id: second.id });
       assert.equal((await client.rpc('list')).length, 1);
     });
-    await t.test('ownership and dimensions are enforced', async () => {
-      const other = await new Client(info.port).connect(); clients.push(other);
-      await assert.rejects(other.rpc('attach', { session_id: first.id }), /another client/);
-      await assert.rejects(other.rpc('input', { session_id: first.id, data: 'oops' }), /Attach/);
+    await t.test('a terminal takes a second viewer, and dimensions are enforced', async () => {
+      const viewer = await new Client(info.port).connect(); clients.push(viewer);
+      await assert.rejects(viewer.rpc('input', { session_id: first.id, data: 'oops' }), /Attach/);
+      // A connection that vanished without closing holds nothing: what a laptop left behind when it slept
+      // does not keep the client that woke up, or anyone else, out of the shell.
+      await viewer.rpc('attach', { session_id: first.id });
+      await until(async () => (await viewer.text(first.id)).includes('你好_kept_/tmp'), 'a second viewer');
       await client.rpc('resize', { session_id: first.id, rows: 31, cols: 101 });
       await client.rpc('input', { session_id: first.id, data: 'stty size\r' });
       await until(() => client.raw(first.id).includes('31 101'), 'PTY resize');
@@ -149,14 +152,14 @@ test('persistent terminal node lifecycle', { timeout: 150000 }, async (t) => {
       assert.deepEqual(await history.rpc('list'), []);
     });
     await t.test('closing a terminal kills shell and background descendants', async () => {
-      const owner = await new Client(info.port).connect(); clients.push(owner);
-      const session = await owner.rpc('create');
-      await owner.rpc('attach', { session_id: session.id });
+      const driver = await new Client(info.port).connect(); clients.push(driver);
+      const session = await driver.rpc('create');
+      await driver.rpc('attach', { session_id: session.id });
       const pidFile = join(home, 'background.pid');
-      await owner.rpc('input', { session_id: session.id, data: `sleep 60 & echo $! > '${pidFile}'\r` });
+      await driver.rpc('input', { session_id: session.id, data: `sleep 60 & echo $! > '${pidFile}'\r` });
       let pid;
       await until(() => { try { pid = Number(readFileSync(pidFile, 'utf8')); return pid > 0; } catch { return false; } }, 'background pid');
-      await owner.rpc('close', { session_id: session.id });
+      await driver.rpc('close', { session_id: session.id });
       await until(() => { try { process.kill(pid, 0); return false; } catch { return true; } }, 'background cleanup');
       await until(() => { try { process.kill(session.pid, 0); return false; } catch { return true; } }, 'shell cleanup');
     });

@@ -31,7 +31,6 @@ struct Terminal {
     parser: vt100::Parser,
     seq: u64,
     exit_code: Option<u32>,
-    owner: Option<String>,
     output: broadcast::Sender<Message>,
 }
 
@@ -225,7 +224,6 @@ impl Node {
             parser: vt100::Parser::new(rows, cols, 10_000),
             seq: 0,
             exit_code: None,
-            owner: None,
             output,
         }));
         let summary = terminal.lock().unwrap().summary();
@@ -290,7 +288,6 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
     .await??;
     let (mut sink, mut source) = socket.split();
     let (out, mut incoming) = mpsc::channel::<Message>(128);
-    let connection_id = uuid::Uuid::new_v4().to_string();
     let mut attachments: HashMap<String, JoinHandle<()>> = HashMap::new();
     let mut commands = tokio::task::JoinSet::new();
     let mut changed = node.changed.subscribe();
@@ -361,10 +358,8 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                         "create" => { let (rows, cols) = dimensions(&request)?; node.create(rows, cols, request["cwd"].as_str()) }
                         "attach" => {
                             let session = node.session(id)?;
-                            let mut terminal = session.lock().unwrap();
-                            if terminal.owner.as_ref().is_some_and(|owner| owner != &connection_id) { bail!("Terminal is attached to another client"); }
+                            let terminal = session.lock().unwrap();
                             if let Some(task) = attachments.remove(id) { task.abort(); }
-                            terminal.owner = Some(connection_id.clone());
                             // Subscribe under the same lock as the snapshot's sequence boundary.
                             let mut events = terminal.output.subscribe();
                             let snapshot = terminal.snapshot();
@@ -390,16 +385,12 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                         }
                         "detach" => {
                             if let Some(task) = attachments.remove(id) { task.abort(); }
-                            if let Ok(session) = node.session(id) {
-                                let mut terminal = session.lock().unwrap();
-                                if terminal.owner.as_ref() == Some(&connection_id) { terminal.owner = None; }
-                            }
                             Ok(json!({}))
                         }
                         "input" | "resize" => {
                             let session = node.session(id)?;
+                            if !attachments.contains_key(id) { bail!("Attach the terminal before writing or resizing"); }
                             let mut terminal = session.lock().unwrap();
-                            if terminal.owner.as_ref() != Some(&connection_id) { bail!("Attach the terminal before writing or resizing"); }
                             if op == "input" {
                                 if terminal.exit_code.is_some() { bail!("Shell has exited"); }
                                 let data = request["data"].as_str().context("Missing input data")?;
@@ -436,14 +427,8 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
             }
         }
     }
-    for (id, task) in attachments {
+    for task in attachments.into_values() {
         task.abort();
-        if let Ok(session) = node.session(&id) {
-            let mut terminal = session.lock().unwrap();
-            if terminal.owner.as_ref() == Some(&connection_id) {
-                terminal.owner = None;
-            }
-        }
     }
     commands.shutdown().await;
     writer.abort();
