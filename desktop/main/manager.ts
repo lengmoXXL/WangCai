@@ -24,12 +24,12 @@ export function pluginManager(options: {
     specs: specs.filter((spec) => !failed.has(spec.id)),
   });
   /** Installs the targets and answers whether any of them had work left to do. */
-  const install = async (targets: PluginSpec[]) => {
+  const install = async (targets: PluginSpec[], follow = false) => {
     let worked = false;
     for (const spec of targets) {
       if (!spec.repo) continue;
       try {
-        const changed = await installPlugin(spec, node, (stage, message) => announce({ id: spec.id, stage, message }));
+        const changed = await installPlugin(spec, node, (stage, message) => announce({ id: spec.id, stage, message }), follow);
         if (changed) worked = true;
         failed.delete(spec.id);
       } catch (error) {
@@ -51,7 +51,7 @@ export function pluginManager(options: {
      * new ones.
      */
     async update(ids: string[]) {
-      if (!(await install(specs.filter(({ id }) => ids.includes(id))))) return false;
+      if (!(await install(specs.filter(({ id }) => ids.includes(id)), true))) return false;
       await (await loading).dispose();
       loading = load();
       return true;

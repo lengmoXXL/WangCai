@@ -47,18 +47,21 @@ async function throughMirrors(repository: string, attempt: (url: string) => Prom
 /**
  * Brings a repository plugin up to date and builds it, so the loader finds the files it expects.
  * `node` is the runtime the app carries; the plugin's own build script decides what a build is.
+ * `follow` is what a row's update asks for: an entry that pins nothing then moves to its branch's commits,
+ * which a start leaves alone.
  * Answers whether that changed anything about the checkout or its build.
  */
-export async function installPlugin(spec: PluginSpec, node: string, onStage: (stage: InstallStage, message?: string) => void) {
+export async function installPlugin(spec: PluginSpec, node: string, onStage: (stage: InstallStage, message?: string) => void, follow = false) {
   const directory = pluginDirectory(spec);
   const repository = spec.repo;
   if (!repository) return;
   const installs = existsSync(installsPath) ? JSON.parse(readFileSync(installsPath, 'utf8')) as Installs : {};
   const stamp = installs[spec.id];
   const builtFrom = (commit: string) => stamp?.repo === repository && stamp.commit === commit && existsSync(join(directory, 'main.cjs'));
-  // A build of the commit init.ts pins is what the app is meant to run, so it starts from it without a
-  // network at all.
-  if (spec.commit && builtFrom(spec.commit)) {
+  // What is already built is what a start runs, without a network at all: the build of the commit init.ts pins,
+  // and the build an entry that pins nothing already has.
+  const upToDate = spec.commit ? builtFrom(spec.commit) : Boolean(stamp && builtFrom(stamp.commit));
+  if (upToDate && !follow) {
     onStage('ready', '无需更新');
     return false;
   }
@@ -91,7 +94,7 @@ export async function installPlugin(spec: PluginSpec, node: string, onStage: (st
     // A pinned entry leaves the clone detached.
     const branch = (await git(['rev-parse', '--abbrev-ref', 'origin/HEAD'])).trim().replace(/^origin\//, '');
     await git(['checkout', '--force', branch]);
-    await throughMirrors(repository, async (url) => {
+    if (follow) await throughMirrors(repository, async (url) => {
       onStage('updating', `git pull ${url}`);
       await git(['remote', 'set-url', 'origin', url]);
       await git(['pull', '--ff-only']);

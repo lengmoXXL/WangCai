@@ -1,7 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
-const { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } = require('node:fs');
+const { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } = require('node:fs');
 const { createServer } = require('node:net');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
@@ -206,7 +205,7 @@ test('naming another repository for an id that is already cloned refuses to inst
   }
 });
 
-test('an entry that drops its commit follows the branch again', { timeout: 180000 }, async () => {
+test('an entry that drops its commit keeps its build until its row is updated', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-unpin-')));
   const env = testEnv(home);
   const moving = makePluginRepo(home, 'moving');
@@ -228,33 +227,33 @@ test('an entry that drops its commit follows the branch again', { timeout: 18000
     moving.revise('moving two');
     writeFileSync(init, readFileSync(init, 'utf8').replace(/,"commit":"[0-9a-f]+"/, ''));
     await launch();
-    assert.equal(await page.locator('[data-plugin=unpinned]').getAttribute('data-revision'), 'moving two');
+    assert.equal(await page.locator('[data-plugin=unpinned]').getAttribute('data-revision'), 'moving one');
+    await desktop.evaluate(({ Menu }) => Menu.getApplicationMenu().items.flatMap((item) => item.submenu.items).find((item) => item.label === '插件').click());
+    const update = page.locator('.installs li[data-stage=ready] button');
+    await update.waitFor();
+    await update.click();
+    await page.waitForFunction(() => document.querySelector('[data-plugin=unpinned]')?.dataset.revision === 'moving two');
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('an update that stalls shows the plugin page first and reports the failure in it', { timeout: 180000 }, async () => {
+test('a start that stalls on a clone shows the plugin page first and reports the failure in it', { timeout: 180000 }, async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-stall-')));
   const env = testEnv(home);
-  const source = makePluginRepo(home, 'stalling');
-  const plugin = join(home, '.local/share/wangcai/plugins/stalling');
-  // A server that takes the connection and never answers: the pull only ends at the transfer limit.
+  // A server that takes the connection and never answers: the clone only ends at the transfer limit.
   const server = createServer(() => {});
   await new Promise((done) => server.listen(0, '127.0.0.1', done));
   const repository = `http://127.0.0.1:${server.address().port}/stalling.git`;
-  mkdirSync(join(home, '.local/share/wangcai/plugins'), { recursive: true });
-  execFileSync('git', ['clone', '-q', source.directory, plugin]);
-  execFileSync('git', ['-C', plugin, 'remote', 'set-url', 'origin', repository]);
   writeInit(home, { tabs: [{ id: 'stalling', repo: repository }] });
   let desktop;
   try {
     desktop = await launchApp(home, env);
     const page = await desktop.firstWindow();
-    const updating = page.locator('.installs li[data-stage=updating]');
-    await updating.waitFor();
-    assert.match(await updating.locator('.install-message').innerText(), /git pull http:\/\/127\.0\.0\.1/);
+    const cloning = page.locator('.installs li[data-stage=cloning]');
+    await cloning.waitFor();
+    assert.match(await cloning.locator('.install-message').innerText(), /git clone http:\/\/127\.0\.0\.1/);
     const failed = page.locator('.installs li[data-stage=failed]');
     await failed.waitFor({ timeout: 120000 });
     assert.match(await failed.locator('.install-message').innerText(), /too slow/);
