@@ -14,7 +14,7 @@ use std::{
     os::unix::process::CommandExt,
     path::PathBuf,
     process::{Command, Stdio},
-    time::{Duration, UNIX_EPOCH},
+    time::Duration,
 };
 use tokio_tungstenite::tungstenite::{self, Message};
 
@@ -54,10 +54,8 @@ pub struct ServerInfo {
     port: u16,
     instance_id: String,
     protocol: u32,
-    // Which agent owns the node, and the build of it that is running: a node an older build wrote carries
-    // neither, and a node that was built again carries the file it was started from.
+    // Which agent owns the node: a node an older build wrote carries no version, and is replaced.
     version: Option<String>,
-    build: Option<String>,
 }
 
 fn data_dir() -> Result<PathBuf> {
@@ -98,13 +96,6 @@ fn running_info() -> Result<ServerInfo> {
         bail!("Node instance does not match server.json");
     }
     Ok(actual)
-}
-
-/// The binary this command runs, as it looks now: a node that reports another one started from another file.
-fn build_stamp() -> Option<String> {
-    let binary = fs::metadata(std::env::current_exe().ok()?).ok()?;
-    let since_epoch = binary.modified().ok()?.duration_since(UNIX_EPOCH).ok()?;
-    Some(format!("{}-{}", binary.len(), since_epoch.as_secs()))
 }
 
 /// Stops the node this info names and waits for its state file to go.
@@ -155,11 +146,9 @@ fn main() -> Result<()> {
                 .open(dir.join("startup.lock"))?;
             startup.lock_exclusive()?;
             if let Ok(info) = running_info() {
-                // A node another build started is replaced: the app asks for the build it ships, and a
-                // development run for the one it just built.
-                if info.version.as_deref() == Some(env!("CARGO_PKG_VERSION"))
-                    && info.build == build_stamp()
-                {
+                // A node of this agent's version is kept, whichever file started it: an app upgrade that ships
+                // the same agent leaves its terminals running, and a new agent comes with a new version.
+                if info.version.as_deref() == Some(env!("CARGO_PKG_VERSION")) {
                     if as_json {
                         println!("{}", serde_json::to_string(&info)?);
                     } else {
@@ -168,7 +157,7 @@ fn main() -> Result<()> {
                     return Ok(());
                 }
                 if !as_json {
-                    println!("Replacing the node that another build started");
+                    println!("Replacing the node of another version");
                 }
                 stop_node(&info)?;
             }
@@ -233,7 +222,6 @@ fn main() -> Result<()> {
                     instance_id: uuid::Uuid::new_v4().to_string(),
                     protocol: 1,
                     version: Some(env!("CARGO_PKG_VERSION").to_string()),
-                    build: build_stamp(),
                 };
                 let tmp = dir.join("server.json.tmp");
                 let mut file = fs::File::create(&tmp)?;

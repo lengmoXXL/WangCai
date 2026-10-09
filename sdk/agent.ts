@@ -34,7 +34,8 @@ export async function ensureAgent(host: string, { version, prefixes, signal }: A
   const failures: string[] = [];
   for (const prefix of prefixes) {
     signal?.throwIfAborted();
-    const url = `${prefix}/v${version}/wangcai-${target}`;
+    // The agent is released on its own, so the release it comes from is named after its version.
+    const url = `${prefix}/agent-v${version}/wangcai-${target}`;
     const deadline = AbortSignal.timeout(DOWNLOAD_TIMEOUT);
     let binary: Buffer;
     try {

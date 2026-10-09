@@ -90,10 +90,8 @@ test('persistent terminal node lifecycle', { timeout: 150000 }, async (t) => {
     assert.deepEqual(JSON.parse(cli('start', '--json')), info);
     assert.ok(info.port > 0);
     assert.equal(info.protocol, 1);
-    // The node says which build it runs, so whoever asked can tell whether it is the one it ships.
-    const stamp = statSync(binary);
+    // The node says which agent owns it, so whoever asked can tell whether it is the one it ships.
     assert.equal(`wangcai ${info.version}`, execFileSync(binary, ['--version'], { encoding: 'utf8' }).trim());
-    assert.equal(info.build, `${stamp.size}-${Math.floor(stamp.mtimeMs / 1000)}`);
     assert.match(cli('start'), /already running/);
     assert.equal(JSON.parse(cli('status', '--json')).instance_id, info.instance_id);
     const client = await new Client(info.port).connect(); clients.push(client);
@@ -177,16 +175,14 @@ test('persistent terminal node lifecycle', { timeout: 150000 }, async (t) => {
       const fresh = await new Client(restarted.port).connect(); clients.push(fresh);
       assert.deepEqual(await fresh.rpc('list'), []);
     });
-    await t.test('a node another build started is replaced, not reused', async () => {
+    await t.test('a node this version started is kept, whichever file started it', async () => {
       const before = JSON.parse(cli('start', '--json'));
       const built = statSync(binary).mtime;
-      // A rebuild leaves the version where it was, so the stamp of the binary is what tells the two apart.
+      // An app upgrade writes the agent of the same version over the one that started the node, so the version
+      // is what decides: the terminals the node holds stay where they are.
       utimesSync(binary, new Date(0), new Date(0));
       try {
-        const after = JSON.parse(cli('start', '--json'));
-        assert.notEqual(after.instance_id, before.instance_id);
-        const fresh = await new Client(after.port).connect(); clients.push(fresh);
-        assert.deepEqual(await fresh.rpc('list'), []);
+        assert.deepEqual(JSON.parse(cli('start', '--json')), before);
       } finally {
         utimesSync(binary, built, built);
       }

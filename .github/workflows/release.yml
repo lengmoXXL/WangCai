@@ -4,12 +4,70 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      agent:
+        description: Publish the agent even if wangcaicli did not change
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 jobs:
+  # The app goes out on every tag. The agent goes out on its own, under the tag of its own version, and only
+  # when wangcaicli changed: an app that ships the same agent keeps the running terminals on the machines it
+  # is installed on.
+  versions:
+    runs-on: ubuntu-latest
+    outputs:
+      crate: ${{ steps.read.outputs.crate }}
+      agent: ${{ steps.read.outputs.agent }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Read the versions and decide what this run publishes
+        id: read
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.agent }}
+        run: |
+          crate=$(sed -n 's/^version = "\(.*\)"/\1/p' wangcaicli/Cargo.toml | head -1)
+          app=$(node -p "require('./desktop/package.json').version")
+          echo "crate=$crate" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            test "$GITHUB_REF_NAME" = "v$app" || { echo "$GITHUB_REF_NAME does not match app version $app"; exit 1; }
+          fi
+          previous=$(git describe --tags --abbrev=0 --match 'v*' HEAD^ 2>/dev/null || true)
+          changed=true
+          if [ -n "$previous" ]; then
+            if [ -z "$(git diff --name-only "$previous" HEAD -- wangcaicli)" ]; then changed=false; fi
+            if [ "$changed" = true ]; then
+              released=$(git show "$previous:wangcaicli/Cargo.toml" | sed -n 's/^version = "\(.*\)"/\1/p' | head -1)
+              test "$crate" != "$released" || { echo "wangcaicli changed but its version is still $crate"; exit 1; }
+            fi
+          fi
+          if [ "$changed" = true ] || [ "$FORCE" = true ]; then
+            echo "agent=true" >> "$GITHUB_OUTPUT"
+          else
+            gh release view "agent-v$crate" >/dev/null 2>&1 || { echo "no agent-v$crate release for the agent this app ships"; exit 1; }
+            echo "agent=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Open the releases this run writes into
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+          fi
+          if [ "${{ steps.read.outputs.agent }}" = true ]; then
+            tag=agent-v${{ steps.read.outputs.crate }}
+            gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "$tag" --target "$GITHUB_SHA" --generate-notes
+          fi
+
   agent:
+    needs: versions
+    if: needs.versions.outputs.agent == 'true'
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -23,13 +81,6 @@ jobs:
             target: x86_64-unknown-linux-musl
     steps:
       - uses: actions/checkout@v4
-      - name: Check the tag against both versions
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          crate=$(sed -n 's/^version = "\(.*\)"/\1/p' wangcaicli/Cargo.toml | head -1)
-          app=$(node -p "require('./desktop/package.json').version")
-          test "$crate" = "$app" || { echo "wangcaicli is $crate but the app is $app"; exit 1; }
-          test "v$crate" = "$GITHUB_REF_NAME" || { echo "$GITHUB_REF_NAME does not match agent version $crate"; exit 1; }
       - name: Add the target
         run: rustup target add ${{ matrix.target }}
       - name: Build the agent
@@ -41,16 +92,13 @@ jobs:
         with:
           name: wangcai-${{ matrix.target }}
           path: wangcai-${{ matrix.target }}
-      - name: Publish to the release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Publish the agent under the tag of its own version
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
-          gh release upload "$GITHUB_REF_NAME" "wangcai-${{ matrix.target }}" --clobber
+        run: gh release upload "agent-v${{ needs.versions.outputs.crate }}" "wangcai-${{ matrix.target }}" --clobber
 
   app:
-    needs: agent
+    needs: versions
     runs-on: macos-latest
     strategy:
       fail-fast: false

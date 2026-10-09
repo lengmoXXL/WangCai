@@ -49,19 +49,19 @@ async function remote(platform, assets) {
 }
 
 test('a remote machine gets the agent for its platform, and only when the version differs', async () => {
-  const machine = await remote('Darwin arm64', { '/v0.1.0/wangcai-aarch64-apple-darwin': agent });
+  const machine = await remote('Darwin arm64', { '/agent-v0.1.0/wangcai-aarch64-apple-darwin': agent });
   try {
     await machine.install('0.1.0');
     assert.equal(readFileSync(join(machine.home, '.local/bin/wangcai'), 'utf8'), agent);
     assert.deepEqual(readdirSync(join(machine.home, '.local/bin')), ['wangcai']);
-    assert.deepEqual(machine.requested, ['/v0.1.0/wangcai-aarch64-apple-darwin']);
+    assert.deepEqual(machine.requested, ['/agent-v0.1.0/wangcai-aarch64-apple-darwin']);
     await machine.install('0.1.0');
-    assert.deepEqual(machine.requested, ['/v0.1.0/wangcai-aarch64-apple-darwin']);
+    assert.deepEqual(machine.requested, ['/agent-v0.1.0/wangcai-aarch64-apple-darwin']);
     await assert.rejects(machine.install('9.9.9'), /下载 agent 失败：[\s\S]*404 Not Found/);
-    assert.deepEqual(machine.requested, ['/v0.1.0/wangcai-aarch64-apple-darwin', '/v9.9.9/wangcai-aarch64-apple-darwin']);
+    assert.deepEqual(machine.requested, ['/agent-v0.1.0/wangcai-aarch64-apple-darwin', '/agent-v9.9.9/wangcai-aarch64-apple-darwin']);
     // A failed download left the working agent in place, so this version is still a no-op.
     await machine.install('0.1.0');
-    assert.deepEqual(machine.requested, ['/v0.1.0/wangcai-aarch64-apple-darwin', '/v9.9.9/wangcai-aarch64-apple-darwin']);
+    assert.deepEqual(machine.requested, ['/agent-v0.1.0/wangcai-aarch64-apple-darwin', '/agent-v9.9.9/wangcai-aarch64-apple-darwin']);
   } finally { await machine.close(); }
 });
 
@@ -85,11 +85,11 @@ test('a platform without a release fails before anything is downloaded', async (
 });
 
 test('a prefix that does not answer hands the download to the next one', async () => {
-  const machine = await remote('Darwin arm64', { '/v0.1.0/wangcai-aarch64-apple-darwin': agent });
+  const machine = await remote('Darwin arm64', { '/agent-v0.1.0/wangcai-aarch64-apple-darwin': agent });
   try {
     // Nothing listens on the first prefix.
     await machine.install('0.1.0', ['http://127.0.0.1:1', machine.prefix]);
     assert.equal(readFileSync(join(machine.home, '.local/bin/wangcai'), 'utf8'), agent);
-    assert.deepEqual(machine.requested, ['/v0.1.0/wangcai-aarch64-apple-darwin']);
+    assert.deepEqual(machine.requested, ['/agent-v0.1.0/wangcai-aarch64-apple-darwin']);
   } finally { await machine.close(); }
 });

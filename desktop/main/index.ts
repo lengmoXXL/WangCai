@@ -1,6 +1,8 @@
+import { execFile } from 'node:child_process';
 import { app, BrowserWindow, ipcMain, Menu, net, protocol, shell } from 'electron';
 import { join, resolve, relative, isAbsolute, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { pluginManager } from './manager';
 import { mirroredUrls } from './install';
@@ -8,8 +10,15 @@ import { homeOverride, loadConfig, storageDirectory, tabsPath, userDataDirectory
 import type { TabRecord } from '@lengmoxxl/sdk/channel';
 import { previewMessage, previewScheme, previewUrl, uiFont } from '../shared';
 
-// The release the app belongs to: its agent binaries live under this GitHub URL.
+// Where the agent releases live: each one is under the tag of its own version.
 const AGENT_RELEASES = 'https://github.com/lengmoXXL/WangCai/releases/download';
+const exec = promisify(execFile);
+
+/** The version of the agent this app carries, which is the release a machine installs it from. */
+async function agentVersion(directory: string) {
+  const { stdout } = await exec(join(directory, 'wangcai'), ['--version']);
+  return stdout.trim().split(' ')[1];
+}
 
 app.setName('旺财');
 protocol.registerSchemesAsPrivileged([
@@ -40,9 +49,10 @@ else {
     // manager page reports each stage while it happens.
     mkdirSync(storageDirectory, { recursive: true });
     const node = app.isPackaged ? join(process.resourcesPath, 'node/bin/node') : join(app.getAppPath(), 'node/bin/node');
+    const resourcesDirectory = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug');
     const manager = pluginManager({
-      resourcesDirectory: app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug'),
-      agent: { version: app.getVersion(), prefixes: mirroredUrls(AGENT_RELEASES) },
+      resourcesDirectory,
+      agent: { version: await agentVersion(resourcesDirectory), prefixes: mirroredUrls(AGENT_RELEASES) },
       profile, specs, node,
       broadcast: (event, data) => send('wangcai:channel', event, data),
     });
