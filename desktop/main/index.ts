@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, net, protocol } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, net, protocol, shell } from 'electron';
 import { join, resolve, relative, isAbsolute, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
@@ -80,6 +80,12 @@ else {
     ipcMain.handle('wangcai:save-tabs', (_: unknown, tabs: TabRecord[]) => {
       writeFileSync(`${tabsPath}.tmp`, JSON.stringify(tabs, null, 2));
       renameSync(`${tabsPath}.tmp`, tabsPath);
+    });
+    // A plugin hands the app a link, not a program.
+    ipcMain.handle('wangcai:open', (_: unknown, url: unknown) => {
+      const address = new URL(String(url));
+      if (address.protocol !== 'http:' && address.protocol !== 'https:') throw new Error(`Only http and https links open in a browser: ${url}`);
+      return shell.openExternal(address.toString());
     });
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { label: '旺财', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'quit' }] },

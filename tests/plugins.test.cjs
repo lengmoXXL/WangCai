@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { launchApp, openWorkspaceMenu, testEnv, writeInit } = require('./init.cjs');
+const { launchApp, mockPlugin, openWorkspaceMenu, testEnv, writeInit } = require('./init.cjs');
 
 test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-plugins-'));
@@ -134,6 +134,33 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     await page.getByText('beta v1', { exact: true }).waitFor();
     assert.equal(await page.getByText('alpha v1', { exact: true }).count(), 0);
     assert.equal(existsSync(join(home, '.local/share/wangcai/server.json')), false);
+  } finally {
+    await desktop?.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a plugin opens a web link in the browser, and nothing else reaches it', { timeout: 180000 }, async () => {
+  const home = mkdtempSync(join(tmpdir(), 'wangcai-links-'));
+  const env = testEnv(home);
+  // The browser belongs to the computer the app runs on: a test cannot open one.
+  mockPlugin(home, 'links', { ui: `export function mount(_container, context) {
+  globalThis.links = (url) => context.host.open(url);
+}` });
+  writeInit(home, { tabs: ['links'] });
+  let desktop;
+  try {
+    desktop = await launchApp(home, env);
+    const page = await desktop.firstWindow();
+    await page.waitForFunction(() => globalThis.links);
+    await desktop.evaluate(({ shell }) => {
+      globalThis.opened = [];
+      shell.openExternal = async (url) => { globalThis.opened.push(url); };
+    });
+    await page.evaluate(() => globalThis.links('https://example.com/page'));
+    const refused = await page.evaluate(() => globalThis.links('file:///etc/passwd').then(() => 'opened', (error) => error.message));
+    assert.match(refused, /Only http and https links open in a browser/);
+    assert.deepEqual(await desktop.evaluate(() => globalThis.opened), ['https://example.com/page']);
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });

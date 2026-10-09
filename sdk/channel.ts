@@ -44,5 +44,7 @@ export interface UiContext {
     config: any;
     preview: { url: string; message: string };
     tabs(options: TabOptions): void;
+    // Opens a web address in the browser of the computer the app runs on; only http and https reach it.
+    open(url: string): Promise<void>;
   };
 }

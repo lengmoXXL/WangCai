@@ -24,5 +24,6 @@ export interface PluginBridge {
   installs(): Promise<InstallStatus[]>;
   loadTabs(): Promise<TabRecord[]>;
   saveTabs(tabs: TabRecord[]): Promise<void>;
+  open(url: string): Promise<void>;
 }
 declare global { interface Window { wangcai: PluginBridge } }

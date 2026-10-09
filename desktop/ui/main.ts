@@ -502,6 +502,7 @@ async function start() {
           config: { ...profile, ...plugin.config },
           preview: { url: previewUrl, message: previewMessage },
           tabs: openTab,
+          open: window.wangcai.open,
         },
       };
       const module = await import(/* @vite-ignore */ plugin.ui!);
