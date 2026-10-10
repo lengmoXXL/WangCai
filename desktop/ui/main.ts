@@ -196,7 +196,7 @@ async function start() {
       const hint = document.createElement('span');
       hint.textContent = item.hint ?? '';
       button.append(hint);
-      button.disabled = Boolean(item.error);
+      // A machine that failed last time keeps its reason on hover, and a click is the retry.
       if (item.error) button.title = item.error;
       button.onclick = async () => {
         button.disabled = true;
@@ -207,9 +207,10 @@ async function start() {
           await refreshRows();
           selectWorkspace(created.id);
         } catch (error) {
-          // A failed attempt keeps the entry listed, greyed out, with the reason in the hint and on hover.
+          // A failed attempt keeps the entry listed, with the reason in the hint and on hover, and clickable.
           hint.textContent = error instanceof Error ? error.message : String(error);
           button.title = hint.textContent;
+          button.disabled = false;
         }
       };
       items.push(button);

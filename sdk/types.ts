@@ -7,7 +7,7 @@ export type InstallAgent = (host: string, signal?: AbortSignal) => Promise<void>
  *
  *   workspaces()              -> WorkspaceRow[]        one flat row per workspace, in draw order
  *   workspace-menu()          -> WorkspaceMenuItem[]   what the menu offers to open; an entry that carries
- *                                                      an error stays listed but is not clickable
+ *                                                      an error stays listed with its reason, and a click retries it
  *   workspace-create({ key }) -> { id: string }        the id of the workspace it made
  *   workspace-select({ id })
  *   workspace-close({ id })
