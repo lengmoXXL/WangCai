@@ -12,6 +12,8 @@ interface Info { pid: number; port: number; instance_id: string; protocol: numbe
 export class MachineConnection {
   private listeners = new Set<(state: MachineState) => void>();
   private terminals = new Map<string, Pty>();
+  // Where the daemon listens: the window reaches it with this.
+  port?: number;
   private instance?: string;
   readonly ready: Promise<void>;
   private resolveReady!: () => void;
@@ -156,6 +158,7 @@ export class MachineConnection {
         if (!current()) return;
         port = await this.forward(info.port, current);
       }
+      this.port = port;
       if (!current()) return;
       const socket = new WebSocket(`ws://127.0.0.1:${port}`, { handshakeTimeout: 5000, maxPayload: 64 * 1024 * 1024 });
       this.ws = socket;

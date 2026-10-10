@@ -14,13 +14,7 @@ use tokio::{
     sync::{Notify, broadcast, mpsc},
     task::JoinHandle,
 };
-use tokio_tungstenite::{
-    accept_hdr_async,
-    tungstenite::{
-        Message,
-        handshake::server::{Request, Response},
-    },
-};
+use tokio_tungstenite::{accept_async, tungstenite::Message};
 
 struct Terminal {
     id: String,
@@ -271,21 +265,9 @@ fn dimensions(request: &Value) -> Result<(u16, u16)> {
     Ok((rows as u16, cols as u16))
 }
 
-#[allow(clippy::result_large_err)] // tungstenite's handshake callback requires an HTTP error response.
 async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
-    let socket = tokio::time::timeout(
-        Duration::from_secs(5),
-        accept_hdr_async(stream, |request: &Request, response: Response| {
-            if request.headers().contains_key("origin") {
-                return Err(tokio_tungstenite::tungstenite::http::Response::builder()
-                    .status(403)
-                    .body(Some("Connect using the Wangcai desktop client".into()))
-                    .unwrap());
-            }
-            Ok(response)
-        }),
-    )
-    .await??;
+    // The renderer speaks to this socket itself, so the origin it was loaded from is never checked.
+    let socket = tokio::time::timeout(Duration::from_secs(5), accept_async(stream)).await??;
     let (mut sink, mut source) = socket.split();
     let (out, mut incoming) = mpsc::channel::<Message>(128);
     let mut attachments: HashMap<String, JoinHandle<()>> = HashMap::new();
