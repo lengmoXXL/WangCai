@@ -1,4 +1,5 @@
-export interface AgentInfo { version: string; prefixes: string[] }
+/** What puts the agent on an ssh machine, which the SDK calls before it connects to it. */
+export type InstallAgent = (host: string, signal?: AbortSignal) => Promise<void>;
 
 /**
  * The workspace protocol. A plugin that init.ts lists under `workspaces` is a workspace provider, and
@@ -35,7 +36,7 @@ export interface FileClick {
   line?: number;
   column?: number;
 }
-export type ConnectionOptions = { type: 'local'; binary?: string; signal?: AbortSignal } | { type: 'ssh'; host: string; agent?: AgentInfo; signal?: AbortSignal };
+export type ConnectionOptions = { type: 'local'; binary?: string; signal?: AbortSignal } | { type: 'ssh'; host: string; agent?: InstallAgent; signal?: AbortSignal };
 export interface Size { rows: number; cols: number }
 export interface Session extends Size { id: string; title: string; pid: number; exit_code: number | null }
 export interface MachineState {

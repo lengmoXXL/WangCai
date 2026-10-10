@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { compileFunction } from 'node:vm';
-import type { AgentInfo, Profile } from '@lengmoxxl/sdk';
+import type { InstallAgent, Profile } from '@lengmoxxl/sdk';
 import type { Dispose, MainContext } from '@lengmoxxl/sdk/channel';
 import type { PluginInfo } from '../shared';
 import { pluginDataDirectory, pluginDirectory, type PluginSpec } from './config';
@@ -31,7 +31,7 @@ function resolveConfig(schema: unknown, values: unknown): Record<string, unknown
 }
 
 export async function loadPlugins(options: {
-  resourcesDirectory: string; agent: AgentInfo; profile: Profile;
+  resourcesDirectory: string; agent: InstallAgent; profile: Profile;
   specs: PluginSpec[]; broadcast: (event: string, data: unknown) => void;
 }) {
   const { resourcesDirectory, agent, profile, specs, broadcast } = options;

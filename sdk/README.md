@@ -32,8 +32,8 @@ connection.disconnect();
 
 `openMachine` returns a `MachineConnection`; every call opens its own. Sharing one belongs to the caller: a
 connection is reference counted, so callers that hand the same one around keep it alive until the last
-`disconnect()`. `openMachine({ type: 'ssh', host, agent })` installs the carrier agent on the host first when
-`agent` is given.
+`disconnect()`. `openMachine({ type: 'ssh', host, agent })` calls `agent(host)` before it connects: putting
+the carrier agent on the host belongs to the app that embeds the SDK.
 
 - `connection.pty` - `list`, `cwd`, `create`, `attach`, `close`
 - `connection.fs` - `stat`, `readDirectory`, `readFile`
