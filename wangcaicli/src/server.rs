@@ -1,4 +1,5 @@
 use crate::ServerInfo;
+use crate::process::{Event, Process};
 use anyhow::{Context, Result, bail};
 use futures_util::{SinkExt, StreamExt};
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
@@ -11,7 +12,7 @@ use std::{
 };
 use tokio::{
     net::{TcpListener, TcpStream},
-    sync::{Notify, broadcast, mpsc},
+    sync::{Mutex as AsyncMutex, Notify, broadcast, mpsc},
     task::JoinHandle,
 };
 use tokio_tungstenite::{accept_async, tungstenite::Message};
@@ -165,6 +166,7 @@ fn packet(header: Value, data: &[u8]) -> Message {
 struct Node {
     info: ServerInfo,
     sessions: Mutex<HashMap<String, Arc<Mutex<Terminal>>>>,
+    processes: Mutex<HashMap<String, Arc<AsyncMutex<Process>>>>,
     changed: broadcast::Sender<()>,
     stop: Notify,
 }
@@ -177,6 +179,15 @@ impl Node {
             .get(id)
             .cloned()
             .context("Terminal no longer exists")
+    }
+
+    fn process(&self, id: &str) -> Result<Arc<AsyncMutex<Process>>> {
+        self.processes
+            .lock()
+            .unwrap()
+            .get(id)
+            .cloned()
+            .context("Process no longer exists")
     }
 
     fn create(&self, rows: u16, cols: u16, cwd: Option<&str>) -> Result<Value> {
@@ -324,7 +335,7 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                     continue;
                 }
                 let id = request["session_id"].as_str().unwrap_or("");
-                let result: Result<Value> = (|| {
+                let result: Result<Value> = async {
                     match op {
                         "info" => Ok(serde_json::to_value(&node.info)?),
                         "stop" => {
@@ -393,9 +404,60 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                             let _ = node.changed.send(());
                             Ok(json!({}))
                         }
+                        "spawn" => {
+                            let (id, process) = crate::process::spawn(request.clone())?;
+                            let summary = process.lock().await.summary();
+                            node.processes.lock().unwrap().insert(id, process);
+                            Ok(summary)
+                        }
+                        "process_attach" => {
+                            let process = node.process(id)?;
+                            if let Some(task) = attachments.remove(id) { task.abort(); }
+                            // Subscribe before reading the summary, so no output slips between the two.
+                            let mut events = process.lock().await.subscribe();
+                            let out = out.clone();
+                            let session = id.to_owned();
+                            let task = tokio::spawn(async move {
+                                loop {
+                                    match events.recv().await {
+                                        Ok(event) => {
+                                            let (header, data) = match event {
+                                                Event::Stdout { seq, data } => (json!({"event":"stdout","session_id":session,"seq":seq}), data),
+                                                Event::Stderr { seq, data } => (json!({"event":"stderr","session_id":session,"seq":seq}), data),
+                                                Event::Exit { seq, code } => (json!({"event":"exit","session_id":session,"seq":seq,"code":code}), Vec::new()),
+                                            };
+                                            if out.send(packet(header, &data)).await.is_err() { break; }
+                                        }
+                                        Err(broadcast::error::RecvError::Lagged(_)) => {
+                                            // A byte stream that lost a frame cannot be resumed; say so and stop.
+                                            let header = json!({"event":"lost","session_id":session});
+                                            let _ = out.send(packet(header, &[])).await;
+                                            break;
+                                        }
+                                        Err(_) => break,
+                                    }
+                                }
+                            });
+                            attachments.insert(id.into(), task);
+                            Ok(process.lock().await.summary())
+                        }
+                        "process_write" => {
+                            let process = node.process(id)?;
+                            if !attachments.contains_key(id) { bail!("Attach the process before writing to it"); }
+                            let data = request["data"].as_str().context("Missing input data")?;
+                            process.lock().await.write(data).await?;
+                            Ok(json!({}))
+                        }
+                        "process_close" => {
+                            let process = node.process(id)?;
+                            process.lock().await.terminate();
+                            node.processes.lock().unwrap().remove(id);
+                            if let Some(task) = attachments.remove(id) { task.abort(); }
+                            Ok(json!({}))
+                        }
                         _ => bail!("Unknown operation: {op}"),
                     }
-                })();
+                }.await;
                 let should_stop = op == "stop" && result.is_ok();
                 let reply = match result {
                     Ok(value) => json!({"id":request["id"],"result":value}),
@@ -422,6 +484,7 @@ pub async fn run(listener: TcpListener, info: ServerInfo) -> Result<()> {
     let node = Arc::new(Node {
         info,
         sessions: Mutex::new(HashMap::new()),
+        processes: Mutex::new(HashMap::new()),
         changed,
         stop: Notify::new(),
     });
@@ -442,6 +505,10 @@ pub async fn run(listener: TcpListener, info: ServerInfo) -> Result<()> {
     }
     for session in node.sessions.lock().unwrap().values() {
         session.lock().unwrap().terminate();
+    }
+    let processes: Vec<_> = node.processes.lock().unwrap().values().cloned().collect();
+    for process in processes {
+        process.lock().await.terminate();
     }
     Ok(())
 }

@@ -1,8 +1,9 @@
 import { MachineConnection } from './connection';
 import type { ConnectionOptions } from './types';
 export { agentCommand } from './agent';
-export type { ConnectionOptions, FileClick, Machine, MachineState, Session, Size, Output, Snapshot, TerminalEvent, DirectoryEntry, ExecOptions, ExecResult, InstallAgent, Profile, Theme, WorkspaceActive, WorkspaceRow, WorkspaceMenuItem } from './types';
+export type { ConnectionOptions, FileClick, Machine, MachineState, Session, Size, Output, Snapshot, TerminalEvent, DirectoryEntry, ExecOptions, ExecResult, ProcessEvent, ProcessInfo, ProcessOutput, InstallAgent, Profile, Theme, WorkspaceActive, WorkspaceRow, WorkspaceMenuItem } from './types';
 export type { MachineConnection } from './connection';
+export type { Process } from './process';
 export type { Pty } from './pty';
 
 /** Opens one connection to a machine and waits for it to be ready. */

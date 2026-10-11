@@ -2,7 +2,8 @@ import { ChildProcess, execFile, spawn } from 'node:child_process';
 import { createServer, createConnection } from 'node:net';
 import { promisify } from 'node:util';
 import WebSocket from 'ws';
-import type { ConnectionOptions, MachineState, Session, Size, DirectoryEntry, ExecOptions, ExecResult } from './types';
+import type { ConnectionOptions, MachineState, Session, Size, DirectoryEntry, ExecOptions, ExecResult, ProcessInfo } from './types';
+import { Process } from './process';
 import { Pty } from './pty';
 import { agentCommand } from './agent';
 
@@ -12,6 +13,7 @@ interface Info { pid: number; port: number; instance_id: string; protocol: numbe
 export class MachineConnection {
   private listeners = new Set<(state: MachineState) => void>();
   private terminals = new Map<string, Pty>();
+  private processes = new Map<string, Process>();
   // Where the daemon listens: the window reaches it with this.
   port?: number;
   private instance?: string;
@@ -63,6 +65,8 @@ export class MachineConnection {
     this.rejectReady(new Error('Connection cancelled'));
     for (const terminal of this.terminals.values()) terminal.release();
     this.terminals.clear();
+    for (const process of this.processes.values()) process.release();
+    this.processes.clear();
     this.state.status = 'disconnected';
     this.state.error = undefined;
     this.publish();
@@ -102,6 +106,21 @@ export class MachineConnection {
     exec: async (program: string, args: string[], options: ExecOptions): Promise<ExecResult> => {
       const result = await this.request('exec', { program, args, ...options }, 20_000) as { stdout: string; stderr: string; code: number };
       return { stdout: Buffer.from(result.stdout, 'base64'), stderr: Buffer.from(result.stderr, 'base64'), code: result.code };
+    },
+    spawn: (program: string, args: string[], options: ExecOptions) => this.request('spawn', { program, args, ...options }) as Promise<ProcessInfo>,
+    attach: async (id: string) => {
+      const existing = this.processes.get(id);
+      if (existing) return existing;
+      const process = new Process(id, (op, params) => this.request(op, params));
+      this.processes.set(id, process);
+      try { await this.request('process_attach', { session_id: id }); }
+      catch (error) { this.processes.delete(id); process.release(); throw error; }
+      return process;
+    },
+    close: async (id: string) => {
+      await this.request('process_close', { session_id: id });
+      this.processes.get(id)?.release();
+      this.processes.delete(id);
     },
   };
 
@@ -168,9 +187,12 @@ export class MachineConnection {
           if (binary) {
             const bytes = data as Buffer;
             const length = bytes.readUInt32BE(0);
-            if (length > bytes.length - 4) throw new Error('Invalid terminal packet');
+            if (length > bytes.length - 4) throw new Error('Invalid packet');
             const header = JSON.parse(bytes.subarray(4, 4 + length).toString());
-            this.terminals.get(header.session_id)?.receive({ ...header, data: bytes.subarray(4 + length) });
+            const event = { ...header, data: bytes.subarray(4 + length) };
+            const terminal = this.terminals.get(header.session_id);
+            if (terminal) terminal.receive(event);
+            else this.processes.get(header.session_id)?.receive(event);
           } else {
             const message = JSON.parse(data.toString());
             if (message.id) {
@@ -201,6 +223,8 @@ export class MachineConnection {
       if (this.instance && this.instance !== actual.instance_id) {
         for (const terminal of this.terminals.values()) terminal.release(new Error('Node restarted; terminal no longer exists'));
         this.terminals.clear();
+        for (const process of this.processes.values()) process.release(new Error('Node restarted; process no longer exists'));
+        this.processes.clear();
       }
       this.instance = actual.instance_id;
       for (const [id, terminal] of this.terminals) {
@@ -209,6 +233,14 @@ export class MachineConnection {
           if (!current()) return;
           terminal.release(error as Error);
           this.terminals.delete(id);
+        }
+      }
+      for (const [id, process] of this.processes) {
+        try { await this.request('process_attach', { session_id: id }); }
+        catch (error) {
+          if (!current()) return;
+          process.release(error as Error);
+          this.processes.delete(id);
         }
       }
       if (!current()) return;

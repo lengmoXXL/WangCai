@@ -86,7 +86,7 @@ provider 要保证工作区 id 在所有 provider 的行中唯一识别；`error
 
 `MachineState` 含 `status`、`error?`、`sessions`、`generation`。
 
-断线会自动重连并重新 attach 已挂载终端，失败的请求与输入不自动重放，后台进程重启时旧 Pty 失效。
+断线会自动重连并重新 attach 已挂载的终端与进程，失败的请求与输入不自动重放，后台进程重启时旧 Pty 与进程失效。
 
 `connection.pty`：`list()`、`cwd(id)`、`create(size?, cwd?)`（默认 24 行 80 列；cwd 用绝对目录，
 省略时在后台进程的 HOME 下启动）、`attach(id)`（复用句柄）、`close(id)`（结束 shell 与后台子孙进程）。
@@ -112,9 +112,25 @@ provider 要保证工作区 id 在所有 provider 的行中唯一识别；`error
 `connection.subprocess.exec(program, args, options)`：`args` 是独立 argv（不经 shell 展开），
 `options.cwd` 是绝对工作目录，`options.env` 覆盖继承的环境变量；返回
 `{ stdout: Uint8Array; stderr: Uint8Array; code: number }`。非零退出码仍返回结果，无法启动、
-超时、输出超限或被信号终止时 reject；stdin 关闭，长时间或交互用 PTY。
+超时、输出超限或被信号终止时 reject；stdin 关闭，长时间或交互用 `subprocess.spawn` 或 PTY。
 
 执行上限 15 秒，SDK 等待响应上限 20 秒，stdout 与 stderr 各最多 8 MiB，断线取消未完成的 exec。
+
+`connection.subprocess.spawn(program, args, options)`（`options` 同 `exec`）启动一个
+长期存活的进程，stdin、stdout、stderr 都是管道，返回 `ProcessInfo = { id, pid, exit_code }`；
+`attach(id)` 复用句柄（未 attach 前不接收输出），`close(id)` 结束进程及其进程组；进程归后台进程所有，不 `close` 就一直留着。
+
+`Process`：`id`、`onData(callback)`、`onExit(callback)`、`write(data)`。
+
+`ProcessOutput = { data: Uint8Array; seq: number; stream: 'stdout' | 'stderr' }`，两路输出各自按序到达，
+`seq` 单调递增，跨两路的先后以 `seq` 为准。
+
+`onExit` 给出退出码（被信号结束时按 shell 的 128+signal），节点来不及投递时给出 `undefined`，此时
+输出流已不可信，进程可能仍在运行，请重新 `spawn`。
+
+`write` 按 32 KiB 分片、按序应用，进程退出后 reject；先 `attach` 再写。
+
+`receive` 与 `release(error?)` 由连接层使用。
 
 ## 独立 Node 客户端
 
