@@ -1,0 +1,4 @@
+/node_modules/
+/main.cjs
+/ui.js
+/package-lock.json
