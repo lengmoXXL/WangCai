@@ -1,14 +1,12 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { mkdtempSync, realpathSync, rmSync } = require('node:fs');
+const { mkdtempSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
-const { join, resolve } = require('node:path');
-const { execFileSync } = require('node:child_process');
+const { join } = require('node:path');
 const { launchApp, mockView, mockWorkspace, newWorkspace, testEnv, waitForShell, writeInit } = require('./init.cjs');
 
-// The plugins themselves live in their own repositories; the app's own chrome is tested with mocks.
 test('full screen reclaims the window chrome space above the workspaces', { timeout: 180000 }, async () => {
-  const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-full-screen-')));
+  const home = mkdtempSync(join(tmpdir(), 'wangcai-full-screen-'));
   const env = testEnv(home);
   let desktop;
   try {
@@ -19,9 +17,8 @@ test('full screen reclaims the window chrome space above the workspaces', { time
     const left = page.locator('.sidebar-left');
     const header = page.locator('.workspace-header');
     await waitForShell(page);
-    const padding = () => left.evaluate((element) => getComputedStyle(element).paddingTop);
     const headerTop = () => header.evaluate((element) => Math.round(element.getBoundingClientRect().top));
-    assert.equal(await padding(), '36px');
+    assert.equal(await left.evaluate((element) => getComputedStyle(element).paddingTop), '36px');
     // 36px chrome + 1px card border + 3px window inset.
     assert.equal(await headerTop(), 40);
     // a real setFullScreen(true) does not enter full screen in this environment, so drive the event the main process forwards
@@ -33,13 +30,12 @@ test('full screen reclaims the window chrome space above the workspaces', { time
     assert.equal(await headerTop(), 40);
   } finally {
     await desktop?.close();
-    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 15000 }); } catch {}
     rmSync(home, { recursive: true, force: true });
   }
 });
 
 test('sidebar tabs can be dragged into a new order', { timeout: 180000 }, async () => {
-  const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-tab-order-')));
+  const home = mkdtempSync(join(tmpdir(), 'wangcai-tab-order-'));
   const env = testEnv(home);
   let desktop;
   let page;
@@ -78,7 +74,6 @@ test('sidebar tabs can be dragged into a new order', { timeout: 180000 }, async 
     await page.waitForFunction((selector) => document.querySelectorAll(selector).length === 0, DROPPED);
     await tab('终端').dragTo(tab('文件'), { targetPosition: { x: 4, y: 18 } });
     await settled(['终端', '文件']);
-    // dropping a tab after the tab behind it moves the tab there
     await tab('终端').dragTo(tab('文件'), { targetPosition: { x: 45, y: 18 } });
     await settled(['文件', '终端']);
     // opening a workspace rebinds these tabs to it, which rewrites their keys
@@ -91,7 +86,6 @@ test('sidebar tabs can be dragged into a new order', { timeout: 180000 }, async 
     assert.deepEqual(errors, []);
   } finally {
     await desktop?.close();
-    try { execFileSync(resolve('wangcaicli/dist/debug/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 15000 }); } catch {}
     rmSync(home, { recursive: true, force: true });
   }
 });

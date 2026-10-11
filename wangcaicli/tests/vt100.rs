@@ -2,7 +2,9 @@
 
 fn sizes() -> impl Iterator<Item = (u16, u16)> {
     const DIMENSIONS: [u16; 3] = [1, 2, 10];
-    DIMENSIONS.into_iter().flat_map(|rows| DIMENSIONS.into_iter().map(move |cols| (rows, cols)))
+    DIMENSIONS
+        .into_iter()
+        .flat_map(|rows| DIMENSIONS.into_iter().map(move |cols| (rows, cols)))
 }
 
 #[test]

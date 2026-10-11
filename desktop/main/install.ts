@@ -4,7 +4,6 @@ import { dirname, join } from 'node:path';
 import { installsPath, pluginDirectory, type PluginSpec } from './config';
 import type { InstallStage } from '../shared';
 
-// How far a repository got: the commit it was built from, so the next start rebuilds only what moved.
 type Installs = Record<string, { repo: string; commit: string }>;
 
 // GitHub is not reachable from every network the app runs on, so a URL on GitHub is retried through the
@@ -17,7 +16,6 @@ export const mirroredUrls = (url: string) => /^https:\/\/github\.com\//.test(url
 // A blocked host can leave a connection hanging, so a transfer that stalls fails instead of never ending.
 const TRANSFER_LIMITS = ['-c', 'http.lowSpeedLimit=1000', '-c', 'http.lowSpeedTime=20'];
 
-/** Runs a command and rejects with the last lines it wrote, which is what a build failure is worth reading. */
 function run(command: string, args: string[], cwd: string, environment = process.env) {
   return new Promise<string>((resolve, reject) => {
     const child = spawn(command, args, { cwd, env: environment });
@@ -30,7 +28,6 @@ function run(command: string, args: string[], cwd: string, environment = process
   });
 }
 
-/** Clones or fetches through whichever of the repository's URLs answers first. */
 async function throughMirrors(repository: string, attempt: (url: string) => Promise<void>) {
   const failures: string[] = [];
   for (const url of mirroredUrls(repository)) {
@@ -45,33 +42,30 @@ async function throughMirrors(repository: string, attempt: (url: string) => Prom
 }
 
 /**
- * Brings a repository plugin up to date and builds it, so the loader finds the files it expects.
- * `node` is the runtime the app carries; the plugin's own build script decides what a build is.
+ * `node` is the runtime the app carries.
+ *
  * `follow` is what a row's update asks for: an entry that pins nothing then moves to its branch's commits,
  * which a start leaves alone.
- * Answers whether that changed anything about the checkout or its build.
  */
 export async function installPlugin(spec: PluginSpec, node: string, onStage: (stage: InstallStage, message?: string) => void, follow = false) {
-  const directory = pluginDirectory(spec);
   const repository = spec.repo;
   if (!repository) return;
+  const directory = pluginDirectory(spec);
   const installs = existsSync(installsPath) ? JSON.parse(readFileSync(installsPath, 'utf8')) as Installs : {};
   const stamp = installs[spec.id];
-  const builtFrom = (commit: string) => stamp?.repo === repository && stamp.commit === commit && existsSync(join(directory, 'main.cjs'));
+  if (stamp && stamp.repo !== repository) throw new Error(`${directory} holds a clone of ${stamp.repo}, not of ${repository}`);
+  const builtFrom = (commit: string) => stamp?.commit === commit && existsSync(join(directory, 'main.cjs'));
   // What is already built is what a start runs, without a network at all: the build of the commit init.ts pins,
   // and the build an entry that pins nothing already has.
-  const upToDate = spec.commit ? builtFrom(spec.commit) : Boolean(stamp && builtFrom(stamp.commit));
+  const upToDate = spec.commit ? builtFrom(spec.commit) : stamp && builtFrom(stamp.commit);
   if (upToDate && !follow) {
     onStage('ready', '无需更新');
     return false;
   }
   let worked = false;
   const git = (args: string[], cwd = directory) => run('git', [...TRANSFER_LIMITS, ...args], cwd);
-  // The directory holds one clone for the id.
-  if (stamp?.repo && stamp.repo !== repository) throw new Error(`${directory} holds a clone of ${stamp.repo}, not of ${repository}`);
   if (!existsSync(join(directory, '.git'))) {
-    const entries = existsSync(directory) ? readdirSync(directory) : [];
-    if (entries.length) throw new Error(`${directory} exists and is not a clone of ${repository}`);
+    if (existsSync(directory) && readdirSync(directory).length) throw new Error(`${directory} exists and is not a clone of ${repository}`);
     mkdirSync(dirname(directory), { recursive: true });
     await throughMirrors(repository, async (url) => {
       onStage('cloning', `git clone ${url}`);
@@ -80,8 +74,7 @@ export async function installPlugin(spec: PluginSpec, node: string, onStage: (st
     worked = true;
   }
   // A commit that is already here needs no network: an offline start rebuilds what it has.
-  const hasCommit = spec.commit ? await run('git', ['cat-file', '-e', `${spec.commit}^{commit}`], directory).then(() => true, () => false) : false;
-  if (spec.commit && !hasCommit) {
+  if (spec.commit && !(await run('git', ['cat-file', '-e', `${spec.commit}^{commit}`], directory).then(() => true, () => false))) {
     await throughMirrors(repository, async (url) => {
       onStage('cloning', `git fetch ${url} ${spec.commit}`);
       await git(['remote', 'set-url', 'origin', url]);
@@ -108,7 +101,7 @@ export async function installPlugin(spec: PluginSpec, node: string, onStage: (st
     // npm and its own directory come first on PATH, so a plugin's build script and the tools it runs
     // resolve to the runtime the app carries rather than whatever the user happens to have installed.
     const environment = { ...process.env, PATH: `${dirname(node)}:${process.env.PATH ?? ''}` };
-    const npm = (args: string[]) => run(node, [join(dirname(node), '../lib/node_modules/npm/bin/npm-cli.js'), ...args], directory, environment);
+    const npm = (args: string[]) => run(node, [join(dirname(node), 'npm'), ...args], directory, environment);
     if (Object.keys(scripts).length) {
       onStage('installing', 'npm install');
       await npm(['install', '--no-audit', '--no-fund', '--no-progress']);

@@ -39,7 +39,6 @@ async function start() {
   left.className = 'desktop-sidebar sidebar-left';
   const main = document.createElement('main');
   main.className = 'desktop-main';
-  // This resolves once every repository has been installed and every plugin has loaded.
   const plugins = await window.wangcai.plugins();
   // Nothing to load fills the pane rather than the window: the page above it is what reported the plugins
   // that are out.
@@ -58,47 +57,30 @@ async function start() {
   root.append(left, main, right);
   sidebarDividers(root, left, right, disposers);
   type Tab = { key: string; element: HTMLElement; button: HTMLButtonElement; panel: HTMLElement; content: TabContent; workspaceId?: string; onClose?(): void };
-  const group = (workspaceId?: string) => workspaceId ?? '';
   let activeWorkspaceId: string | undefined;
   let current = '';
   const selected = new Map<string, string>();
-  const tabKey = (plugin: string, id: string, workspaceId?: string) => JSON.stringify([plugin, group(workspaceId), id]);
   const tabs = new Map<string, Tab>();
   const records = new Map<string, TabRecord>();
   let dragging: string | undefined;
-  const reorder = <T>(map: Map<string, T>, key: string, before: string | undefined) => {
-    if (key === before) return;
-    const value = map.get(key)!;
-    map.delete(key);
-    if (before === undefined) { map.set(key, value); return; }
-    const entries = [...map];
-    map.clear();
-    for (const [item, entry] of entries) {
-      if (item === before) map.set(key, value);
-      map.set(item, entry);
-    }
-  };
-  const visibleTab = (tab: Tab) => tab.workspaceId === undefined || tab.workspaceId === activeWorkspaceId;
-  const persist = () => { void window.wangcai.saveTabs([...records.values()]); };
-  for (const record of await window.wangcai.loadTabs()) records.set(tabKey(record.plugin, record.id, record.workspaceId), record);
+  for (const record of await window.wangcai.loadTabs()) records.set(JSON.stringify([record.plugin, record.workspaceId ?? '', record.id]), record);
   const show = () => {
     right.hidden = !tabs.size;
     toggle.setAttribute('aria-expanded', String(!right.hidden));
     for (const [key, tab] of tabs) {
-      const visible = visibleTab(tab);
+      const visible = tab.workspaceId === undefined || tab.workspaceId === activeWorkspaceId;
       const isCurrent = key === current;
       tab.element.hidden = !visible;
       tab.button.setAttribute('aria-selected', String(isCurrent));
       tab.panel.hidden = !visible || !isCurrent;
     }
   };
-  const refresh = () => tabs.get(current)?.content.onSelect?.();
   const select = (key: string) => {
     const tab = tabs.get(key);
     current = tab ? key : '';
-    if (tab) selected.set(group(tab.workspaceId), key);
+    if (tab) selected.set(tab.workspaceId ?? '', key);
     show();
-    refresh();
+    tab?.content.onSelect?.();
     tab?.button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   };
   const removeTab = (key: string) => {
@@ -111,17 +93,14 @@ async function start() {
     records.delete(key);
   };
   const settle = () => {
-    persist();
-    const wanted = selected.get(group(activeWorkspaceId)) ?? selected.get(group());
+    void window.wangcai.saveTabs([...records.values()]);
+    const wanted = selected.get(activeWorkspaceId ?? '') ?? selected.get('');
     current = wanted && tabs.has(wanted) ? wanted : '';
     show();
-    refresh();
+    tabs.get(current)?.content.onSelect?.();
   };
-  // The workspace view draws the rows every provider holds, and the menu offers what they can create.
   const providers = plugins.filter((plugin) => plugin.workspaces && !plugin.error).map((plugin) => plugin.id);
   const grouped = new Map(providers.map((id) => [id, [] as WorkspaceRow[]]));
-  const listed = () => providers.flatMap((provider) => grouped.get(provider)!);
-  const providerOf = (id: string) => providers.find((provider) => grouped.get(provider)!.some((row) => row.id === id));
   let draggingRow: string | undefined;
   const workspaceHeader = document.createElement('header');
   workspaceHeader.className = 'workspace-header';
@@ -134,7 +113,6 @@ async function start() {
   workspaceList.setAttribute('aria-label', '工作区');
   workspaceList.setAttribute('aria-orientation', 'vertical');
   left.append(workspaceHeader, workspaceList);
-  // The menu carries what to open, and how to close the workspace it was opened on.
   const rowMenu = document.createElement('div');
   rowMenu.id = 'workspace-row-menu';
   rowMenu.className = 'view-menu';
@@ -157,17 +135,15 @@ async function start() {
     menu.style.left = `${Math.max(4, Math.min(at.left, window.innerWidth - menu.offsetWidth - 4))}px`;
     menu.style.top = `${Math.max(4, Math.min(at.top, window.innerHeight - menu.offsetHeight - 4))}px`;
   };
-  const showRowMenu = (at: MenuAnchor, row: string | undefined) => {
-    menuRow = row;
-    // The anchor is set before the menu is on screen.
+
+  const openRowMenu = async (event: MouseEvent) => {
+    event.preventDefault();
+    const at = { left: event.clientX, top: event.clientY };
+    menuRow = (event.target as Element).closest<HTMLElement>('.workspace')?.dataset.workspace;
     rowMenu.replaceChildren();
     rowMenu.style.left = `${at.left}px`;
     rowMenu.style.top = `${at.top}px`;
     rowBackdrop.hidden = false;
-    void fillRowMenu(at);
-  };
-
-  const fillRowMenu = async (at: MenuAnchor) => {
     const entries: { provider: string; item: WorkspaceMenuItem }[] = [];
     for (const provider of providers) {
       try {
@@ -183,7 +159,7 @@ async function start() {
       button.setAttribute('role', 'menuitem');
       button.textContent = '关闭工作区';
       button.onclick = () => {
-        const provider = providerOf(closeId);
+        const provider = providers.find((provider) => grouped.get(provider)!.some((item) => item.id === closeId));
         hideRowMenu();
         if (provider) void window.wangcai.request(provider, 'workspace-close', { id: closeId }).then(refreshRows).catch(console.error);
       };
@@ -196,7 +172,6 @@ async function start() {
       const hint = document.createElement('span');
       hint.textContent = item.hint ?? '';
       button.append(hint);
-      // A machine that failed last time keeps its reason on hover, and a click is the retry.
       if (item.error) button.title = item.error;
       button.onclick = async () => {
         button.disabled = true;
@@ -207,7 +182,6 @@ async function start() {
           await refreshRows();
           selectWorkspace(created.id);
         } catch (error) {
-          // A failed attempt keeps the entry listed, with the reason in the hint and on hover, and clickable.
           hint.textContent = error instanceof Error ? error.message : String(error);
           button.title = hint.textContent;
           button.disabled = false;
@@ -224,31 +198,24 @@ async function start() {
     rowMenu.replaceChildren(...items);
     clampMenu(rowMenu, at);
   };
-  // A right-click on the heading or on empty list space opens the menu with no row to close.
-  const openRowMenu = (event: MouseEvent) => {
-    event.preventDefault();
-    const row = (event.target as Element).closest<HTMLElement>('.workspace');
-    showRowMenu({ left: event.clientX, top: event.clientY }, row?.dataset.workspace);
-  };
   workspaceHeader.oncontextmenu = openRowMenu;
   workspaceList.oncontextmenu = openRowMenu;
 
   const selectWorkspace = (id: string) => {
-    const provider = providerOf(id);
+    const provider = providers.find((provider) => grouped.get(provider)!.some((item) => item.id === id));
     if (!provider) return;
     activeWorkspaceId = id;
-    // Tabs opened before any workspace existed belong to the one now in front.
     for (const [key, tab] of [...tabs]) {
       if (tab.workspaceId !== undefined) continue;
       const record = records.get(key)!;
-      const moved = tabKey(record.plugin, record.id, id);
+      const moved = JSON.stringify([record.plugin, id, record.id]);
       tabs.delete(key);
       tab.workspaceId = id;
       tab.key = moved;
       tabs.set(moved, tab);
       records.delete(key);
       records.set(moved, { ...record, workspaceId: id });
-      if (selected.get(group()) === key) selected.set(group(id), moved);
+      if (selected.get('') === key) selected.set(id, moved);
     }
     showRows();
     settle();
@@ -267,15 +234,15 @@ async function start() {
       }
     }
     if (closing) return;
-    const served = new Set(listed().map((row) => row.id));
-    // A workspace that is gone takes its tabs with it.
+    const rows = providers.flatMap((provider) => grouped.get(provider)!);
+    const served = new Set(rows.map((row) => row.id));
     for (const [key, tab] of [...tabs]) {
       if (tab.workspaceId === undefined || served.has(tab.workspaceId)) continue;
       if (activeWorkspaceId === tab.workspaceId) activeWorkspaceId = undefined;
       removeTab(key);
     }
     if (activeWorkspaceId === undefined || !served.has(activeWorkspaceId)) {
-      const first = listed()[0];
+      const first = rows[0];
       if (first) {
         selectWorkspace(first.id);
         return;
@@ -291,7 +258,7 @@ async function start() {
   };
 
   const showRows = () => {
-    workspaceList.replaceChildren(...listed().map((row) => {
+    workspaceList.replaceChildren(...providers.flatMap((provider) => grouped.get(provider)!).map((row) => {
       const element = document.createElement('div');
       element.className = `workspace${row.id === activeWorkspaceId ? ' selected' : ''}${row.running ? ' running' : ''}`;
       element.setAttribute('role', 'tab');
@@ -321,7 +288,9 @@ async function start() {
       };
       element.ondragover = (event) => {
         const source = draggingRow;
-        if (source === undefined || source === row.id || providerOf(source) !== providerOf(row.id)) return;
+        if (source === undefined || source === row.id ||
+          providers.find((provider) => grouped.get(provider)!.some((item) => item.id === source)) !==
+          providers.find((provider) => grouped.get(provider)!.some((item) => item.id === row.id))) return;
         event.preventDefault();
         const box = element.getBoundingClientRect();
         element.dataset.drop = event.clientY > box.top + box.height / 2 ? 'after' : 'before';
@@ -333,9 +302,9 @@ async function start() {
         const after = element.dataset.drop === 'after';
         draggingRow = undefined;
         clearDrop(workspaceList);
-        const rows = listed();
+        const rows = providers.flatMap((provider) => grouped.get(provider)!);
         const before = after ? rows[rows.findIndex((item) => item.id === row.id) + 1]?.id : row.id;
-        const provider = providerOf(moved);
+        const provider = providers.find((provider) => grouped.get(provider)!.some((item) => item.id === moved));
         if (provider) void window.wangcai.request(provider, 'workspace-move', { id: moved, before }).catch(console.error);
       };
       return element;
@@ -374,7 +343,7 @@ async function start() {
   toggle.onclick = () => {
     right.hidden = !right.hidden;
     toggle.setAttribute('aria-expanded', String(!right.hidden));
-    if (!right.hidden) refresh();
+    if (!right.hidden) tabs.get(current)?.content.onSelect?.();
     viewMenu.hidePopover();
   };
   root.append(toggle, viewMenu);
@@ -413,10 +382,9 @@ async function start() {
       }
       const openTab = (options: TabOptions) => {
         const workspaceId = options.workspaceId ?? activeWorkspaceId;
-        const key = tabKey(plugin.id, options.id, workspaceId);
-        const record: TabRecord = { plugin: plugin.id, id: options.id, workspaceId };
-        records.set(key, record);
-        persist();
+        const key = JSON.stringify([plugin.id, workspaceId ?? '', options.id]);
+        records.set(key, { plugin: plugin.id, id: options.id, workspaceId });
+        void window.wangcai.saveTabs([...records.values()]);
         const existing = tabs.get(key);
         if (existing) {
           void existing.content.dispose();
@@ -443,10 +411,10 @@ async function start() {
         const tab: Tab = { key, element, button, panel, workspaceId, onClose: options.onClose, content: options.mount(panel) };
         button.onclick = () => select(tab.key);
         close.onclick = () => {
-          const siblings = [...tabs].filter(([, item]) => group(item.workspaceId) === group(tab.workspaceId)).map(([itemKey]) => itemKey);
+          const siblings = [...tabs].filter(([, item]) => (item.workspaceId ?? '') === (tab.workspaceId ?? '')).map(([itemKey]) => itemKey);
           const index = siblings.indexOf(tab.key);
           removeTab(tab.key);
-          persist();
+          void window.wangcai.saveTabs([...records.values()]);
           if (current === tab.key) select(siblings[index - 1] ?? siblings[index + 1] ?? '');
         };
         element.append(button, close);
@@ -470,12 +438,24 @@ async function start() {
           event.preventDefault();
           const source = dragging!;
           const after = element.dataset.drop === 'after';
-          const visible = [...tabs].filter(([, item]) => visibleTab(item));
+          const visible = [...tabs].filter(([, item]) => item.workspaceId === undefined || item.workspaceId === activeWorkspaceId);
           const before = after ? visible[visible.findIndex(([item]) => item === tab.key) + 1]?.[0] : tab.key;
-          reorder(tabs, source, before);
-          reorder(records, source, before);
+          const reorder = <T>(map: Map<string, T>) => {
+            if (source === before) return;
+            const value = map.get(source)!;
+            map.delete(source);
+            if (before === undefined) { map.set(source, value); return; }
+            const entries = [...map];
+            map.clear();
+            for (const [item, entry] of entries) {
+              if (item === before) map.set(source, value);
+              map.set(item, entry);
+            }
+          };
+          reorder(tabs);
+          reorder(records);
           header.insertBefore(tabs.get(source)!.element, before === undefined ? viewPicker : tabs.get(before)!.element);
-          persist();
+          void window.wangcai.saveTabs([...records.values()]);
         };
         header.insertBefore(element, viewPicker);
         content.append(panel);

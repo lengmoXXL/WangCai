@@ -8,9 +8,7 @@ import type { PluginInfo } from '../shared';
 import { pluginDataDirectory, pluginDirectory, type PluginSpec } from './config';
 import { connect } from './machines';
 
-// A schema is an object of leaves, each naming the type it takes and the default to use without one.
 // An 'array' leaf takes whatever list init.ts holds and leaves its entries to the plugin to check.
-// Only keys the schema lists survive, so a plugin decides for itself which config it accepts.
 function resolveConfig(schema: unknown, values: unknown): Record<string, unknown> {
   const settings: Record<string, unknown> = {};
   if (typeof schema !== 'object' || schema === null) return settings;
@@ -18,7 +16,7 @@ function resolveConfig(schema: unknown, values: unknown): Record<string, unknown
   for (const [key, entry] of Object.entries(schema as Record<string, unknown>)) {
     if (typeof entry !== 'object' || entry === null) continue;
     const declared = entry as { type?: unknown; default?: unknown };
-    if (declared.type === 'array' || typeof declared.type === 'string') {
+    if (typeof declared.type === 'string') {
       const matches = declared.type === 'array' ? Array.isArray(given[key]) : typeof given[key] === declared.type;
       const value = matches ? given[key] : declared.default;
       if (value !== undefined) settings[key] = value;
@@ -70,7 +68,6 @@ export async function loadPlugins(options: {
       const module = { exports: {} as { activate(context: MainContext): void | Dispose | Promise<void | Dispose>; config?: unknown } };
       compileFunction(readFileSync(filename, 'utf8'), ['require', 'module', 'exports', '__filename', '__dirname'], { filename })
         .call(module.exports, createRequire(filename), module, module.exports, filename, dirname(filename));
-      // The app knows nothing about the fields a plugin takes.
       const settings = resolveConfig(module.exports.config, spec.config);
       info.config = settings;
       info.workspaces = spec.workspaces;

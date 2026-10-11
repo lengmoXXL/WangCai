@@ -4,7 +4,6 @@ import type { PluginSpec } from './config';
 import { installPlugin } from './install';
 import { loadPlugins } from './plugins';
 
-/** The plugins init.ts lists: what still has to be installed, and the loader the window reads them from. */
 export function pluginManager(options: {
   resourcesDirectory: string; agent: InstallAgent; profile: Profile;
   specs: PluginSpec[]; node: string; broadcast: (event: string, data: unknown) => void;
@@ -23,14 +22,11 @@ export function pluginManager(options: {
     // the app runs without it, and the page says what went wrong.
     specs: specs.filter((spec) => !failed.has(spec.id)),
   });
-  /** Installs the targets and answers whether any of them had work left to do. */
   const install = async (targets: PluginSpec[], follow = false) => {
     let worked = false;
     for (const spec of targets) {
-      if (!spec.repo) continue;
       try {
-        const changed = await installPlugin(spec, node, (stage, message) => announce({ id: spec.id, stage, message }), follow);
-        if (changed) worked = true;
+        if (await installPlugin(spec, node, (stage, message) => announce({ id: spec.id, stage, message }), follow)) worked = true;
         failed.delete(spec.id);
       } catch (error) {
         failed.add(spec.id);
@@ -39,17 +35,11 @@ export function pluginManager(options: {
     }
     return worked;
   };
-  // Everything that needs a plugin waits for this.
   let loading = install(specs).then(load);
   return {
-    /** The loader every plugin consumer reads; an update replaces it. */
     loaded: () => loading,
     statuses,
-    /**
-     * Installs the named specs and answers whether that moved plugin files. The loader is rebuilt when it
-     * did: what the plugins mounted are the files of the build before it, and only a fresh mount shows the
-     * new ones.
-     */
+    /** Existing mounts use the previous build, so changed plugin files need a fresh loader. */
     async update(ids: string[]) {
       if (!(await install(specs.filter(({ id }) => ids.includes(id)), true))) return false;
       await (await loading).dispose();

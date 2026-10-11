@@ -6,7 +6,7 @@ const { tmpdir, userInfo } = require('node:os');
 const { join, resolve } = require('node:path');
 const { spawn, execFileSync } = require('node:child_process');
 const { createServer } = require('node:net');
-const { openMachine } = require('../sdk/dist/index.cjs');
+const { openMachine, agentCommand } = require('../sdk/dist/index.cjs');
 const { testEnv } = require('./init.cjs');
 
 async function until(check, diagnostic) {
@@ -34,7 +34,8 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     const sshPort = reservation.address().port;
     await new Promise((resolve) => reservation.close(resolve));
     const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
-    writeFileSync(join(home, 'start-command'), `#!/bin/sh\n[ "$SSH_ORIGINAL_COMMAND" = ${quote('export PATH="$HOME/.local/bin:$PATH"; wangcai server start --json')} ] || exit 64\nexec env HOME=${quote(home)} ${quote(binary)} server start --json\n`, { mode: 0o700 });
+    process.env.WANGCAI_HOME = '';
+    writeFileSync(join(home, 'start-command'), `#!/bin/sh\n[ "$SSH_ORIGINAL_COMMAND" = ${quote(agentCommand('wangcai server start --json'))} ] || exit 64\nexec env HOME=${quote(home)} ${quote(binary)} server start --json\n`, { mode: 0o700 });
     writeFileSync(join(home, 'sshd_config'), [
       `Port ${sshPort}`, 'ListenAddress 127.0.0.1', `HostKey ${join(home, 'host-key')}`,
       `PidFile ${join(home, 'sshd.pid')}`, `AuthorizedKeysFile ${join(home, 'client-key.pub')}`,
@@ -51,16 +52,15 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
       `  UserKnownHostsFile ${join(home, 'known_hosts')}`,
     ].join('\n'));
     writeFileSync(join(home, 'known_hosts'), `[127.0.0.1]:${sshPort} ${readFileSync(join(home, 'host-key.pub'), 'utf8')}`);
-    // Inject only a private SSH config. All SSH transport is the real system client/server.
     mkdirSync(join(home, 'bin'));
-    writeFileSync(join(home, 'bin/ssh'), `#!/bin/sh\nexec /usr/bin/ssh -F ${quote(join(home, 'ssh_config'))} "$@"\n`, { mode: 0o700 });
+    const tunnelPidPath = join(home, 'tunnel.pid');
+    writeFileSync(join(home, 'bin/ssh'), `#!/bin/sh\nfor arg; do [ "$arg" != -N ] || echo $$ > ${quote(tunnelPidPath)}; done\nexec /usr/bin/ssh -F ${quote(join(home, 'ssh_config'))} "$@"\n`, { mode: 0o700 });
     process.env.PATH = `${join(home, 'bin')}:${originalPath}`;
-    process.env.WANGCAI_HOME = '';
     connection = await openMachine({ type: 'ssh', host: 'wangcai-test' });
     const info = JSON.parse(cli('status', '--json'));
     let state;
     connection.onState((value) => { state = value; });
-    const localPort = Number(new URL(connection.ws.url).port);
+    const localPort = connection.port;
     assert.ok(localPort > 0);
     assert.notEqual(localPort, info.port);
     assert.deepEqual(await connection.pty.list(), []);
@@ -82,7 +82,7 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     const snapshots = [];
     terminal.onSnapshot((event) => snapshots.push(Buffer.from(event.data).toString()));
     await until(() => snapshots.some((text) => text.includes('SSH_survived')), () => 'remote snapshot');
-    connection.tunnel.kill();
+    process.kill(Number(readFileSync(tunnelPidPath, 'utf8')));
     const beforeReconnect = state.generation;
     await until(() => state.status === 'connected' && state.generation > beforeReconnect, () => state.error);
     await terminal.write("printf 'REATTACH_%s\\n' ok\r");
@@ -91,7 +91,7 @@ test('real OpenSSH forwarding discovers random node ports and reconnects', { tim
     await until(() => output.join('').includes('REATTACH_ok'), () => 'automatic reattach');
     const generation = state.generation;
     cli('stop');
-    await until(() => state?.status === 'connected' && state.generation > generation, () => state?.error);
+    await until(() => state.status === 'connected' && state.generation > generation, () => state.error);
     const restarted = JSON.parse(cli('status', '--json'));
     assert.notEqual(restarted.instance_id, info.instance_id);
     assert.deepEqual(state.sessions, []);

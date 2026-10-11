@@ -5,18 +5,12 @@ const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
-const { buildSync } = require('esbuild');
-const { Module } = require('node:module');
-const { openMachine } = require('../sdk/dist/index.cjs');
+const { openMachine, agentCommand } = require('../sdk/dist/index.cjs');
 
 async function until(check) {
   for (let i = 0; i < 150; i++) { if (check()) return; await delay(40); }
   throw new Error('Timed out waiting for SDK output');
 }
-
-const sdkAgent = new Module('sdk-agent');
-sdkAgent._compile(buildSync({ entryPoints: ['sdk/agent.ts'], bundle: true, platform: 'node', write: false }).outputFiles[0].text, 'sdk-agent.cjs');
-const { agentCommand } = sdkAgent.exports;
 
 test('the command the SDK runs on a machine carries the home a development profile uses', () => {
   process.env.WANGCAI_HOME = "/tmp/a b'c";

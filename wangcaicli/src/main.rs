@@ -88,17 +88,16 @@ fn running_info() -> Result<ServerInfo> {
     let info: ServerInfo = serde_json::from_slice(
         &fs::read(path).context("Node is not running. Run: wangcai server start")?,
     )?;
-    let actual: ServerInfo = serde_json::from_value(
-        rpc(&info, "info")
-            .context("Node is unreachable; its state file may be stale. Run: wangcai server start")?,
-    )?;
+    let actual: ServerInfo =
+        serde_json::from_value(rpc(&info, "info").context(
+            "Node is unreachable; its state file may be stale. Run: wangcai server start",
+        )?)?;
     if actual.instance_id != info.instance_id || actual.pid != info.pid || actual.protocol != 1 {
         bail!("Node instance does not match server.json");
     }
     Ok(actual)
 }
 
-/// Stops the node this info names and waits for its state file to go.
 fn stop_node(info: &ServerInfo) -> Result<()> {
     rpc(info, "stop")?;
     for _ in 0..50 {

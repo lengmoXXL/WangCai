@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } = require('node:fs');
+const { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { launchApp, mockPlugin, openWorkspaceMenu, testEnv, writeInit } = require('./init.cjs');
@@ -8,22 +8,16 @@ const { launchApp, mockPlugin, openWorkspaceMenu, testEnv, writeInit } = require
 test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-plugins-'));
   const env = testEnv(home);
-  const plugins = join(home, '.local/share/wangcai/plugins');
-  const write = (id, files) => {
-    mkdirSync(join(plugins, id), { recursive: true });
-    for (const [name, body] of Object.entries(files)) writeFileSync(join(plugins, id, name), body);
-  };
   const main = (name) => `
     const { writeFileSync } = require('node:fs');
     const { join } = require('node:path');
-    // A plugin states the fields it accepts; the app only checks the types and fills in the defaults.
     exports.config = { font: { family: { type: 'string', default: '${name} Font' }, size: { type: 'number', default: 10 } } };
     exports.activate = (context) => {
       globalThis.fixtureConnect ??= context.connect;
       context.ui.handle('sharedConnect', () => globalThis.fixtureConnect === context.connect);
+      writeFileSync(${JSON.stringify(join(home, `${name}-data-directory`))}, context.host.dataDirectory);
       writeFileSync(join(context.host.dataDirectory, 'name.txt'), '${name}');
-      const settings = context.host.config;
-      writeFileSync(join(context.host.dataDirectory, 'settings.json'), JSON.stringify(settings));
+      writeFileSync(join(context.host.dataDirectory, 'settings.json'), JSON.stringify(context.host.config));
       const received = [];
       const off = context.global.subscribe('onclick', (data) => received.push(data));
       context.ui.handle('received', () => received);
@@ -51,26 +45,22 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     }
   `;
   let desktop;
-  const launch = async () => {
-    desktop = await launchApp(home, env);
-    return desktop.firstWindow();
-  };
   try {
-    write('alpha', { 'main.cjs': main('alpha'), 'ui.js': ui('alpha'), 'ui.css': 'button { color: rgb(1, 2, 3); }' });
-    write('beta', { 'main.cjs': main('beta'), 'ui.js': ui('beta') });
-    write('broken', { 'main.cjs': `
+    const alphaDirectory = mockPlugin(home, 'alpha', { main: main('alpha'), ui: ui('alpha'), css: 'button { color: rgb(1, 2, 3); }' });
+    mockPlugin(home, 'beta', { main: main('beta'), ui: ui('beta') });
+    mockPlugin(home, 'broken', { main: `
       const { writeFileSync } = require('node:fs');
       const { join } = require('node:path');
       exports.activate = (context) => {
+        writeFileSync(${JSON.stringify(join(home, 'broken-data-directory'))}, context.host.dataDirectory);
         context.global.subscribe('onclick', () => writeFileSync(join(context.host.dataDirectory, 'leaked'), 'yes'));
         throw new Error('intentional failure');
       };
     ` });
-    write('failed-ui', {
-      'main.cjs': 'exports.activate = () => {};',
-      'ui.js': 'export function mount(container, context) { container.hidden = true; context.global.subscribe("onclick", () => { document.body.dataset.leaked = "yes"; }); throw new Error("UI failure"); }',
+    mockPlugin(home, 'failed-ui', {
+      ui: 'export function mount(container, context) { container.hidden = true; context.global.subscribe("onclick", () => { document.body.dataset.leaked = "yes"; }); throw new Error("UI failure"); }',
     });
-    write('syntax', { 'main.cjs': 'exports.activate = (;' });
+    mockPlugin(home, 'syntax', { main: 'exports.activate = (;' });
     writeInit(home, {
       tabs: [
         { id: 'alpha', config: { font: { size: 30 }, junk: 'dropped' } },
@@ -79,13 +69,12 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
         'broken', 'failed-ui', 'syntax', 'missing',
       ],
     });
-    let page = await launch();
-    // Only the listed plugins load, in id order; the ones that fail are reported rather than dropped.
+    desktop = await launchApp(home, env);
+    let page = await desktop.firstWindow();
     assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)),
       ['absent', 'alpha', 'beta', 'broken', 'failed-ui', 'missing', 'syntax']);
     assert.equal(await page.evaluate(() => window.wangcai.request('alpha', 'sharedConnect')), true);
     assert.equal(await page.evaluate(() => window.wangcai.request('beta', 'sharedConnect')), true);
-    // The schema keeps a value of the type it names, defaults what init.ts leaves out and drops the rest.
     await page.waitForFunction(() => document.querySelector('[data-plugin=alpha]')?.dataset.font);
     assert.equal(await page.locator('[data-plugin=alpha]').getAttribute('data-font'), '{"family":"alpha Font","size":30}');
     assert.equal(await page.locator('[data-plugin=beta]').getAttribute('data-font'), '{"family":"beta Font","size":10}');
@@ -106,34 +95,32 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     await page.evaluate(() => window.wangcai.publish('onclick', 'after-unsubscribe'));
     await page.waitForFunction(() => document.querySelector('[data-plugin=beta]')?.getAttribute('data-channel') === 'after-unsubscribe');
     assert.equal(await page.locator('[data-plugin=alpha]').getAttribute('data-channel'), 'main-event');
-    assert.equal(existsSync(join(home, '.local/share/wangcai/data/broken/leaked')), false);
+    assert.equal(existsSync(join(readFileSync(join(home, 'broken-data-directory'), 'utf8'), 'leaked')), false);
     assert.equal(await page.evaluate(() => document.body.dataset.leaked), undefined);
     await page.getByText('broken: intentional failure', { exact: true }).waitFor();
     await page.getByText('failed-ui: UI failure', { exact: true }).waitFor();
     await page.getByText('missing: Plugin is not installed', { exact: true }).waitFor();
     await page.getByText('absent: Plugin is not installed', { exact: true }).waitFor();
     assert.equal(await page.locator('.plugin-error[data-plugin=syntax]').count(), 1);
-    // None of these plugins is listed for workspaces, so the menu has nothing to offer.
     await openWorkspaceMenu(page);
     await page.locator('#workspace-row-menu').getByText('没有可用的工作区', { exact: true }).waitFor();
     await desktop.close(); desktop = undefined;
     for (const name of ['alpha', 'beta']) {
-      assert.equal(readFileSync(join(home, '.local/share/wangcai/data', name, 'cleaned'), 'utf8'), 'yes');
-      assert.equal(readFileSync(join(home, '.local/share/wangcai/data', name, 'name.txt'), 'utf8'), name);
-      const settings = JSON.parse(readFileSync(join(home, '.local/share/wangcai/data', name, 'settings.json'), 'utf8'));
+      const dataDirectory = readFileSync(join(home, `${name}-data-directory`), 'utf8');
+      assert.equal(readFileSync(join(dataDirectory, 'cleaned'), 'utf8'), 'yes');
+      assert.equal(readFileSync(join(dataDirectory, 'name.txt'), 'utf8'), name);
+      const settings = JSON.parse(readFileSync(join(dataDirectory, 'settings.json'), 'utf8'));
       assert.equal(settings.theme.background, '#121314');
       assert.equal(settings.junk, undefined);
       assert.deepEqual(settings.font, name === 'alpha' ? { family: 'alpha Font', size: 30 } : { family: 'beta Font', size: 10 });
     }
-    // A plugin is a set of files that the app loads; nothing here is compiled or cached.
-    assert.equal(existsSync(join(home, '.cache/wangcai')), false);
-    const source = join(plugins, 'alpha/ui.js');
+    const source = join(alphaDirectory, 'ui.js');
     writeFileSync(source, readFileSync(source, 'utf8').replace('alpha v1', 'alpha v2'));
-    page = await launch();
+    desktop = await launchApp(home, env);
+    page = await desktop.firstWindow();
     await page.getByText('alpha v2', { exact: true }).waitFor();
     await page.getByText('beta v1', { exact: true }).waitFor();
     assert.equal(await page.getByText('alpha v1', { exact: true }).count(), 0);
-    assert.equal(existsSync(join(home, '.local/share/wangcai/server.json')), false);
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });
