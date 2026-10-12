@@ -68,6 +68,6 @@ exports.openWorkspaceMenu = (page) => page.locator('.workspace-header').click({ 
 
 exports.newWorkspace = async (page) => {
   await exports.openWorkspaceMenu(page);
-  await page.locator('#workspace-row-menu').getByRole('menuitem', { name: '本机', exact: true }).click();
+  await page.locator('#workspace-row-menu').getByRole('menuitem', { name: '新建 本机', exact: true }).click();
   await page.getByRole('tablist', { name: '工作区' }).getByRole('tab').last().waitFor();
 };

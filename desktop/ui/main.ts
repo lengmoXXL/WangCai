@@ -145,11 +145,14 @@ async function start() {
     rowMenu.style.top = `${at.top}px`;
     rowBackdrop.hidden = false;
     const entries: { provider: string; item: WorkspaceMenuItem }[] = [];
-    for (const provider of providers) {
-      try {
-        for (const item of await window.wangcai.request<WorkspaceMenuItem[]>(provider, 'workspace-menu')) entries.push({ provider, item });
-      } catch (error) {
-        if (!closing) console.error(error);
+    // A row is closed from its menu; what can be opened belongs to the header alone.
+    if (menuRow === undefined) {
+      for (const provider of providers) {
+        try {
+          for (const item of await window.wangcai.request<WorkspaceMenuItem[]>(provider, 'workspace-menu')) entries.push({ provider, item });
+        } catch (error) {
+          if (!closing) console.error(error);
+        }
       }
     }
     const closeId = menuRow;
@@ -168,7 +171,7 @@ async function start() {
     for (const { provider, item } of entries) {
       const button = document.createElement('button');
       button.setAttribute('role', 'menuitem');
-      button.textContent = item.label;
+      button.textContent = `新建 ${item.label}`;
       const hint = document.createElement('span');
       hint.textContent = item.hint ?? '';
       button.append(hint);

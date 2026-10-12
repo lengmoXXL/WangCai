@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { mkdtempSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { launchApp, mockView, mockWorkspace, newWorkspace, testEnv, waitForShell, writeInit } = require('./init.cjs');
+const { launchApp, mockView, mockWorkspace, newWorkspace, openWorkspaceMenu, testEnv, waitForShell, writeInit } = require('./init.cjs');
 
 test('full screen reclaims the window chrome space above the workspaces', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-full-screen-'));
@@ -84,6 +84,30 @@ test('sidebar tabs can be dragged into a new order', { timeout: 180000 }, async 
     await open();
     await settled(['终端', '文件']);
     assert.deepEqual(errors, []);
+  } finally {
+    await desktop?.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the workspaces header names what it can open, and a row menu only closes', { timeout: 180000 }, async () => {
+  const home = mkdtempSync(join(tmpdir(), 'wangcai-workspace-menu-'));
+  const env = testEnv(home);
+  let desktop;
+  try {
+    mockWorkspace(home);
+    writeInit(home, { workspaces: ['terminal-agent'], tabs: [] });
+    desktop = await launchApp(home, env);
+    const page = await desktop.firstWindow();
+    await waitForShell(page);
+    await newWorkspace(page);
+    const menu = page.locator('#workspace-row-menu');
+    const items = () => menu.getByRole('menuitem').allTextContents();
+    await openWorkspaceMenu(page);
+    assert.deepEqual(await items(), ['新建 本机'], 'what can be opened is named as a creation');
+    await page.keyboard.press('Escape');
+    await page.getByRole('tablist', { name: '工作区' }).getByRole('tab').first().click({ button: 'right' });
+    assert.deepEqual(await items(), ['关闭工作区'], 'a row is closed from its menu and nothing else');
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });
