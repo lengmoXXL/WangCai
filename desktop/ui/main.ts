@@ -127,9 +127,9 @@ async function start() {
   const hideRowMenu = () => { rowBackdrop.hidden = true; menuRow = undefined; };
   // A click on an entry belongs to the entry, which decides for itself when the menu goes away.
   rowBackdrop.onclick = (event) => { if (!rowMenu.contains(event.target as Node)) hideRowMenu(); };
-  const escapeRowMenu = (event: KeyboardEvent) => { if (event.key === 'Escape') hideRowMenu(); };
-  document.addEventListener('keydown', escapeRowMenu);
-  disposers.push(() => document.removeEventListener('keydown', escapeRowMenu));
+  const escapeOverlays = (event: KeyboardEvent) => { if (event.key === 'Escape') { hideRename(); hideRowMenu(); } };
+  document.addEventListener('keydown', escapeOverlays);
+  disposers.push(() => document.removeEventListener('keydown', escapeOverlays));
   // A menu is as large as its entries, so where it fits is only known once they are in the DOM.
   const clampMenu = (menu: HTMLElement, at: MenuAnchor) => {
     menu.style.left = `${Math.max(4, Math.min(at.left, window.innerWidth - menu.offsetWidth - 4))}px`;
@@ -145,7 +145,7 @@ async function start() {
     rowMenu.style.top = `${at.top}px`;
     rowBackdrop.hidden = false;
     const entries: { provider: string; item: WorkspaceMenuItem }[] = [];
-    // A row is closed from its menu; what can be opened belongs to the header alone.
+    // A row's menu acts on that row; what can be opened belongs to the space around the rows.
     if (menuRow === undefined) {
       for (const provider of providers) {
         try {
@@ -155,16 +155,21 @@ async function start() {
         }
       }
     }
-    const closeId = menuRow;
+    const rowId = menuRow;
     const items: HTMLElement[] = [];
-    if (closeId !== undefined) {
+    if (rowId !== undefined) {
+      const rename = document.createElement('button');
+      rename.setAttribute('role', 'menuitem');
+      rename.textContent = '重命名';
+      rename.onclick = () => { hideRowMenu(); openRename(rowId); };
+      items.push(rename);
       const button = document.createElement('button');
       button.setAttribute('role', 'menuitem');
       button.textContent = '关闭工作区';
       button.onclick = () => {
-        const provider = providers.find((provider) => grouped.get(provider)!.some((item) => item.id === closeId));
+        const provider = providers.find((provider) => grouped.get(provider)!.some((item) => item.id === rowId));
         hideRowMenu();
-        if (provider) void window.wangcai.request(provider, 'workspace-close', { id: closeId }).then(refreshRows).catch(console.error);
+        if (provider) void window.wangcai.request(provider, 'workspace-close', { id: rowId }).then(refreshRows).catch(console.error);
       };
       items.push(button);
     }
@@ -203,6 +208,61 @@ async function start() {
   };
   workspaceHeader.oncontextmenu = openRowMenu;
   workspaceList.oncontextmenu = openRowMenu;
+
+  // A row is a draggable tab, so renaming it asks in a dialog rather than in the row itself.
+  const renameScrim = document.createElement('div');
+  renameScrim.className = 'menu-scrim rename-scrim';
+  renameScrim.hidden = true;
+  const renameDialog = document.createElement('form');
+  renameDialog.className = 'rename-dialog';
+  renameDialog.setAttribute('role', 'dialog');
+  renameDialog.setAttribute('aria-label', '重命名工作区');
+  const renameInput = document.createElement('input');
+  renameInput.className = 'rename-input';
+  renameInput.setAttribute('aria-label', '工作区名字');
+  renameInput.placeholder = '留空则恢复默认名字';
+  const renameNote = document.createElement('p');
+  renameNote.className = 'rename-note';
+  renameNote.setAttribute('role', 'alert');
+  const renameCancel = document.createElement('button');
+  renameCancel.type = 'button';
+  renameCancel.textContent = '取消';
+  const renameSubmit = document.createElement('button');
+  renameSubmit.type = 'submit';
+  renameSubmit.textContent = '重命名';
+  const renameActions = document.createElement('div');
+  renameActions.className = 'rename-actions';
+  renameActions.append(renameCancel, renameSubmit);
+  renameDialog.append(renameInput, renameNote, renameActions);
+  renameScrim.append(renameDialog);
+  root.append(renameScrim);
+  let renameId: string | undefined;
+  const hideRename = () => { renameScrim.hidden = true; renameId = undefined; };
+  const openRename = (id: string) => {
+    renameId = id;
+    renameInput.value = providers.flatMap((provider) => grouped.get(provider)!).find((row) => row.id === id)?.label ?? '';
+    renameNote.textContent = '';
+    renameScrim.hidden = false;
+    renameInput.focus();
+    renameInput.select();
+  };
+  renameScrim.onclick = (event) => { if (!renameDialog.contains(event.target as Node)) hideRename(); };
+  renameCancel.onclick = hideRename;
+  renameDialog.onsubmit = async (event) => {
+    event.preventDefault();
+    const provider = providers.find((provider) => grouped.get(provider)!.some((row) => row.id === renameId));
+    if (!provider || renameId === undefined) return;
+    renameSubmit.disabled = true;
+    try {
+      await window.wangcai.request(provider, 'workspace-rename', { id: renameId, name: renameInput.value });
+      hideRename();
+      await refreshRows();
+    } catch (error) {
+      renameNote.textContent = error instanceof Error ? error.message : String(error);
+    } finally {
+      renameSubmit.disabled = false;
+    }
+  };
 
   const selectWorkspace = (id: string) => {
     const provider = providers.find((provider) => grouped.get(provider)!.some((item) => item.id === id));

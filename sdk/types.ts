@@ -11,6 +11,7 @@ export type InstallAgent = (host: string, signal?: AbortSignal) => Promise<void>
  *   workspace-create({ key }) -> { id: string }        the id of the workspace it made
  *   workspace-select({ id })
  *   workspace-close({ id })
+ *   workspace-rename({ id, name })                     an empty name gives the workspace back to the name it followed
  *   workspace-move({ id, before? })
  *
  * Every view that follows the workspace in front shares these channel topics, whatever the provider

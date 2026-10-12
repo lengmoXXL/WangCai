@@ -78,6 +78,20 @@ html[data-fullscreen] .sidebar-left { padding-top: 0; }
 .view-menu button:hover:not(:disabled), .view-picker:hover, .sidebar-toggle:hover { background: var(--wc-overlay); }
 .view-menu button:focus-visible, .view-picker:focus-visible, .sidebar-toggle:focus-visible { outline: 2px solid var(--wc-accent); }
 
+/* The rename dialog sits in the middle of the window: a right-click leaves no room beside the row. */
+.rename-scrim { display: flex; align-items: center; justify-content: center; }
+.rename-scrim[hidden] { display: none; }
+.rename-dialog { display: flex; flex-direction: column; gap: 8px; width: 240px; padding: 10px; border: 1px solid var(--wc-border); border-radius: 5px; background: var(--wc-background); color: var(--wc-foreground); font-size: 12px; }
+.rename-input { padding: 5px 6px; border: 1px solid var(--wc-border); border-radius: 3px; background: var(--wc-surface); color: inherit; font-size: 12px; }
+.rename-input:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: -2px; }
+.rename-note { margin: 0; color: var(--wc-red); font-size: 11px; }
+.rename-note:empty { display: none; }
+.rename-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.rename-actions button { padding: 5px 10px; border: 1px solid var(--wc-border); border-radius: 3px; background: var(--wc-surface); color: inherit; font-size: 12px; cursor: pointer; }
+.rename-actions button:hover:not(:disabled) { background: var(--wc-overlay); }
+.rename-actions button:disabled { color: var(--wc-muted); cursor: default; }
+.rename-actions button:focus-visible { outline: 2px solid var(--wc-accent); }
+
 /* The plugin page is a card the window's own 3px inset leaves a margin for, and it covers the app, so its
    top carries the window buttons and the whole card drags the window. */
 .installs { position: fixed; inset: 3px; z-index: 20; display: flex; flex-direction: column; padding-top: 36px; border: 1px solid var(--wc-border); border-radius: 8px; background: var(--wc-background); overflow: hidden; -webkit-app-region: drag; }

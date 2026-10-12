@@ -58,6 +58,10 @@ exports.mockWorkspace = (home) => exports.mockPlugin(home, 'terminal-agent', {
     rows.push(row);
     return { id: row.id };
   });
+  ui.handle('workspace-rename', ({ id, name }) => {
+    const row = rows.find((item) => item.id === id);
+    if (row) row.label = name || '~';
+  });
 };
 `,
 });

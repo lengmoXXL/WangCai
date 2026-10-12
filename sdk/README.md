@@ -65,6 +65,7 @@
 放入 init.ts `workspaces` 的插件用 `ui.handle` 提供：`workspaces()`（`WorkspaceRow[]`，
 按显示顺序）、`workspace-menu()`（`WorkspaceMenuItem[]`）、`workspace-create({ key })`
 （返回 `{ id }`）、`workspace-select({ id })`、`workspace-close({ id })`、
+`workspace-rename({ id, name })`（名字为空表示交回 provider 自己跟随的名字）、
 `workspace-move({ id, before? })`（`before` 是目标工作区 id，不是索引；省略为末尾，且只
 允许同一 provider 内拖动）。
 

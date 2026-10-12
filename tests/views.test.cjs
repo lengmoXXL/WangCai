@@ -90,7 +90,7 @@ test('sidebar tabs can be dragged into a new order', { timeout: 180000 }, async 
   }
 });
 
-test('the workspaces header names what it can open, and a row menu only closes', { timeout: 180000 }, async () => {
+test('the workspaces header names what it can open, and a row menu closes or renames it', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-workspace-menu-'));
   const env = testEnv(home);
   let desktop;
@@ -107,7 +107,47 @@ test('the workspaces header names what it can open, and a row menu only closes',
     assert.deepEqual(await items(), ['新建 本机'], 'what can be opened is named as a creation');
     await page.keyboard.press('Escape');
     await page.getByRole('tablist', { name: '工作区' }).getByRole('tab').first().click({ button: 'right' });
-    assert.deepEqual(await items(), ['关闭工作区'], 'a row is closed from its menu and nothing else');
+    assert.deepEqual(await items(), ['重命名', '关闭工作区'], 'a row is renamed or closed from its menu and nothing else');
+  } finally {
+    await desktop?.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a workspace is renamed in a dialog, and an empty name is left to the provider', { timeout: 180000 }, async () => {
+  const home = mkdtempSync(join(tmpdir(), 'wangcai-workspace-rename-'));
+  const env = testEnv(home);
+  let desktop;
+  try {
+    mockWorkspace(home);
+    writeInit(home, { workspaces: ['terminal-agent'], tabs: [] });
+    desktop = await launchApp(home, env);
+    const page = await desktop.firstWindow();
+    await waitForShell(page);
+    await newWorkspace(page);
+    const LABELS = '[aria-label="工作区"] [role=tab] .name';
+    const settled = (expected) => page.waitForFunction(([selector, want]) => [...document.querySelectorAll(selector)].map((node) => node.textContent).join() === want, [LABELS, expected.join()]);
+    const dialog = page.getByRole('dialog', { name: '重命名工作区' });
+    const input = dialog.getByRole('textbox');
+    const openRename = async () => {
+      await page.getByRole('tablist', { name: '工作区' }).getByRole('tab').first().click({ button: 'right' });
+      await page.getByRole('menuitem', { name: '重命名', exact: true }).click();
+      await dialog.waitFor();
+    };
+    await settled(['~']);
+    await openRename();
+    assert.equal(await input.inputValue(), '~', 'the dialog opens on the name the row shows');
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'hidden' });
+    await openRename();
+    await input.fill('手写的名字');
+    await input.press('Enter');
+    await dialog.waitFor({ state: 'hidden' });
+    await settled(['手写的名字']);
+    await openRename();
+    await input.fill('');
+    await input.press('Enter');
+    await settled(['~']);
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });
