@@ -69,7 +69,7 @@ impl Process {
     }
 
     pub fn terminate(&mut self) {
-        if self.exit_code.is_some() || self.pid <= 1 {
+        if self.exit_code.is_some() {
             return;
         }
         // The child was spawned as its own process group leader, so its group holds the helpers it
