@@ -109,7 +109,7 @@ const PRESET = `// 旺财的启动入口：启动时由 app 直接加载，只�
 //             brightGreen, brightYellow, brightBlue, brightMagenta, brightCyan, brightWhite }
 //           界面与终端配色，值写 '#rrggbb'；终端调色板是 black 到 brightWhite
 //   workspaces [{ id, repo, commit, directory, config }]  工作区插件：窗口从这里取工作区列表，以及菜单里能开什么
-//   tabs       [{ id, repo, commit, directory, config }]  侧栏标签页插件：它导出的视图出现在视图菜单里
+//   tabs       [{ id, repo, commit, directory, config }]  侧栏标签页插件：它导出的视图出现在侧栏菜单里
 // 插件条目的字段：
 //   id        插件 id，也就是插件目录名
 //   repo      插件仓库：不写就用官方仓库 https://github.com/lengmoXXL/WangCai-<id>；写了就 clone 并构建

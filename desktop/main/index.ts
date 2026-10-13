@@ -87,9 +87,7 @@ else {
     });
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { label: '旺财', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'quit' }] },
-      { label: 'Edit', submenu: [{ role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
-      { label: 'View', submenu: [{ role: 'toggleDevTools' }, { role: 'togglefullscreen' }, { type: 'separator' },
-        { label: '插件', click: () => send('wangcai:channel', 'plugin-page') }] },
+      { label: '视图', submenu: [{ label: '插件', click: () => send('wangcai:channel', 'plugin-page') }] },
     ]));
     const { maximized, ...bounds } = existsSync(windowStatePath) ? JSON.parse(readFileSync(windowStatePath, 'utf8')) : { width: 1180, height: 780 };
     const win = new BrowserWindow({
@@ -106,6 +104,19 @@ else {
       renameSync(`${windowStatePath}.tmp`, windowStatePath);
     });
     win.on('closed', () => { window = undefined; });
+    // The menu bar holds no clipboard roles, so the app serves those shortcuts itself.
+    const editing: Record<string, () => void> = {
+      c: () => win.webContents.copy(),
+      v: () => win.webContents.paste(),
+      a: () => win.webContents.selectAll(),
+    };
+    win.webContents.on('before-input-event', (event, input) => {
+      if (!input.meta || input.control || input.alt || input.type !== 'keyDown') return;
+      const command = editing[input.key.toLowerCase()];
+      if (!command) return;
+      event.preventDefault();
+      command();
+    });
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', (event) => event.preventDefault());
     let cleaned = false;

@@ -153,3 +153,23 @@ test('a workspace is renamed in a dialog, and an empty name is left to the provi
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('the menu bar holds one view menu with the plugin item', { timeout: 180000 }, async () => {
+  const home = mkdtempSync(join(tmpdir(), 'wangcai-menu-'));
+  const env = testEnv(home);
+  let desktop;
+  try {
+    writeInit(home, { workspaces: [], tabs: [] });
+    desktop = await launchApp(home, env);
+    await desktop.firstWindow();
+    const [labels, viewItems] = await desktop.evaluate(({ Menu }) => {
+      const items = Menu.getApplicationMenu().items;
+      return [items.map((item) => item.label), items[1].submenu.items.map((item) => item.label)];
+    });
+    assert.deepEqual(labels, ['旺财', '视图']);
+    assert.deepEqual(viewItems, ['插件']);
+  } finally {
+    await desktop?.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
