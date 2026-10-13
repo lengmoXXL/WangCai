@@ -10,12 +10,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     fs,
-    io::Write,
+    io::{Read, Write},
     net::{SocketAddr, TcpStream},
     os::unix::process::CommandExt,
     path::PathBuf,
     process::{Command, Stdio},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio_tungstenite::tungstenite::{self, Message};
 
@@ -66,6 +66,55 @@ fn data_dir() -> Result<PathBuf> {
         .or_else(|| std::env::var_os("HOME"))
         .context("neither WANGCAI_HOME nor HOME is set")?;
     Ok(PathBuf::from(home).join(".local/share/wangcai"))
+}
+
+// A node the app starts inherits the app's environment, which carries no login shell's PATH, so a program the
+// user's rc files put there (a language server, for one) would stay out of reach of every child it spawns.
+fn adopt_terminal_environment() {
+    const MARKER: &str = "__wangcai_shell_environment__";
+    let Some(shell) = std::env::var_os("SHELL").filter(|shell| !shell.is_empty()) else {
+        return;
+    };
+    let script = format!("printf '%s\\n' {MARKER}; env; printf '%s\\n' {MARKER}");
+    let Ok(mut child) = Command::new(shell)
+        .args(["-l", "-i", "-c", &script])
+        .env("TERM", "xterm-256color")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+    else {
+        return;
+    };
+    let mut stdout = child.stdout.take();
+    let reader = std::thread::spawn(move || {
+        let mut text = String::new();
+        if let Some(stdout) = stdout.as_mut() {
+            let _ = stdout.read_to_string(&mut text);
+        }
+        text
+    });
+    // An rc file that waits on something would otherwise hold the node, so the shell is killed after a while.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while child.try_wait().ok().flatten().is_none() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let _ = child.kill();
+    let output = reader.join().unwrap_or_default();
+    let between = output
+        .split_once(MARKER)
+        .and_then(|(_, rest)| rest.split_once(MARKER))
+        .map(|(values, _)| values);
+    for (key, value) in between
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|line| line.split_once('='))
+    {
+        // SAFETY: the node has not started its runtime yet, so no other thread reads the environment.
+        if !key.is_empty() {
+            unsafe { std::env::set_var(key, value) };
+        }
+    }
 }
 
 fn rpc(info: &ServerInfo, op: &str) -> Result<Value> {
@@ -214,6 +263,7 @@ fn main() -> Result<()> {
                 .open(dir.join("server.lock"))?;
             lock.try_lock_exclusive()
                 .context("Wangcai node is already running")?;
+            adopt_terminal_environment();
             tokio::runtime::Runtime::new()?.block_on(async {
                 let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
                 let info = ServerInfo {

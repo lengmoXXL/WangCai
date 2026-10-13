@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { mkdtempSync, mkdirSync, readFileSync, existsSync, rmSync, realpathSync } = require('node:fs');
+const { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, realpathSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
@@ -22,6 +22,10 @@ test('SDK subprocess: binary output, argv, cwd, environment, limits and cancella
   const previousHome = process.env.HOME;
   process.env.HOME = home;
   process.env.WANGCAI_HOME = '';
+  const previousShell = process.env.SHELL;
+  process.env.SHELL = '/bin/bash';
+  // The node adopts the environment a login shell gives it, so this profile stands in for a user's rc files.
+  writeFileSync(join(home, '.bash_profile'), 'export SDK_SHELL_ENV=from-profile\n');
   const binary = resolve('wangcaicli/dist/debug/wangcai');
   let machine;
   try {
@@ -33,6 +37,8 @@ test('SDK subprocess: binary output, argv, cwd, environment, limits and cancella
     assert.equal(info.code, 0);
     assert.deepEqual(JSON.parse(Buffer.from(info.stdout).toString()), { cwd, arg: literal, env: 'custom' });
     assert.equal(existsSync(join(cwd, 'unwanted')), false);
+    const inherited = await machine.subprocess.exec('/bin/sh', ['-c', 'printf "%s" "$SDK_SHELL_ENV"'], { cwd });
+    assert.equal(Buffer.from(inherited.stdout).toString(), 'from-profile');
     const bytes = await machine.subprocess.exec(process.execPath, ['-e', 'process.stdout.write(Buffer.from([0, 255, 128])); process.stderr.write(Buffer.from([254, 0])); process.exitCode = 7'], { cwd });
     assert.equal(bytes.code, 7);
     assert.deepEqual(Buffer.from(bytes.stdout), Buffer.from([0, 255, 128]));
@@ -62,6 +68,7 @@ test('SDK subprocess: binary output, argv, cwd, environment, limits and cancella
     machine?.disconnect();
     try { execFileSync(binary, ['server', 'stop'], { stdio: 'ignore' }); } catch {}
     process.env.HOME = previousHome;
+    process.env.SHELL = previousShell;
     rmSync(home, { recursive: true, force: true });
   }
 });
