@@ -6,6 +6,7 @@ const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
 const { openMachine } = require('../sdk/dist/index.cjs');
+const binary = resolve('wangcaicli/dist/debug/wangcai');
 
 async function until(check) {
   for (let i = 0; i < 150; i++) { if (check()) return; await delay(40); }
@@ -26,7 +27,6 @@ test('SDK process: streaming pipes, binary writes, exit codes, cleanup and recon
   const previousHome = process.env.HOME;
   process.env.HOME = home;
   process.env.WANGCAI_HOME = '';
-  const binary = resolve('wangcaicli/dist/debug/wangcai');
   let machine;
   try {
     machine = await openMachine({ type: 'local', binary });
@@ -111,6 +111,39 @@ test('SDK process: streaming pipes, binary writes, exit codes, cleanup and recon
     machine.disconnect();
     execFileSync(binary, ['server', 'stop'], { stdio: 'ignore' });
     await until(() => !running(child.pid));
+  } finally {
+    machine?.disconnect();
+    try { execFileSync(binary, ['server', 'stop'], { stdio: 'ignore' }); } catch {}
+    process.env.HOME = previousHome;
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// A process that writes everything it has before it reads anything: a node that writes stdin under the
+// lock its output forwarder needs deadlocks here, losing the client's write to its timeout.
+test('SDK process: a slow reader does not stall the output it is producing', { timeout: 120000 }, async () => {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-slow-reader-')));
+  const previousHome = process.env.HOME;
+  process.env.HOME = home;
+  process.env.WANGCAI_HOME = '';
+  const size = 512 * 1024;
+  let machine;
+  try {
+    machine = await openMachine({ type: 'local', binary });
+    const script = `process.stdout.write(Buffer.alloc(${size}, 7), () => {
+      let read = 0;
+      process.stdin.on('data', (chunk) => {
+        read += chunk.length;
+        if (read >= ${size}) process.stdout.write('GOT ' + read);
+      });
+    });`;
+    const info = await machine.subprocess.spawn(process.execPath, ['-e', script], { cwd: home });
+    const handle = await machine.subprocess.attach(info.id);
+    const stdout = [];
+    handle.onData((event) => { if (event.stream === 'stdout') stdout.push(Buffer.from(event.data)); });
+    await handle.write(Buffer.alloc(size, 5));
+    await until(() => Buffer.concat(stdout).includes(`GOT ${size}`));
+    await machine.subprocess.close(info.id);
   } finally {
     machine?.disconnect();
     try { execFileSync(binary, ['server', 'stop'], { stdio: 'ignore' }); } catch {}

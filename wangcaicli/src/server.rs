@@ -445,7 +445,10 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                             let process = node.process(id)?;
                             if !attachments.contains_key(id) { bail!("Attach the process before writing to it"); }
                             let data = request["data"].as_str().context("Missing input data")?;
-                            process.lock().await.write(data).await?;
+                            // The lock goes before the bytes are queued: a process that is slow to read its
+                            // stdin delays this reply without ever holding up its own output or its close.
+                            let input = process.lock().await.input()?;
+                            input.write(data).await?;
                             Ok(json!({}))
                         }
                         "process_close" => {

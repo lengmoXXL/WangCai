@@ -9,13 +9,16 @@ use std::{
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     process::{ChildStdin, Command},
-    sync::{Mutex, broadcast},
+    sync::{Mutex, broadcast, mpsc},
 };
 
 const MAX_WRITE: usize = 64 * 1024;
 const READ_CHUNK: usize = 8 * 1024;
 // A consumer this far behind has missed part of a byte stream, which cannot be repaired by a reattach.
 const BUFFER: usize = 1024;
+// Writes waiting for the process to read its stdin. A process that stops reading fills this queue, and
+// the client's next write waits for room in it, which is backpressure rather than a stalled process.
+const WRITE_QUEUE: usize = 32;
 
 #[derive(Deserialize)]
 struct SpawnRequest {
@@ -39,10 +42,26 @@ pub enum Event {
 pub struct Process {
     id: String,
     pid: u32,
-    stdin: ChildStdin,
+    // The process' stdin belongs to its writer task rather than to this struct.
+    input: mpsc::Sender<Vec<u8>>,
     output: broadcast::Sender<Event>,
     seq: u64,
     exit_code: Option<u32>,
+}
+
+pub struct Input(mpsc::Sender<Vec<u8>>);
+
+impl Input {
+    pub async fn write(&self, data: &str) -> Result<()> {
+        if data.len() > MAX_WRITE {
+            bail!("Input chunk is too large");
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(data)
+            .context("Input is not base64")?;
+        // A queue whose receiver is gone belongs to a process that has ended, which its exit event tells.
+        self.0.send(bytes).await.context("Process has exited")
+    }
 }
 
 impl Process {
@@ -54,18 +73,11 @@ impl Process {
         self.output.subscribe()
     }
 
-    pub async fn write(&mut self, data: &str) -> Result<()> {
+    pub fn input(&self) -> Result<Input> {
         if self.exit_code.is_some() {
             bail!("Process has exited");
         }
-        if data.len() > MAX_WRITE {
-            bail!("Input chunk is too large");
-        }
-        let bytes = base64::engine::general_purpose::STANDARD
-            .decode(data)
-            .context("Input is not base64")?;
-        self.stdin.write_all(&bytes).await?;
-        Ok(())
+        Ok(Input(self.input.clone()))
     }
 
     pub fn terminate(&mut self) {
@@ -104,15 +116,17 @@ pub fn spawn(request: Value) -> Result<(String, Arc<Mutex<Process>>)> {
     let stdout = child.stdout.take().context("Process has no stdout")?;
     let stderr = child.stderr.take().context("Process has no stderr")?;
     let (output, _) = broadcast::channel(BUFFER);
+    let (input, queue) = mpsc::channel(WRITE_QUEUE);
     let id = uuid::Uuid::new_v4().to_string();
     let process = Arc::new(Mutex::new(Process {
         id: id.clone(),
         pid,
-        stdin,
+        input,
         output,
         seq: 0,
         exit_code: None,
     }));
+    tokio::spawn(write_stdin(stdin, queue));
     tokio::spawn(forward(stdout, process.clone(), |seq, data| {
         Event::Stdout { seq, data }
     }));
@@ -142,6 +156,16 @@ pub fn spawn(request: Value) -> Result<(String, Arc<Mutex<Process>>)> {
         });
     });
     Ok((id, process))
+}
+
+async fn write_stdin(mut stdin: ChildStdin, mut queue: mpsc::Receiver<Vec<u8>>) {
+    while let Some(bytes) = queue.recv().await {
+        // A pipe that refuses the bytes belongs to a process that closed its stdin, whose ending the
+        // wait task reports; the queued writes that follow fail against the closed queue.
+        if stdin.write_all(&bytes).await.is_err() {
+            break;
+        }
+    }
 }
 
 async fn forward(
