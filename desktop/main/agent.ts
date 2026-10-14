@@ -1,5 +1,6 @@
 import { net } from 'electron';
 import { execFile, spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { agentCommand } from '@lengmoxxl/sdk';
@@ -39,12 +40,16 @@ export function agentInstaller(directory: string) {
       signal?.throwIfAborted();
       const url = `${prefix}/agent-v${await version}/wangcai-${target}`;
       const deadline = AbortSignal.timeout(DOWNLOAD_TIMEOUT);
+      const until = signal ? AbortSignal.any([signal, deadline]) : deadline;
       let binary: Buffer;
       try {
+        const expected = await publishedDigest(`${url}.sha256`, until);
         // The app's own fetch goes through the network stack, so a machine behind a proxy is still reached.
-        const response = await net.fetch(url, { signal: signal ? AbortSignal.any([signal, deadline]) : deadline });
+        const response = await net.fetch(url, { signal: until });
         if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
         binary = Buffer.from(await response.arrayBuffer());
+        const digest = createHash('sha256').update(binary).digest('hex');
+        if (digest !== expected) throw new Error(`sha256 不符：期望 ${expected}，得到 ${digest}`);
       } catch (error) {
         failures.push(`${url}\n${error instanceof Error ? error.message : String(error)}`);
         continue;
@@ -62,6 +67,16 @@ export function agentInstaller(directory: string) {
     }
     throw new Error(`下载 agent 失败：\n${failures.join('\n\n')}`);
   };
+}
+
+// Every asset is published beside its digest, from the same prefix: what a mirror answers for one has to
+// agree with the other, so an error page or a half file never reaches the machine.
+async function publishedDigest(url: string, signal: AbortSignal) {
+  const response = await net.fetch(url, { signal });
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+  const digest = (await response.text()).trim();
+  if (!/^[0-9a-f]{64}$/i.test(digest)) throw new Error('发布目录里的校验值不是 sha256');
+  return digest.toLowerCase();
 }
 
 /** The version of the agent this app carries, which is the release a machine installs it from. */

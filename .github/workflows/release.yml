@@ -92,10 +92,14 @@ jobs:
         with:
           name: wangcai-${{ matrix.target }}
           path: wangcai-${{ matrix.target }}
+      # The app checks what it installs against this digest.
       - name: Publish the agent under the tag of its own version
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "agent-v${{ needs.versions.outputs.crate }}" "wangcai-${{ matrix.target }}" --clobber
+        run: |
+          asset=wangcai-${{ matrix.target }}
+          shasum -a 256 "$asset" | cut -d' ' -f1 > "$asset.sha256"
+          gh release upload "agent-v${{ needs.versions.outputs.crate }}" "$asset" "$asset.sha256" --clobber
 
   app:
     needs: versions

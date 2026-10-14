@@ -1,5 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
@@ -21,6 +22,8 @@ Module._load = load;
 const { agentInstaller } = installer.exports;
 // The agent the app ships: the installer reads its version and installs that release.
 const shipped = '#!/bin/sh\n[ "$1" = --version ] && echo "wangcai 0.1.0"\n';
+// The release publishes each asset with its digest beside it; the stub serves both from the same body.
+const digest = (body) => createHash('sha256').update(body).digest('hex');
 
 // A stub ssh runs the remote command here against a stubbed uname and a private HOME, so an install is
 // exercised end to end with only the download left to the test.
@@ -36,8 +39,11 @@ async function machine(platform, assets = {}) {
   const requests = [];
   download = async (url) => {
     requests.push(url);
-    const name = Object.keys(assets).find((suffix) => url.endsWith(suffix));
-    return name ? new Response(assets[name], { status: 200 }) : new Response('', { status: 404, statusText: 'Not Found' });
+    const sum = url.endsWith('.sha256');
+    const asset = sum ? url.slice(0, -'.sha256'.length) : url;
+    const name = Object.keys(assets).find((suffix) => asset.endsWith(suffix));
+    if (!name) return new Response('', { status: 404, statusText: 'Not Found' });
+    return new Response(sum ? digest(assets[name]) : assets[name], { status: 200 });
   };
   const install = agentInstaller(resources);
   return {
@@ -60,18 +66,19 @@ async function machine(platform, assets = {}) {
 
 test('a remote machine gets the agent for its platform, and only when the version differs', async () => {
   const target = 'agent-v0.1.0/wangcai-aarch64-apple-darwin';
+  const asset = `https://github.com/lengmoXXL/WangCai/releases/download/${target}`;
   const remote = await machine('Darwin arm64', { [target]: shipped });
   try {
     await remote.install();
     assert.equal(readFileSync(join(remote.home, '.local/bin/wangcai'), 'utf8'), shipped);
     assert.deepEqual(readdirSync(join(remote.home, '.local/bin')), ['wangcai']);
-    assert.deepEqual(remote.requests, [`https://github.com/lengmoXXL/WangCai/releases/download/${target}`]);
+    assert.deepEqual(remote.requests, [`${asset}.sha256`, asset]);
     await remote.install();
-    assert.equal(remote.requests.length, 1);
+    assert.equal(remote.requests.length, 2);
     // The machine is a version behind, so the agent it runs is the one this app ships.
     remote.installed('0.0.9');
     await remote.install();
-    assert.equal(remote.requests.length, 2);
+    assert.equal(remote.requests.length, 4);
   } finally { remote.close(); }
 });
 
@@ -109,11 +116,30 @@ test('a prefix that does not answer hands the download to the next one', async (
     // GitHub itself is not reachable, and the mirror that serves it is what answers.
     download = async (url) => {
       remote.requests.push(url);
-      return url.startsWith('https://github.com/') ? new Response('', { status: 502 }) : new Response(shipped, { status: 200 });
+      if (url.startsWith('https://github.com/')) return new Response('', { status: 502 });
+      return url.endsWith('.sha256') ? new Response(digest(shipped), { status: 200 }) : new Response(shipped, { status: 200 });
     };
     await remote.install();
     assert.equal(readFileSync(join(remote.home, '.local/bin/wangcai'), 'utf8'), shipped);
     assert.match(remote.requests[0], /^https:\/\/github\.com\//);
-    assert.match(remote.requests[1], /^https:\/\/ghfast\.top\/https:\/\/github\.com\//);
+    assert.match(remote.requests[2], /^https:\/\/ghfast\.top\/https:\/\/github\.com\//);
+  } finally { remote.close(); }
+});
+
+test('a download that disagrees with the published digest is never installed', async () => {
+  const target = 'agent-v0.1.0/wangcai-aarch64-apple-darwin';
+  const remote = await machine('Darwin arm64', { [target]: shipped });
+  const serve = (sum) => {
+    download = async (url) => {
+      return url.endsWith('.sha256') ? new Response(sum, { status: 200 }) : new Response(shipped, { status: 200 });
+    };
+  };
+  try {
+    // A mirror that answers the digest with its own error page, and one that publishes a digest of other bytes.
+    serve('<!doctype html><title>502 Bad Gateway</title>');
+    await assert.rejects(remote.install(), /校验值不是 sha256/);
+    serve(digest('some other build'));
+    await assert.rejects(remote.install(), /sha256 不符/);
+    assert.equal(existsSync(join(remote.home, '.local/bin/wangcai')), false);
   } finally { remote.close(); }
 });

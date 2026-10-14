@@ -37,9 +37,9 @@ IPC 转发；后台只监听 loopback。
 本机：SDK 连接 Rust 后台进程的 loopback WebSocket 端口，
 后续 PTY、文件与子进程操作都走这条连接。
 
-SSH 远端：App 下载匹配远端平台的 agent 经 SSH 写入安装目录，SDK 通过 SSH 执行远端 CLI，
-系统 SSH 用 `-L` 把本地 loopback 端口转发到远端 loopback 端口，SDK 连接本地转发端口后
-使用与本机相同的机器 API。
+SSH 远端：App 下载匹配远端平台的 agent 并按发布时随附的 sha256 校验，经 SSH 写入安装目录，
+SDK 通过 SSH 执行远端 CLI，系统 SSH 用 `-L` 把本地 loopback 端口转发到远端 loopback 端口，
+SDK 连接本地转发端口后使用与本机相同的机器 API。
 
 ## CLI 后台与终端生命周期
 
