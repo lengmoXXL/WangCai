@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use std::{
     collections::HashMap,
     io::{Read, Write},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, atomic::{AtomicU64, Ordering}},
     time::Duration,
 };
 use tokio::{
@@ -16,6 +16,10 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_tungstenite::{accept_async, tungstenite::Message};
+
+// A node outlives the windows that speak to it, so a process one of them started is kept until nobody
+// has come back for it: a window that reconnects attaches its processes again and keeps them running.
+const REAP: Duration = Duration::from_secs(60);
 
 struct Terminal {
     id: String,
@@ -163,10 +167,19 @@ fn packet(header: Value, data: &[u8]) -> Message {
     Message::Binary(bytes.into())
 }
 
+/// A process the node holds, and the connection that started or last attached it: only that connection's
+/// end takes it away.
+struct Held {
+    process: Arc<AsyncMutex<Process>>,
+    connection: u64,
+}
+
 struct Node {
     info: ServerInfo,
     sessions: Mutex<HashMap<String, Arc<Mutex<Terminal>>>>,
-    processes: Mutex<HashMap<String, Arc<AsyncMutex<Process>>>>,
+    processes: Mutex<HashMap<String, Held>>,
+    // Names one client socket, so the node can tell which window a process was left by.
+    serial: AtomicU64,
     changed: broadcast::Sender<()>,
     stop: Notify,
 }
@@ -186,8 +199,23 @@ impl Node {
             .lock()
             .unwrap()
             .get(id)
-            .cloned()
+            .map(|held| held.process.clone())
             .context("Process no longer exists")
+    }
+
+    /// The processes one connection's end leaves behind: the ones it started that no later connection
+    /// attached again.
+    fn abandoned(&self, connection: u64) -> Vec<Arc<AsyncMutex<Process>>> {
+        let mut processes = self.processes.lock().unwrap();
+        let ids: Vec<String> = processes
+            .iter()
+            .filter(|(_, held)| held.connection == connection)
+            .map(|(id, _)| id.clone())
+            .collect();
+        ids.into_iter()
+            .filter_map(|id| processes.remove(&id))
+            .map(|held| held.process)
+            .collect()
     }
 
     fn create(&self, rows: u16, cols: u16, cwd: Option<&str>) -> Result<Value> {
@@ -277,6 +305,7 @@ fn dimensions(request: &Value) -> Result<(u16, u16)> {
 }
 
 async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
+    let connection = node.serial.fetch_add(1, Ordering::Relaxed);
     // The renderer speaks to this socket itself, so the origin it was loaded from is never checked.
     let socket = tokio::time::timeout(Duration::from_secs(5), accept_async(stream)).await??;
     let (mut sink, mut source) = socket.split();
@@ -407,7 +436,7 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                         "spawn" => {
                             let (id, process) = crate::process::spawn(request.clone())?;
                             let summary = process.lock().await.summary();
-                            node.processes.lock().unwrap().insert(id, process);
+                            node.processes.lock().unwrap().insert(id, Held { process, connection });
                             Ok(summary)
                         }
                         "process_attach" => {
@@ -439,6 +468,7 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                                 }
                             });
                             attachments.insert(id.into(), task);
+                            if let Some(held) = node.processes.lock().unwrap().get_mut(id) { held.connection = connection; }
                             Ok(process.lock().await.summary())
                         }
                         "process_write" => {
@@ -479,6 +509,12 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
     }
     commands.shutdown().await;
     writer.abort();
+    tokio::spawn(async move {
+        tokio::time::sleep(REAP).await;
+        for process in node.abandoned(connection) {
+            process.lock().await.terminate();
+        }
+    });
     Ok(())
 }
 
@@ -488,6 +524,7 @@ pub async fn run(listener: TcpListener, info: ServerInfo) -> Result<()> {
         info,
         sessions: Mutex::new(HashMap::new()),
         processes: Mutex::new(HashMap::new()),
+        serial: AtomicU64::new(0),
         changed,
         stop: Notify::new(),
     });
@@ -509,7 +546,7 @@ pub async fn run(listener: TcpListener, info: ServerInfo) -> Result<()> {
     for session in node.sessions.lock().unwrap().values() {
         session.lock().unwrap().terminate();
     }
-    let processes: Vec<_> = node.processes.lock().unwrap().values().cloned().collect();
+    let processes: Vec<_> = node.processes.lock().unwrap().values().map(|held| held.process.clone()).collect();
     for process in processes {
         process.lock().await.terminate();
     }

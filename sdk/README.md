@@ -119,7 +119,7 @@ provider 要保证工作区 id 在所有 provider 的行中唯一识别；`error
 
 `connection.subprocess.spawn(program, args, options)`（`options` 同 `exec`）启动一个
 长期存活的进程，stdin、stdout、stderr 都是管道，返回 `ProcessInfo = { id, pid, exit_code }`；
-`attach(id)` 复用句柄（未 attach 前不接收输出），`close(id)` 结束进程及其进程组；进程归后台进程所有，不 `close` 就一直留着。
+`attach(id)` 复用句柄（未 attach 前不接收输出），`close(id)` 结束进程及其进程组；进程归后台进程所有，除 `close` 外，只有起它或最后 `attach` 它的那条连接断开后 60 秒内没有连接再 `attach`，节点才会自己收回。
 
 `Process`：`id`、`onData(callback)`、`onExit(callback)`、`write(data)`。
 
