@@ -44,11 +44,27 @@ macOS `x86_64 / arm64` 与 Linux `x86_64`。
 
 ```ts
 export default {
-  theme: { background: '#121314', foreground: '#dce3eb', accent: '#3994bc' },
+  theme: {
+    background: '#121314',
+    foreground: '#dce3eb',
+    accent: '#3994bc',
+  },
   workspaces: [
-    { id: 'terminal-agent', config: { machines: [{ name: '开发机', host: 'dev-box' }] } },
+    {
+      id: 'terminal-agent',
+      config: {
+        machines: [
+          { host: 'local', env: { PATH: '$HOME/.local/bin:$PATH', GOPATH: '$HOME/go' } },
+          { name: '开发机', host: 'dev-box', env: { PATH: '$HOME/.local/bin:$PATH' } },
+          { name: '测试机', host: 'test-box' },
+        ],
+      },
+    },
   ],
-  tabs: [{ id: 'files' }, { id: 'terminal' }],
+  tabs: [
+    { id: 'files' },
+    { id: 'terminal' },
+  ],
 };
 ```
 
@@ -88,10 +104,11 @@ terminal-agent 还有 `machines` 与 `images.maxCount`；更多选项以各自�
 
 ### 连接 SSH 机器
 
-在 `terminal-agent.config.machines` 里加 `{ name, host }`；`host` 交给系统 `ssh`，
-可以用 `~/.ssh/config` 别名。
+在 `terminal-agent.config.machines` 里加 `{ name, host, env }`；`host` 交给系统 `ssh`，可以用
+`~/.ssh/config` 别名。`env` 是节点启动时带上的环境，节点的子进程（终端、agent、语言服务）都继承；
+值里的 `$NAME` 在那台机器上展开，名字只能是 shell 标识符。
 
-本机无需声明，创建菜单里始终有“本机”。
+本机无需声明，创建菜单里始终有“本机”；要给它环境变量就写 `{ host: 'local', env: { … } }`。
 
 先确认免交互认证与主机指纹已经配好，App 不弹出 SSH 密码输入框：
 

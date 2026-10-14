@@ -5,9 +5,19 @@ import WebSocket from 'ws';
 import type { ConnectionOptions, MachineState, Session, Size, DirectoryEntry, ExecOptions, ExecResult, ProcessInfo } from './types';
 import { Process } from './process';
 import { Pty } from './pty';
-import { agentCommand } from './agent';
+import { agentCommand, exportableEnvironment } from './agent';
 
 const exec = promisify(execFile);
+
+// A configured value like $HOME/tools means the home of the machine that reads it, so a local spawn expands
+// the names from this process while a remote command leaves them for the shell on the other side.
+function expandedEnvironment(env: Record<string, string>) {
+  return Object.fromEntries(Object.entries(env).map(([name, value]) => [
+    name,
+    value.replace(/\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?/g, (_, variable: string) => process.env[variable] ?? ''),
+  ]));
+}
+
 interface Info { pid: number; port: number; instance_id: string; protocol: number }
 
 export class MachineConnection {
@@ -162,15 +172,18 @@ export class MachineConnection {
     try {
       let info: Info;
       let port: number;
+      const env = exportableEnvironment(this.options.env);
       if (this.options.type === 'local') {
-        const { stdout } = await exec(this.options.binary ?? 'wangcai', ['server', 'start', '--json'], { timeout: 15_000 });
+        const { stdout } = await exec(this.options.binary ?? 'wangcai', ['server', 'start', '--json'], {
+          timeout: 15_000, env: { ...process.env, ...expandedEnvironment(env) },
+        });
         info = JSON.parse(stdout);
         port = info.port;
       } else {
         if (this.options.agent) await this.options.agent(this.options.host, this.options.signal);
         const { stdout } = await exec('ssh', [
           '-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', this.options.host,
-          agentCommand('wangcai server start --json'),
+          agentCommand('wangcai server start --json', env),
         ], { timeout: 15_000, maxBuffer: 64 * 1024 });
         info = JSON.parse(stdout);
         if (!Number.isInteger(info.port) || info.port < 1 || info.port > 65535) throw new Error('Node returned an invalid port.');

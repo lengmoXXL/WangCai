@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { compileFunction } from 'node:vm';
-import type { InstallAgent, Profile } from '@lengmoxxl/sdk';
+import type { InstallAgent, Machine, Profile } from '@lengmoxxl/sdk';
 import type { Dispose, MainContext } from '@lengmoxxl/sdk/channel';
 import type { PluginInfo } from '../shared';
 import { pluginDataDirectory, pluginDirectory, type PluginSpec } from './config';
@@ -33,9 +33,9 @@ export async function loadPlugins(options: {
   specs: PluginSpec[]; broadcast: (event: string, data: unknown) => void;
 }) {
   const { resourcesDirectory, agent, profile, specs, broadcast } = options;
-  const connectMachine = (machine: { host?: string }, signal?: AbortSignal) => connect(machine.host
-    ? { type: 'ssh', host: machine.host, agent, signal }
-    : { type: 'local', binary: join(resourcesDirectory, 'wangcai'), signal });
+  const connectMachine = (machine: Pick<Machine, 'host' | 'env'>, signal?: AbortSignal) => connect(machine.host
+    ? { type: 'ssh', host: machine.host, agent, env: machine.env, signal }
+    : { type: 'local', binary: join(resourcesDirectory, 'wangcai'), env: machine.env, signal });
   const plugins: PluginInfo[] = [];
   const directories = new Map<string, string>();
   const handlers = new Map<string, Map<string, (params: any) => unknown>>();

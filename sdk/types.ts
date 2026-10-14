@@ -23,7 +23,7 @@ export type InstallAgent = (host: string, signal?: AbortSignal) => Promise<void>
  */
 export interface WorkspaceRow { id: string; label: string; machine: string; running: boolean }
 export interface WorkspaceMenuItem { key: string; label: string; hint?: string; error?: string }
-export interface Machine { id: string; name: string; host?: string }
+export interface Machine { id: string; name: string; host?: string; env?: Record<string, string> }
 export interface WorkspaceActive {
   machine: Machine;
   sessionId: string;
@@ -37,7 +37,9 @@ export interface FileClick {
   line?: number;
   column?: number;
 }
-export type ConnectionOptions = { type: 'local'; binary?: string; signal?: AbortSignal } | { type: 'ssh'; host: string; agent?: InstallAgent; signal?: AbortSignal };
+export type ConnectionOptions =
+  | { type: 'local'; binary?: string; env?: Record<string, string>; signal?: AbortSignal }
+  | { type: 'ssh'; host: string; agent?: InstallAgent; env?: Record<string, string>; signal?: AbortSignal };
 export interface Size { rows: number; cols: number }
 export interface Session extends Size { id: string; title: string; pid: number; exit_code: number | null }
 export interface MachineState {

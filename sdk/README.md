@@ -13,7 +13,7 @@
 | `ui.publish(topic, data)` | 后端向本插件 UI 发事件，对应前端 `ui.subscribe` |
 | `ui.subscribe<T>(topic, callback)` | 前端订阅本插件后端事件，返回取消订阅的函数 |
 | `ui.request<T>(method, params?)` | 前端调用本插件后端方法，返回 `Promise<T>` |
-| `connect(machine, signal?)` | 后端借用机器连接：`{ host?: string }`，可带 `AbortSignal` |
+| `connect(machine, signal?)` | 后端借用机器连接：`{ host?, env? }`，可带 `AbortSignal` |
 | `host.dataDirectory` / `host.config` | 插件私有数据目录 / 本插件设置 |
 | `host.tabs(options)` / `host.open(url)` | 前端开侧栏标签页 / 用系统浏览器打开 http、https |
 | `host.preview` | `{ url, message }`，HTML 预览 frame 的地址与握手消息 |
@@ -23,7 +23,7 @@
 `ui.handle` 注册的方法名不能含 `:`；`ui.publish` 与 `ui.subscribe` 的主题由宿主加插件 id 前缀，
 `global` 用原始主题，自定义主题要自己加命名空间（如 `directory-demo:opened`）。
 
-`connect({})` 连接本机，`connect({ host })` 连接 SSH。
+`connect({})` 连接本机，`connect({ host })` 连接 SSH；`env` 是那台机器上节点启动时的环境。
 
 宿主为相同机器复用连接并计数，每次取得连接对应一次 `disconnect()`。
 
@@ -147,7 +147,9 @@ connection.disconnect();
 
 `openMachine` 返回 `Promise<MachineConnection>`。`type` 为 `'local'` 或 `'ssh'`；local 可给
 `binary`，ssh 必须给 `host`（系统 ssh 目标或别名）与可选 `agent`（`InstallAgent`），两者
-都可给 `signal`。不传 `agent` 时 SDK 不下载二进制；连接用 BatchMode SSH。
+都可给 `env`（节点启动时带上的环境，值里的 `$NAME` 用运行节点那台机器的环境展开）与 `signal`。
+不传 `agent` 时 SDK 不下载二进制；连接用 BatchMode SSH。
 
-`agentCommand(command)` 返回拼接后的 shell 命令：在 PATH 前加入远端 `$HOME/.local/bin`，
-并携带当前进程的 WANGCAI_HOME（会转义；command 本身不转义，只传可信命令）。
+`agentCommand(command, env)` 返回拼接后的 shell 命令：在 PATH 前加入远端 `$HOME/.local/bin`，
+再带上当前进程的 WANGCAI_HOME 与配置要求的环境；值里的 `$NAME` 留给远端 shell 展开。命令本身
+不转义，只传可信内容。
