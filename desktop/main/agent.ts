@@ -4,12 +4,13 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { agentCommand } from '@lengmoxxl/sdk';
-import { mirroredUrls } from './install';
+import type { Network } from './config';
+import { mirroredUrl } from './install';
 
 const exec = promisify(execFile);
 // Where the agent releases live: each one is under the tag of its own version.
 const RELEASES = 'https://github.com/lengmoXXL/WangCai/releases/download';
-// A prefix that never answers hands over to the next one rather than holding the connect up.
+// A download that stalls fails instead of holding the connect up for good.
 const DOWNLOAD_TIMEOUT = 30_000;
 const TARGETS: Record<string, string> = {
   'Darwin x86_64': 'x86_64-apple-darwin',
@@ -22,9 +23,8 @@ const TARGETS: Record<string, string> = {
  * The release is fetched and written over ssh stdin, so the machine needs neither curl nor a route to the
  * release host; the write lands through a temporary name, so a broken transfer cannot leave a half binary.
  */
-export function agentInstaller(directory: string) {
+export function agentInstaller(directory: string, network: Network) {
   let version: Promise<string> | undefined;
-  const prefixes = mirroredUrls(RELEASES);
   return async (host: string, signal?: AbortSignal) => {
     version ??= versionOf(directory);
     const remote = (command: string) => ['-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', host, agentCommand(command)];
@@ -35,37 +35,32 @@ export function agentInstaller(directory: string) {
     const target = TARGETS[platform];
     if (!target) throw new Error(`${platform} 上暂不支持自动安装 agent`);
     if (installed === `wangcai ${await version}`) return;
-    const failures: string[] = [];
-    for (const prefix of prefixes) {
+    const url = mirroredUrl(`${RELEASES}/agent-v${await version}/wangcai-${target}`, network.mirror);
+    const deadline = AbortSignal.timeout(DOWNLOAD_TIMEOUT);
+    const until = signal ? AbortSignal.any([signal, deadline]) : deadline;
+    let binary: Buffer;
+    try {
+      const expected = await publishedDigest(`${url}.sha256`, until);
+      // The app's own fetch goes through the session, which is where the proxy init.ts names is set.
+      const response = await net.fetch(url, { signal: until });
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      binary = Buffer.from(await response.arrayBuffer());
+      const digest = createHash('sha256').update(binary).digest('hex');
+      if (digest !== expected) throw new Error(`sha256 不符：期望 ${expected}，得到 ${digest}`);
+    } catch (error) {
+      // A cancel is not a download failure: the connect that asked for this was aborted.
       signal?.throwIfAborted();
-      const url = `${prefix}/agent-v${await version}/wangcai-${target}`;
-      const deadline = AbortSignal.timeout(DOWNLOAD_TIMEOUT);
-      const until = signal ? AbortSignal.any([signal, deadline]) : deadline;
-      let binary: Buffer;
-      try {
-        const expected = await publishedDigest(`${url}.sha256`, until);
-        // The app's own fetch goes through the network stack, so a machine behind a proxy is still reached.
-        const response = await net.fetch(url, { signal: until });
-        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-        binary = Buffer.from(await response.arrayBuffer());
-        const digest = createHash('sha256').update(binary).digest('hex');
-        if (digest !== expected) throw new Error(`sha256 不符：期望 ${expected}，得到 ${digest}`);
-      } catch (error) {
-        failures.push(`${url}\n${error instanceof Error ? error.message : String(error)}`);
-        continue;
-      }
-      await new Promise<void>((resolve, reject) => {
-        const command = 'mkdir -p ~/.local/bin && cat > ~/.local/bin/.wangcai.tmp && chmod 755 ~/.local/bin/.wangcai.tmp && mv ~/.local/bin/.wangcai.tmp ~/.local/bin/wangcai';
-        const child = spawn('ssh', remote(command), { stdio: ['pipe', 'ignore', 'pipe'] });
-        let stderr = '';
-        child.stderr.on('data', (chunk: Buffer) => { stderr += chunk; });
-        child.on('error', reject);
-        child.on('close', (code) => code === 0 ? resolve() : reject(new Error(stderr.trim() || `写入 agent 失败（ssh 退出码 ${code}）`)));
-        child.stdin.end(binary);
-      });
-      return;
+      throw new Error(`下载 agent 失败：${url}\n${error instanceof Error ? error.message : String(error)}`);
     }
-    throw new Error(`下载 agent 失败：\n${failures.join('\n\n')}`);
+    await new Promise<void>((resolve, reject) => {
+      const command = 'mkdir -p ~/.local/bin && cat > ~/.local/bin/.wangcai.tmp && chmod 755 ~/.local/bin/.wangcai.tmp && mv ~/.local/bin/.wangcai.tmp ~/.local/bin/wangcai';
+      const child = spawn('ssh', remote(command), { stdio: ['pipe', 'ignore', 'pipe'] });
+      let stderr = '';
+      child.stderr.on('data', (chunk: Buffer) => { stderr += chunk; });
+      child.on('error', reject);
+      child.on('close', (code) => code === 0 ? resolve() : reject(new Error(stderr.trim() || `写入 agent 失败（ssh 退出码 ${code}）`)));
+      child.stdin.end(binary);
+    });
   };
 }
 

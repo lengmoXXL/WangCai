@@ -1,17 +1,17 @@
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { installsPath, pluginDirectory, type PluginSpec } from './config';
+import { installsPath, pluginDirectory, type Network, type PluginSpec } from './config';
 import type { InstallStage } from '../shared';
 
 type Installs = Record<string, { repo: string; commit: string }>;
 
-// GitHub is not reachable from every network the app runs on, so a URL on GitHub is retried through the
-// mirrors that serve it. A network that reaches GitHub never pays for them.
-const GITHUB_MIRRORS = ['https://ghfast.top/', 'https://ghproxy.net/', 'https://gh-proxy.com/'];
-export const mirroredUrls = (url: string) => /^https:\/\/github\.com\//.test(url)
-  ? [url, ...GITHUB_MIRRORS.map((mirror) => mirror + url)]
-  : [url];
+// GitHub is not reachable from every network the app runs on, and init.ts says what a run goes out
+// through instead: a prefix that https://github.com/ URLs are rewritten to. An ssh remote cannot
+// carry a prefix, so a git@github.com: clone goes out as it is.
+export const mirroredUrl = (url: string, mirror?: string) => mirror && /^https:\/\/github\.com\//.test(url)
+  ? `${mirror}${url}`
+  : url;
 
 // A blocked host can leave a connection hanging, so a transfer that stalls fails instead of never ending.
 const TRANSFER_LIMITS = ['-c', 'http.lowSpeedLimit=1000', '-c', 'http.lowSpeedTime=20'];
@@ -28,18 +28,13 @@ function run(command: string, args: string[], cwd: string, environment = process
   });
 }
 
-async function throughMirrors(repository: string, attempt: (url: string) => Promise<void>) {
-  const failures: string[] = [];
-  for (const url of mirroredUrls(repository)) {
-    try {
-      await attempt(url);
-      return;
-    } catch (error) {
-      failures.push(`${url}\n${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-  throw new Error(failures.join('\n\n'));
-}
+// A proxy reaches the children too: git and npm read it from the environment, not from the app session. A
+// socks proxy goes out in its remote-DNS form, since a name resolved here is one a proxy cannot correct.
+const withProxy = (proxy: string | undefined, environment = process.env) => {
+  if (!proxy) return environment;
+  const address = proxy.replace(/^socks5:\/\//, 'socks5h://');
+  return { ...environment, http_proxy: address, https_proxy: address, all_proxy: address };
+};
 
 /**
  * `node` is the runtime the app carries.
@@ -47,7 +42,7 @@ async function throughMirrors(repository: string, attempt: (url: string) => Prom
  * `follow` is what a row's update asks for: an entry that pins nothing then moves to its branch's commits,
  * which a start leaves alone.
  */
-export async function installPlugin(spec: PluginSpec, node: string, onStage: (stage: InstallStage, message?: string) => void, follow = false) {
+export async function installPlugin(spec: PluginSpec, node: string, network: Network, onStage: (stage: InstallStage, message?: string) => void, follow = false) {
   const repository = spec.repo;
   if (!repository) return;
   const directory = pluginDirectory(spec);
@@ -63,23 +58,21 @@ export async function installPlugin(spec: PluginSpec, node: string, onStage: (st
     return false;
   }
   let worked = false;
-  const git = (args: string[], cwd = directory) => run('git', [...TRANSFER_LIMITS, ...args], cwd);
+  const url = mirroredUrl(repository, network.mirror);
+  const environment = withProxy(network.proxy);
+  const git = (args: string[], cwd = directory) => run('git', [...TRANSFER_LIMITS, ...args], cwd, environment);
   if (!existsSync(join(directory, '.git'))) {
     if (existsSync(directory) && readdirSync(directory).length) throw new Error(`${directory} exists and is not a clone of ${repository}`);
     mkdirSync(dirname(directory), { recursive: true });
-    await throughMirrors(repository, async (url) => {
-      onStage('cloning', `git clone ${url}`);
-      await git(['clone', url, directory], dirname(directory));
-    });
+    onStage('cloning', `git clone ${url}`);
+    await git(['clone', url, directory], dirname(directory));
     worked = true;
   }
   // A commit that is already here needs no network: an offline start rebuilds what it has.
-  if (spec.commit && !(await run('git', ['cat-file', '-e', `${spec.commit}^{commit}`], directory).then(() => true, () => false))) {
-    await throughMirrors(repository, async (url) => {
-      onStage('cloning', `git fetch ${url} ${spec.commit}`);
-      await git(['remote', 'set-url', 'origin', url]);
-      await git(['fetch', 'origin']);
-    });
+  if (spec.commit && !(await run('git', ['cat-file', '-e', `${spec.commit}^{commit}`], directory, environment).then(() => true, () => false))) {
+    onStage('cloning', `git fetch ${url} ${spec.commit}`);
+    await git(['remote', 'set-url', 'origin', url]);
+    await git(['fetch', 'origin']);
     worked = true;
   }
   if (spec.commit) await git(['checkout', '--force', spec.commit]);
@@ -87,11 +80,11 @@ export async function installPlugin(spec: PluginSpec, node: string, onStage: (st
     // A pinned entry leaves the clone detached.
     const branch = (await git(['rev-parse', '--abbrev-ref', 'origin/HEAD'])).trim().replace(/^origin\//, '');
     await git(['checkout', '--force', branch]);
-    if (follow) await throughMirrors(repository, async (url) => {
+    if (follow) {
       onStage('updating', `git pull ${url}`);
       await git(['remote', 'set-url', 'origin', url]);
       await git(['pull', '--ff-only']);
-    });
+    }
   }
   const commit = (await git(['rev-parse', 'HEAD'])).trim();
 
@@ -100,8 +93,8 @@ export async function installPlugin(spec: PluginSpec, node: string, onStage: (st
     const scripts = existsSync(join(directory, 'package.json')) ? (JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')).scripts ?? {}) : {};
     // npm and its own directory come first on PATH, so a plugin's build script and the tools it runs
     // resolve to the runtime the app carries rather than whatever the user happens to have installed.
-    const environment = { ...process.env, PATH: `${dirname(node)}:${process.env.PATH ?? ''}` };
-    const npm = (args: string[]) => run(node, [join(dirname(node), 'npm'), ...args], directory, environment);
+    const buildEnvironment = { ...environment, PATH: `${dirname(node)}:${environment.PATH ?? ''}` };
+    const npm = (args: string[]) => run(node, [join(dirname(node), 'npm'), ...args], directory, buildEnvironment);
     if (Object.keys(scripts).length) {
       onStage('installing', 'npm install');
       await npm(['install', '--no-audit', '--no-fund', '--no-progress']);

@@ -1,14 +1,14 @@
 import type { InstallAgent, Profile } from '@lengmoxxl/sdk';
 import type { InstallStatus } from '../shared';
-import type { PluginSpec } from './config';
+import type { Network, PluginSpec } from './config';
 import { installPlugin } from './install';
 import { loadPlugins } from './plugins';
 
 export function pluginManager(options: {
-  resourcesDirectory: string; agent: InstallAgent; profile: Profile;
+  resourcesDirectory: string; agent: InstallAgent; profile: Profile; network: Network;
   specs: PluginSpec[]; node: string; broadcast: (event: string, data: unknown) => void;
 }) {
-  const { resourcesDirectory, agent, profile, specs, node, broadcast } = options;
+  const { resourcesDirectory, agent, profile, network, specs, node, broadcast } = options;
   const statuses: InstallStatus[] = specs.map(({ id }) => ({ id, stage: 'ready' }));
   const announce = (status: InstallStatus) => {
     statuses[statuses.findIndex((entry) => entry.id === status.id)] = status;
@@ -26,7 +26,7 @@ export function pluginManager(options: {
     let worked = false;
     for (const spec of targets) {
       try {
-        if (await installPlugin(spec, node, (stage, message) => announce({ id: spec.id, stage, message }), follow)) worked = true;
+        if (await installPlugin(spec, node, network, (stage, message) => announce({ id: spec.id, stage, message }), follow)) worked = true;
         failed.delete(spec.id);
       } catch (error) {
         failed.add(spec.id);

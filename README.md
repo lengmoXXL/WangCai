@@ -68,14 +68,14 @@ export default {
 };
 ```
 
-顶层只有 `theme`、`workspaces`、`tabs` 三项；省略后两者表示列表为空，不会补回官方插件。
+顶层有 `theme`、`network`、`workspaces`、`tabs`；省略 `network` 表示直连，省略后两者表示列表为空，不会补回官方插件。
 
 工作区条目提供工作区列表与创建菜单，标签页条目提供侧栏视图，两者条目格式相同：
 
 | 条目参数 | 说明 |
 | --- | --- |
 | `id` | 必填；插件标识，默认也用作插件目录名 |
-| `repo` | Git 仓库 URL；省略来源时用官方 `WangCai-<id>` 仓库；GitHub 不可达时依次尝试内置镜像 |
+| `repo` | Git 仓库 URL；省略来源时用官方 `WangCai-<id>` 仓库；`https://github.com/` 开头的链接按「出网（network）」出去 |
 | `commit` | 交给 Git checkout 的提交或引用，推荐完整 commit SHA |
 | `directory` | 插件目录；相对路径从 init.ts 所在目录解析 |
 | `config` | 插件自己的配置 |
@@ -93,6 +93,21 @@ export default {
 `theme` 覆盖部分配色，值写 `'#rrggbb'`：`background`、`foreground`、`cursor`、
 `selection`、`surface`、`overlay`、`border`、`muted`、`accent`，
 以及 `black` 到 `brightWhite` 的 ANSI 调色板。
+
+### 出网（network）
+
+```ts
+network: {
+  proxy: 'socks5://127.0.0.1:7890',
+  mirror: 'https://ghfast.top/',
+},
+```
+
+`proxy` 是 app 自己的请求（下载 agent）与插件 `clone`、`npm install` 走的代理，写 `http://`、`https://` 或
+`socks5://`；不写 scheme 当 `http://`，写 `socks://` 当 `socks5://`。socks5 一律走远端解析域名。
+
+`mirror` 是 GitHub 加速前缀：`https://github.com/` 开头的链接都拼在它后面取，其它 URL（含
+`git@github.com:` 形式的仓库）照原样用。
 
 ### 官方插件配置
 

@@ -18,14 +18,15 @@ exports.launchApp = (home, env) => electron.launch({ args: ['desktop', `--user-d
  * the mock plugins are written into instead.
  */
 exports.writeInit = (home, lists) => {
-  const { workspaces = [], tabs = [] } = lists ?? { workspaces: ['terminal-agent'], tabs: ['files', 'terminal'] };
+  const { workspaces = [], tabs = [], network } = lists ?? { workspaces: ['terminal-agent'], tabs: ['files', 'terminal'] };
   const list = (entries) => entries.map((item) => {
     const spec = typeof item === 'string' ? { id: item } : item;
     if (spec.repo || spec.directory) return JSON.stringify(spec);
     return JSON.stringify({ ...spec, directory: pluginDirectory(home, spec.id) });
   }).join(', ');
+  const settings = network ? `network: ${JSON.stringify(network)}, ` : '';
   mkdirSync(join(home, '.config/wangcai'), { recursive: true });
-  writeFileSync(join(home, '.config/wangcai/init.ts'), `export default { workspaces: [${list(workspaces)}], tabs: [${list(tabs)}] };\n`);
+  writeFileSync(join(home, '.config/wangcai/init.ts'), `export default { ${settings}workspaces: [${list(workspaces)}], tabs: [${list(tabs)}] };\n`);
 };
 
 /**

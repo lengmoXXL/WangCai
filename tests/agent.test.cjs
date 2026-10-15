@@ -27,7 +27,7 @@ const digest = (body) => createHash('sha256').update(body).digest('hex');
 
 // A stub ssh runs the remote command here against a stubbed uname and a private HOME, so an install is
 // exercised end to end with only the download left to the test.
-async function machine(platform, assets = {}) {
+async function machine(platform, assets = {}, network = {}) {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-agent-'));
   const bin = join(home, 'bin');
   mkdirSync(bin);
@@ -45,7 +45,7 @@ async function machine(platform, assets = {}) {
     if (!name) return new Response('', { status: 404, statusText: 'Not Found' });
     return new Response(sum ? digest(assets[name]) : assets[name], { status: 200 });
   };
-  const install = agentInstaller(resources);
+  const install = agentInstaller(resources, network);
   return {
     requests,
     home,
@@ -101,7 +101,7 @@ test('a platform without a release fails before anything is downloaded', async (
   } finally { remote.close(); }
 });
 
-test('a release that is not there fails with what every prefix answered', async () => {
+test('a release that is not there fails with what the download answered', async () => {
   const remote = await machine('Darwin arm64');
   try {
     await assert.rejects(remote.install(), /下载 agent 失败：[\s\S]*404 Not Found/);
@@ -109,20 +109,14 @@ test('a release that is not there fails with what every prefix answered', async 
   } finally { remote.close(); }
 });
 
-test('a prefix that does not answer hands the download to the next one', async () => {
+test('the download goes out through the mirror init.ts names', async () => {
   const target = 'agent-v0.1.0/wangcai-aarch64-apple-darwin';
-  const remote = await machine('Darwin arm64', { [target]: shipped });
+  const asset = `https://ghfast.top/https://github.com/lengmoXXL/WangCai/releases/download/${target}`;
+  const remote = await machine('Darwin arm64', { [target]: shipped }, { mirror: 'https://ghfast.top/' });
   try {
-    // GitHub itself is not reachable, and the mirror that serves it is what answers.
-    download = async (url) => {
-      remote.requests.push(url);
-      if (url.startsWith('https://github.com/')) return new Response('', { status: 502 });
-      return url.endsWith('.sha256') ? new Response(digest(shipped), { status: 200 }) : new Response(shipped, { status: 200 });
-    };
     await remote.install();
     assert.equal(readFileSync(join(remote.home, '.local/bin/wangcai'), 'utf8'), shipped);
-    assert.match(remote.requests[0], /^https:\/\/github\.com\//);
-    assert.match(remote.requests[2], /^https:\/\/ghfast\.top\/https:\/\/github\.com\//);
+    assert.deepEqual(remote.requests, [`${asset}.sha256`, asset]);
   } finally { remote.close(); }
 });
 

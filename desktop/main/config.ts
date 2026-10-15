@@ -53,9 +53,14 @@ export const pluginDataDirectory = (id: string) => join(storageDirectory, 'data'
 
 type ProfileInput = {
   theme?: Record<string, unknown>;
+  network?: { proxy?: unknown; mirror?: unknown };
   workspaces?: unknown;
   tabs?: unknown;
 };
+
+/** How this run reaches the network: `proxy` is an http://, https:// or socks5:// address, and `mirror` is a
+ * prefix every https://github.com/ URL goes out through. */
+export type Network = { proxy?: string; mirror?: string };
 
 const text = (value: unknown, fallback: string) => typeof value === 'string' && value.trim() ? value : fallback;
 const trimmed = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : undefined;
@@ -64,6 +69,17 @@ function mergeProfile(input: ProfileInput): Profile {
   const theme = { ...DEFAULT_PROFILE.theme };
   for (const token of Object.keys(theme) as (keyof Theme)[]) theme[token] = text(input.theme?.[token], theme[token]);
   return { theme };
+}
+
+function mergeNetwork(input: ProfileInput): Network {
+  const proxy = trimmed(input.network?.proxy);
+  const mirror = trimmed(input.network?.mirror);
+  return {
+    // Chromium and curl both read a bare `socks://` as SOCKS4, and npm needs a scheme to read a proxy at all.
+    proxy: proxy && (/^\w+:\/\//.test(proxy) ? proxy : `http://${proxy}`).replace(/^socks:\/\//, 'socks5://'),
+    // A prefix is joined to a URL, so it ends in one whether init.ts wrote it or not.
+    mirror: mirror ? (mirror.endsWith('/') ? mirror : `${mirror}/`) : undefined,
+  };
 }
 
 // A relative directory is taken from the config directory. The first entry for an id wins.
@@ -108,12 +124,15 @@ const PRESET = `// 旺财的启动入口：启动时由 app 直接加载，只�
 //             black, red, green, yellow, blue, magenta, cyan, white, brightBlack, brightRed,
 //             brightGreen, brightYellow, brightBlue, brightMagenta, brightCyan, brightWhite }
 //           界面与终端配色，值写 '#rrggbb'；终端调色板是 black 到 brightWhite
+//   network { proxy, mirror }  出网方式：proxy 写 http://host:port、https://host:port 或 socks5://host:port
+//           （不写 scheme 当 http://，socks:// 当 socks5://；插件的 clone 与构建也走它），mirror 是 GitHub
+//           加速前缀（像 https://ghfast.top/），https://github.com/ 开头的链接都从这里出去；两个都不写就用直连
 //   workspaces [{ id, repo, commit, directory, config }]  工作区插件：窗口从这里取工作区列表，以及菜单里能开什么
 //   tabs       [{ id, repo, commit, directory, config }]  侧栏标签页插件：它导出的视图出现在侧栏菜单里
 // 插件条目的字段：
 //   id        插件 id，也就是插件目录名
 //   repo      插件仓库：不写就用官方仓库 https://github.com/lengmoXXL/WangCai-<id>；写了就 clone 并构建
-//             （app 自带 node 与 npm；GitHub 连不上时会自动换国内镜像重试）
+//             （app 自带 node 与 npm；出网方式见 network）
 //   commit    写哪个 commit 或分支就 checkout 到它（换一个就重新 checkout 并重建）；不写就只在更新时
 //             跟仓库的分支走，启动时用的是已经构建好的那份
 //   directory 插件放在哪个目录：clone 到这里，也直接读这里的 main.cjs；不写时用数据目录（默认为
@@ -132,7 +151,7 @@ ${DEFAULT_PLUGINS.filter((spec) => !spec.workspaces).map(({ id, repo }) => `    
 `;
 
 // init.ts is loaded as it stands: this process strips its types, so a config change needs no build step.
-export async function loadConfig(): Promise<{ profile: Profile; plugins: PluginSpec[] }> {
+export async function loadConfig(): Promise<{ profile: Profile; plugins: PluginSpec[]; network: Network }> {
   const source = join(configDirectory, 'init.ts');
   if (!existsSync(source)) {
     try {
@@ -140,14 +159,14 @@ export async function loadConfig(): Promise<{ profile: Profile; plugins: PluginS
       writeFileSync(source, PRESET);
     } catch (error) {
       console.error('User config:', error);
-      return { profile: DEFAULT_PROFILE, plugins: DEFAULT_PLUGINS };
+      return { profile: DEFAULT_PROFILE, plugins: DEFAULT_PLUGINS, network: {} };
     }
   }
   try {
     const { default: input } = await import(pathToFileURL(source).href) as { default?: ProfileInput };
-    return { profile: mergeProfile(input ?? {}), plugins: pluginsFrom(input ?? {}) };
+    return { profile: mergeProfile(input ?? {}), plugins: pluginsFrom(input ?? {}), network: mergeNetwork(input ?? {}) };
   } catch (error) {
     console.error('User config:', error);
-    return { profile: DEFAULT_PROFILE, plugins: [] };
+    return { profile: DEFAULT_PROFILE, plugins: [], network: {} };
   }
 }

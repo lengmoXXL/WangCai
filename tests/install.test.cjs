@@ -11,15 +11,14 @@ const { makePluginRepo } = require('./plugin-repo.cjs');
 
 const compiled = new Module('install');
 compiled._compile(buildSync({ entryPoints: ['desktop/main/install.ts'], bundle: true, platform: 'node', packages: 'external', write: false }).outputFiles[0].text, 'install.cjs');
-const { mirroredUrls } = compiled.exports;
+const { mirroredUrl } = compiled.exports;
 
-test('a GitHub URL lists mirrors to retry through, and other URLs are used as they are', () => {
-  const urls = mirroredUrls('https://github.com/lengmoXXL/WangCai-git');
-  assert.equal(urls[0], 'https://github.com/lengmoXXL/WangCai-git');
-  assert.match(urls[1], /^https:\/\/ghfast\.top\//);
-  for (const url of urls.slice(1)) assert.match(url, /^https:\/\/[^/]+\/https:\/\/github\.com\/lengmoXXL\/WangCai-git$/);
-  assert.deepEqual(mirroredUrls('/Users/someone/plugin'), ['/Users/someone/plugin']);
-  assert.deepEqual(mirroredUrls('git@github.com:owner/repo.git'), ['git@github.com:owner/repo.git']);
+test('a GitHub URL goes out through the prefix init.ts names, and other URLs are used as they are', () => {
+  const repository = 'https://github.com/lengmoXXL/WangCai-git';
+  assert.equal(mirroredUrl(repository, 'https://ghfast.top/'), `https://ghfast.top/${repository}`);
+  assert.equal(mirroredUrl(repository), repository);
+  assert.equal(mirroredUrl('/Users/someone/plugin', 'https://ghfast.top/'), '/Users/someone/plugin');
+  assert.equal(mirroredUrl('git@github.com:owner/repo.git', 'https://ghfast.top/'), 'git@github.com:owner/repo.git');
 });
 
 test('repository plugins are cloned, built and rebuilt when their commit moves', { timeout: 180000 }, async () => {
@@ -235,6 +234,36 @@ test('an entry that drops its commit keeps its build until its row is updated', 
     await page.waitForFunction(() => document.querySelector('[data-plugin=unpinned]')?.dataset.revision === 'moving two');
   } finally {
     await desktop?.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a plugin clone goes out through the proxy init.ts names', { timeout: 180000 }, async () => {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'wangcai-proxy-')));
+  const env = testEnv(home);
+  // A proxy that refuses everything it is asked for: what it is asked for is what this test reads.
+  const asked = [];
+  const proxy = createServer((socket) => {
+    socket.once('data', (data) => {
+      asked.push(String(data).split('\r\n')[0]);
+      socket.end('HTTP/1.1 502 Bad Gateway\r\ncontent-length: 0\r\n\r\n');
+    });
+  });
+  await new Promise((done) => proxy.listen(0, '127.0.0.1', done));
+  writeInit(home, {
+    network: { proxy: `http://127.0.0.1:${proxy.address().port}` },
+    tabs: [{ id: 'proxied', repo: 'https://github.com/lengmoXXL/WangCai-proxied' }],
+  });
+  let desktop;
+  try {
+    desktop = await launchApp(home, env);
+    const page = await desktop.firstWindow();
+    await page.locator('.installs li[data-stage=failed]').waitFor();
+    // An https clone through an http proxy is a CONNECT for the host the plugin names.
+    assert.match(asked[0], /^CONNECT github\.com:443/);
+  } finally {
+    await desktop?.close();
+    proxy.close();
     rmSync(home, { recursive: true, force: true });
   }
 });

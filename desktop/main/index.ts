@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, net, protocol, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, net, protocol, session, shell } from 'electron';
 import { join, resolve, relative, isAbsolute, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
@@ -32,7 +32,10 @@ else {
   app.on('second-instance', () => { window?.show(); window?.focus(); });
   void app.whenReady().then(async () => {
     if (!app.isPackaged) app.dock?.setIcon(join(app.getAppPath(), 'build/icon.png'));
-    const { profile, plugins: specs } = await loadConfig();
+    const { profile, plugins: specs, network } = await loadConfig();
+    // A request the app makes of its own goes through the default session, so the proxy init.ts names is set
+    // before anything is fetched. Chromium has no remote-DNS scheme: its socks5 already resolves out there.
+    if (network.proxy) await session.defaultSession.setProxy({ proxyRules: network.proxy.replace(/^socks5h:\/\//, 'socks5://') });
     // The window opens before the plugins do: a plugin may have to be cloned and built first, and the
     // manager page reports each stage while it happens.
     mkdirSync(storageDirectory, { recursive: true });
@@ -40,8 +43,8 @@ else {
     const resourcesDirectory = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug');
     const manager = pluginManager({
       resourcesDirectory,
-      agent: agentInstaller(resourcesDirectory),
-      profile, specs, node,
+      agent: agentInstaller(resourcesDirectory, network),
+      profile, network, specs, node,
       broadcast: (event, data) => send('wangcai:channel', event, data),
     });
     // Serves a loaded plugin's files to the renderer; the directories exist once loading is done.
