@@ -2,6 +2,7 @@ mod files;
 mod process;
 mod server;
 mod subprocess;
+mod watch;
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};

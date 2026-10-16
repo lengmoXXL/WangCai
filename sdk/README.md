@@ -1,8 +1,7 @@
 # @lengmoxxl/sdk：接口参考
 
-本参考对应 SDK `0.1.5`：连接本机或 SSH 机器上的旺财后台进程，提供终端、文件与子进程
-操作。插件入口与生命周期见 [插件开发手册](../docs/plugins.md)，进程关系见
-[架构说明](../docs/architecture.md)。
+SDK 连接本机或 SSH 机器上的旺财后台进程，提供终端、文件与子进程操作。插件入口与生命周期见
+[插件开发手册](../docs/plugins.md)，进程关系见 [架构说明](../docs/architecture.md)。
 
 ## 插件上下文
 
@@ -87,7 +86,8 @@ provider 要保证工作区 id 在所有 provider 的行中唯一识别；`error
 
 `MachineState` 含 `status`、`error?`、`sessions`、`generation`。
 
-断线会自动重连并重新 attach 已挂载的终端与进程，失败的请求与输入不自动重放，后台进程重启时旧 Pty 与进程失效。
+断线会自动重连并重新 attach 已挂载的终端、进程与文件订阅，失败的请求与输入不自动重放，后台进程重启时
+旧 Pty 与进程失效。
 
 `connection.pty`：`list()`、`cwd(id)`、`create(size?, cwd?)`（默认 24 行 80 列；cwd 用绝对目录，
 省略时在后台进程的 HOME 下启动）、`attach(id)`（复用句柄）、`close(id)`（结束 shell 与后台子孙进程）。
@@ -109,6 +109,12 @@ provider 要保证工作区 id 在所有 provider 的行中唯一识别；`error
 `DirectoryEntry[]`（`{ name, isDirectory }`）、`readFile(path)` 返回原始字节。
 
 路径为绝对路径，`readFile` 上限 16 MiB；SDK 不提供写入、删除或上传接口。
+
+`connection.fs.watch(path, options, callback)` 订阅该路径的变化，`options.recursive` 决定是否含子目录，
+返回的 `() => void` 关闭订阅。回调收到的是 `FileChanges = { created, modified, removed }`，一个安静窗口
+（约 200ms 没新事件，最长 2 秒）一批，路径按订阅时给的根路径书写；连接彻底关闭（最后一个持有者
+`disconnect()`）时一并结束。macOS 走 FSEvents，创建与删除多数时候报成 `modified`；Linux 走 inotify，
+三类齐全。
 
 `connection.subprocess.exec(program, args, options)`：`args` 是独立 argv（不经 shell 展开），
 `options.cwd` 是绝对工作目录，`options.env` 覆盖继承的环境变量；返回

@@ -58,6 +58,8 @@ export type ProcessEvent =
   ({ event: 'stdout' | 'stderr' } & Output | { event: 'exit'; seq: number; code: number } | { event: 'lost' }) & { session_id: string };
 
 export interface DirectoryEntry { name: string; isDirectory: boolean }
+export interface FileChanges { created: string[]; modified: string[]; removed: string[] }
+export interface WatchOptions { recursive?: boolean }
 export interface ExecOptions { cwd: string; env?: Record<string, string> }
 export interface ExecResult { stdout: Uint8Array; stderr: Uint8Array; code: number }
 export interface Theme {

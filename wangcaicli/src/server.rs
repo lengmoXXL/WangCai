@@ -1,5 +1,6 @@
 use crate::ServerInfo;
 use crate::process::{Event, Process};
+use crate::watch::Batch;
 use anyhow::{Context, Result, bail};
 use futures_util::{SinkExt, StreamExt};
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
@@ -310,7 +311,9 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
     let socket = tokio::time::timeout(Duration::from_secs(5), accept_async(stream)).await??;
     let (mut sink, mut source) = socket.split();
     let (out, mut incoming) = mpsc::channel::<Message>(128);
+    let (batches, mut reported) = mpsc::channel::<Batch>(16);
     let mut attachments: HashMap<String, JoinHandle<()>> = HashMap::new();
+    let mut watchers: HashMap<String, JoinHandle<()>> = HashMap::new();
     let mut commands = tokio::task::JoinSet::new();
     let mut changed = node.changed.subscribe();
     let writer = tokio::spawn(async move {
@@ -329,6 +332,10 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
             _ = commands.join_next(), if !commands.is_empty() => {},
             _ = changed.recv() => {
                 if out.send(Message::text(json!({"event":"sessions_changed"}).to_string())).await.is_err() { break; }
+            }
+            Some(batch) = reported.recv() => {
+                let event = json!({"event":"fs_changed","watch_id":batch.watch_id,"created":batch.created,"modified":batch.modified,"removed":batch.removed});
+                if out.send(Message::text(event.to_string())).await.is_err() { break; }
             }
             message = source.next() => {
                 let Some(Ok(message)) = message else { break; };
@@ -353,6 +360,23 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                         };
                         let _ = out.send(Message::text(reply.to_string())).await;
                     });
+                    continue;
+                }
+                if op == "watch" || op == "unwatch" {
+                    let watch_id = request["watch_id"].as_str().unwrap_or("").to_owned();
+                    let reply = if op == "watch" {
+                        match crate::watch::start(request["path"].as_str().unwrap_or(""), request["recursive"].as_bool().unwrap_or(false), &watch_id, batches.clone()) {
+                            Ok(task) => {
+                                if let Some(previous) = watchers.insert(watch_id, task) { previous.abort(); }
+                                json!({"id":request["id"],"result":{}})
+                            }
+                            Err(error) => json!({"id":request["id"],"error":error.to_string()}),
+                        }
+                    } else {
+                        if let Some(task) = watchers.remove(&watch_id) { task.abort(); }
+                        json!({"id":request["id"],"result":{}})
+                    };
+                    if out.send(Message::text(reply.to_string())).await.is_err() { break; }
                     continue;
                 }
                 if op == "read_file" || op == "read_directory" || op == "stat" {
@@ -505,6 +529,9 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
         }
     }
     for task in attachments.into_values() {
+        task.abort();
+    }
+    for task in watchers.into_values() {
         task.abort();
     }
     commands.shutdown().await;

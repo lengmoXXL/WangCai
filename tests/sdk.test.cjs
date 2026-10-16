@@ -7,9 +7,9 @@ const { execFileSync } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
 const { openMachine, agentCommand } = require('../sdk/dist/index.cjs');
 
-async function until(check) {
+async function until(check, message = 'SDK output') {
   for (let i = 0; i < 150; i++) { if (check()) return; await delay(40); }
-  throw new Error('Timed out waiting for SDK output');
+  throw new Error(`Timed out waiting for ${message}`);
 }
 
 test('the command the SDK runs on a machine carries the home a development profile uses', () => {
@@ -17,7 +17,7 @@ test('the command the SDK runs on a machine carries the home a development profi
   assert.equal(agentCommand('wangcai server start --json'), "export WANGCAI_HOME='/tmp/a b'\\''c'; export PATH=\"$HOME/.local/bin:$PATH\"; wangcai server start --json");
 });
 
-test('Node SDK: local PTYs, binary files, detach and reconnect', { timeout: 90000 }, async () => {
+test('Node SDK: local PTYs, binary files, file watches, detach and reconnect', { timeout: 90000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-sdk-'));
   const previousHome = process.env.HOME;
   process.env.HOME = home;
@@ -58,6 +58,26 @@ test('Node SDK: local PTYs, binary files, detach and reconnect', { timeout: 9000
     assert.ok(entries.some(entry => entry.name === 'binary' && !entry.isDirectory));
     await assert.rejects(machine.fs.readDirectory('relative'), /absolute/);
     await assert.rejects(machine.fs.readDirectory(path), /Not a directory/);
+    const watched = join(home, 'watched');
+    mkdirSync(watched);
+    const batches = [];
+    const mentioned = (file) => batches.some((batch) => [...batch.created, ...batch.modified, ...batch.removed].includes(file));
+    const close = await machine.fs.watch(watched, { recursive: true }, (changes) => batches.push(changes));
+    await assert.rejects(machine.fs.watch('relative', {}, () => {}), /absolute/);
+    await assert.rejects(machine.fs.watch(join(home, 'missing'), {}, () => {}), /does not exist/);
+    writeFileSync(join(watched, 'one.txt'), 'one');
+    await until(() => mentioned(join(watched, 'one.txt')), 'the file written under the watched path');
+    // A node that restarts under the connection is followed by the watch it was holding.
+    const generation = machine.state.generation;
+    execFileSync(binary, ['server', 'stop'], { stdio: 'ignore' });
+    await until(() => machine.state.generation > generation, 'a reconnect to the restarted node');
+    writeFileSync(join(watched, 'two.txt'), 'two');
+    await until(() => mentioned(join(watched, 'two.txt')), 'the file written after the restart');
+    close();
+    batches.length = 0;
+    writeFileSync(join(watched, 'three.txt'), 'three');
+    await delay(600);
+    assert.deepEqual(batches, []);
     const session = await machine.pty.create({ rows: 25, cols: 90 });
     const terminal = await machine.pty.attach(session.id);
     const output = [];

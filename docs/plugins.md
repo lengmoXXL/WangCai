@@ -23,7 +23,7 @@
 
 `context` 由宿主传入：
 
-- **后端 MainContext**：注册 `ui.handle`，访问 Node API、机器连接及数据目录。
+- **后端 MainContext**：注册 `ui.handle`，访问 Node API、机器连接及数据目录，订阅机器上的文件变化。
 - **前端 UiContext**：调用 `ui.request`、订阅事件、创建侧栏标签页。
 - **两端 global**：跨插件的公共事件总线，适合工作区与文件点击等协作。
 

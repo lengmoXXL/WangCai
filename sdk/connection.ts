@@ -2,7 +2,7 @@ import { ChildProcess, execFile, spawn } from 'node:child_process';
 import { createServer, createConnection } from 'node:net';
 import { promisify } from 'node:util';
 import WebSocket from 'ws';
-import type { ConnectionOptions, MachineState, Session, Size, DirectoryEntry, ExecOptions, ExecResult, ProcessInfo } from './types';
+import type { ConnectionOptions, MachineState, Session, Size, DirectoryEntry, ExecOptions, ExecResult, ProcessInfo, FileChanges, WatchOptions } from './types';
 import { Process } from './process';
 import { Pty } from './pty';
 import { agentCommand, exportableEnvironment } from './agent';
@@ -24,6 +24,7 @@ export class MachineConnection {
   private listeners = new Set<(state: MachineState) => void>();
   private terminals = new Map<string, Pty>();
   private processes = new Map<string, Process>();
+  private watchers = new Map<string, { recursive: boolean; path: string; callback: (changes: FileChanges) => void }>();
   // Where the daemon listens: the window reaches it with this.
   port?: number;
   private instance?: string;
@@ -77,6 +78,7 @@ export class MachineConnection {
     this.terminals.clear();
     for (const process of this.processes.values()) process.release();
     this.processes.clear();
+    this.watchers.clear();
     this.state.status = 'disconnected';
     this.state.error = undefined;
     this.publish();
@@ -109,6 +111,17 @@ export class MachineConnection {
     readFile: async (path: string): Promise<Uint8Array> => {
       const result = await this.request('read_file', { path }) as { data: string };
       return Buffer.from(result.data, 'base64');
+    },
+    watch: async (path: string, options: WatchOptions, callback: (changes: FileChanges) => void): Promise<() => void> => {
+      const watchId = `watch-${++this.serial}`;
+      const recursive = options.recursive ?? false;
+      this.watchers.set(watchId, { recursive, path, callback });
+      try { await this.request('watch', { watch_id: watchId, path, recursive }); }
+      catch (error) { this.watchers.delete(watchId); throw error; }
+      return () => {
+        this.watchers.delete(watchId);
+        void this.request('unwatch', { watch_id: watchId }).catch(() => {});
+      };
     },
   };
 
@@ -217,6 +230,9 @@ export class MachineConnection {
               else pending.resolve(message.result);
             } else if (message.event === 'sessions_changed') {
               void this.refresh().catch(() => {});
+            } else if (message.event === 'fs_changed') {
+              const watcher = this.watchers.get(message.watch_id);
+              if (watcher) watcher.callback({ created: message.created, modified: message.modified, removed: message.removed });
             }
           }
         } catch (error) { this.fail(error); }
@@ -255,6 +271,12 @@ export class MachineConnection {
           process.release(error as Error);
           this.processes.delete(id);
         }
+      }
+      // A watch lives in the connection that asked for it, so it is armed again on the one that is up; one
+      // that cannot be armed yet stays registered, and the next connection tries it again.
+      for (const [watchId, watcher] of this.watchers) {
+        try { await this.request('watch', { watch_id: watchId, path: watcher.path, recursive: watcher.recursive }); }
+        catch { if (!current()) return; }
       }
       if (!current()) return;
       this.state.status = 'connected';
