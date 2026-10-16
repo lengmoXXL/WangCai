@@ -25,6 +25,38 @@
       {
         "from": "node",
         "to": "node"
+      },
+      {
+        "from": "../docs",
+        "to": "src/docs"
+      },
+      {
+        "from": "../sdk",
+        "to": "src/sdk"
+      },
+      {
+        "from": "../examples",
+        "to": "src/examples"
+      },
+      {
+        "from": "../README.md",
+        "to": "src/README.md"
+      },
+      {
+        "from": "main",
+        "to": "src/desktop/main"
+      },
+      {
+        "from": "ui",
+        "to": "src/desktop/ui"
+      },
+      {
+        "from": "shared.ts",
+        "to": "src/desktop/shared.ts"
+      },
+      {
+        "from": "build/icon.png",
+        "to": "src/desktop/build/icon.png"
       }
     ],
     "mac": {

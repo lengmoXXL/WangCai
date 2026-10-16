@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { agentInstaller } from './agent';
 import { pluginManager } from './manager';
-import { homeOverride, loadConfig, storageDirectory, tabsPath, userDataDirectory, windowStatePath } from './config';
+import { homeOverride, loadConfig, storageDirectory, syncSources, tabsPath, userDataDirectory, windowStatePath } from './config';
 import type { TabRecord } from '@lengmoxxl/sdk/channel';
 import { previewMessage, previewScheme, previewUrl, uiFont } from '../shared';
 
@@ -39,6 +39,7 @@ else {
     // The window opens before the plugins do: a plugin may have to be cloned and built first, and the
     // manager page reports each stage while it happens.
     mkdirSync(storageDirectory, { recursive: true });
+    syncSources(app.isPackaged ? join(process.resourcesPath, 'src') : join(app.getAppPath(), '..'), app.getVersion());
     const node = app.isPackaged ? join(process.resourcesPath, 'node/bin/node') : join(app.getAppPath(), 'node/bin/node');
     const resourcesDirectory = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug');
     const manager = pluginManager({

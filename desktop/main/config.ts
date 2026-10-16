@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -44,6 +44,22 @@ export const userDataDirectory = join(homeDirectory, 'electron');
 export const installsPath = join(storageDirectory, 'installs.json');
 export const tabsPath = join(storageDirectory, 'tabs.json');
 export const windowStatePath = join(storageDirectory, 'window-state.json');
+
+// What a session's agent reads about this app: the documentation and the images it links to, the SDK and
+// examples, and the app's own sources. The app ships them beside its binary and copies them into the data
+// directory, where a session can open them; a version that changes replaces them, since they are the app's
+// files and not the user's.
+export const sourcesDirectory = join(storageDirectory, 'src');
+const SOURCES = ['docs', 'sdk', 'examples', 'README.md', 'desktop/main', 'desktop/ui', 'desktop/shared.ts', 'desktop/build/icon.png'];
+const sourcesStampPath = join(storageDirectory, 'src.version');
+const sourcesGuidePath = join(sourcesDirectory, 'README.md');
+
+export function syncSources(shipped: string, version: string) {
+  if (existsSync(sourcesStampPath) && readFileSync(sourcesStampPath, 'utf8') === version) return;
+  rmSync(sourcesDirectory, { recursive: true, force: true });
+  for (const entry of SOURCES) cpSync(join(shipped, entry), join(sourcesDirectory, entry), { recursive: true });
+  writeFileSync(sourcesStampPath, version);
+}
 
 export type PluginSpec = { id: string; workspaces: boolean; repo?: string; commit?: string; directory?: string; config?: Record<string, unknown> };
 
@@ -139,6 +155,7 @@ const PRESET = `// 旺财的启动入口：启动时由 app 直接加载，只�
 //             ~/.local/share/wangcai）下的 plugins/<id>/；只写 directory 就是用那里的现成插件
 //   config    这个插件自己的配置，能写哪些字段由插件说了算（schema 在插件的 main.cjs 里），不写的用插件给的默认值
 // 插件就是一个目录，里面是编译好的 main.cjs（主进程）和可选的 ui.js / ui.css（界面文件）。
+// 配置字段的完整说明：${sourcesGuidePath}
 // 删掉本文件会重新生成这份默认配置。
 export default {
   workspaces: [
