@@ -1,4 +1,5 @@
-const { mkdirSync, writeFileSync } = require('node:fs');
+const { mkdirSync, mkdtempSync, writeFileSync } = require('node:fs');
+const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { _electron: electron } = require('playwright');
 
@@ -59,6 +60,14 @@ exports.mockWorkspace = (home) => exports.mockPlugin(home, 'terminal-agent', {
     rows.push(row);
     return { id: row.id };
   });
+  ui.handle('workspace-move', ({ id, before }) => {
+    const at = rows.findIndex((row) => row.id === id);
+    if (at < 0) return;
+    const [row] = rows.splice(at, 1);
+    const target = rows.findIndex((item) => item.id === before);
+    if (target < 0) rows.push(row);
+    else rows.splice(target, 0, row);
+  });
   ui.handle('workspace-rename', ({ id, name }) => {
     const row = rows.find((item) => item.id === id);
     if (row) row.label = name || '~';
@@ -76,3 +85,64 @@ exports.newWorkspace = async (page) => {
   await page.locator('#workspace-row-menu').getByRole('menuitem', { name: '新建 本机', exact: true }).click();
   await page.getByRole('tablist', { name: '工作区' }).getByRole('tab').last().waitFor();
 };
+
+// A group is made from the row menu, named in the dialog it opens; the dialog opens on the name the group was made
+// with, so typing a name is what names it.
+exports.makeGroup = async (page, name) => {
+  await exports.openWorkspaceMenu(page);
+  await page.locator('#workspace-row-menu').getByRole('menuitem', { name: '新建分组', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '重命名分组' });
+  const input = dialog.getByRole('textbox');
+  await input.fill(name);
+  await input.press('Enter');
+  await dialog.waitFor({ state: 'hidden' });
+};
+
+// The order the row list draws: a group by its name, a row as 'row'.
+exports.drawnOrder = (page) => page.locator('.workspaces').locator(':scope > :not(.workspace-line)').evaluateAll((nodes) => nodes.map((node) => node.classList.contains('workspace-group') ? node.querySelector('.workspace-group-bar .name').textContent : 'row'));
+
+// The line under a group's bar, which is the first line the group holds.
+exports.firstInsideLine = (group) => group.locator('.workspace-line').first();
+
+// The line at an index among the row list's children.
+const lineAt = (page, index) => page.locator(`.workspaces > :nth-child(${index + 1})`);
+
+// The line in front of a group, by index into the groups as Array.prototype.at reads it: 0 is the first group and
+// -1 the last. An index no group answers throws instead of pointing at nothing.
+exports.lineBeforeGroup = async (page, index) => {
+  const at = await page.locator('.workspaces').evaluate((list, which) => {
+    const groups = [...list.children].filter((node) => node.classList.contains('workspace-group'));
+    const group = groups.at(which);
+    if (group === undefined) throw new Error(`no group at ${which}`);
+    return [...list.children].indexOf(group) - 1;
+  }, index);
+  return lineAt(page, at);
+};
+
+// The line right after a row of the list: where a row dropped under that row would stand.
+exports.lineAfter = async (page, row) => {
+  const at = await row.evaluate((element) => [...element.parentElement.children].indexOf(element) + 1);
+  return lineAt(page, at);
+};
+
+// Where a line is dropped on: its own one pixel, a little in from the left edge.
+exports.onLine = { x: 40, y: 0 };
+
+// A launched app with three workspaces, and the locators the row list is read through.
+exports.launchedWithThree = async () => {
+  const home = mkdtempSync(join(tmpdir(), 'wangcai-lines-'));
+  const env = exports.testEnv(home);
+  exports.mockWorkspace(home);
+  exports.writeInit(home, { workspaces: ['terminal-agent'], tabs: [] });
+  const desktop = await exports.launchApp(home, env);
+  const page = await desktop.firstWindow();
+  await exports.waitForShell(page);
+  for (const _ of [1, 2, 3]) await exports.newWorkspace(page);
+  return { home, desktop, page, rows: page.locator('.workspaces > .workspace'), groups: page.locator('.workspace-group') };
+};
+
+// The ids of the workspaces a locator matches, in the order they are drawn.
+exports.rowIds = (locator) => locator.evaluateAll((nodes) => nodes.map((node) => node.dataset.workspace));
+
+// The id of the first workspace a locator matches.
+exports.rowId = (locator) => locator.first().evaluate((element) => element.dataset.workspace);

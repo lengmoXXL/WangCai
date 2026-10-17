@@ -5,7 +5,8 @@ export type InstallAgent = (host: string, signal?: AbortSignal) => Promise<void>
  * The workspace protocol. A plugin that init.ts lists under `workspaces` is a workspace provider, and
  * the app drives it through these `ui` methods:
  *
- *   workspaces()              -> WorkspaceRow[]        one flat row per workspace, in draw order
+ *   workspaces()              -> WorkspaceRow[]        one flat row per workspace, in draw order; the window may
+ *                                                      draw rows under groups of its own, whose rows keep this order
  *   workspace-menu()          -> WorkspaceMenuItem[]   what the menu offers to open; an entry that carries
  *                                                      an error stays listed with its reason, and a click retries it
  *   workspace-create({ key }) -> { id: string }        the id of the workspace it made
