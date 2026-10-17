@@ -21,7 +21,9 @@ export type InstallAgent = (host: string, signal?: AbortSignal) => Promise<void>
  *   'workspace:active' the workspace in front, or null; published by its provider
  *   'workspace:query'  a view asks for 'workspace:active' again
  */
-export interface WorkspaceRow { id: string; label: string; machine: string; running: boolean }
+/** What the agent in a workspace is doing, which the app draws at the right end of its row. */
+export type WorkspaceStatus = 'idle' | 'working' | 'finished';
+export interface WorkspaceRow { id: string; label: string; machine: string; running: boolean; status?: WorkspaceStatus }
 export interface WorkspaceMenuItem { key: string; label: string; hint?: string; error?: string }
 export interface Machine { id: string; name: string; host?: string; env?: Record<string, string> }
 export interface WorkspaceActive {
@@ -41,6 +43,8 @@ export type ConnectionOptions =
   | { type: 'local'; binary?: string; env?: Record<string, string>; signal?: AbortSignal }
   | { type: 'ssh'; host: string; agent?: InstallAgent; env?: Record<string, string>; signal?: AbortSignal };
 export interface Size { rows: number; cols: number }
+/** What a session is created with: the directory its shell opens in, and what it is told besides the node's environment. */
+export interface PtyOptions { cwd?: string; env?: Record<string, string> }
 export interface Session extends Size { id: string; title: string; pid: number; exit_code: number | null }
 export interface MachineState {
   status: 'disconnected' | 'connecting' | 'connected';

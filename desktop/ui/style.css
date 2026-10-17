@@ -24,6 +24,15 @@ html[data-fullscreen] .sidebar-left { padding-top: 0; }
 .workspace .glyph { flex-shrink: 0; color: var(--wc-muted); fill: none; stroke: currentColor; stroke-width: 1.1; }
 .workspace.running .glyph { color: var(--wc-foreground); }
 .workspace .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* What the agent in the row is doing sits at the row's far end, past the name it follows. */
+.workspace .agent-state { flex-shrink: 0; display: flex; margin-left: auto; padding: 0; border: 0; background: none; color: var(--wc-muted); cursor: default; }
+.workspace .agent-state svg { fill: none; stroke: currentColor; stroke-width: 1.4; }
+.workspace .agent-state[data-state=working] { color: var(--wc-accent); }
+.workspace .agent-state[data-state=working] svg { stroke-dasharray: 9 5; animation: wc-agent-working 1s linear infinite; }
+.workspace .agent-state[data-state=finished] { color: var(--wc-green); cursor: pointer; }
+.workspace .agent-state[data-state=finished] svg { fill: currentColor; stroke: none; }
+.workspace .agent-state[data-state=finished]:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 1px; }
+@keyframes wc-agent-working { to { transform: rotate(360deg); } }
 .workspace[data-drop=before] { box-shadow: inset 0 2px 0 var(--wc-accent); }
 .workspace[data-drop=after] { box-shadow: inset 0 -2px 0 var(--wc-accent); }
 .workspace[data-drop=before]::after { border-top-color: transparent; }

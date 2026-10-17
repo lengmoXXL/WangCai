@@ -2,7 +2,7 @@ import { ChildProcess, execFile, spawn } from 'node:child_process';
 import { createServer, createConnection } from 'node:net';
 import { promisify } from 'node:util';
 import WebSocket from 'ws';
-import type { ConnectionOptions, MachineState, Session, Size, DirectoryEntry, ExecOptions, ExecResult, ProcessInfo, FileChanges, WatchOptions } from './types';
+import type { ConnectionOptions, MachineState, Session, Size, PtyOptions, DirectoryEntry, ExecOptions, ExecResult, ProcessInfo, FileChanges, WatchOptions } from './types';
 import { Process } from './process';
 import { Pty } from './pty';
 import { agentCommand, exportableEnvironment } from './agent';
@@ -88,7 +88,7 @@ export class MachineConnection {
   pty = {
     list: () => this.request('list') as Promise<Session[]>,
     cwd: (id: string) => this.request('cwd', { session_id: id }) as Promise<string>,
-    create: (size: Size = { rows: 24, cols: 80 }, cwd?: string) => this.request('create', { ...size, cwd }) as Promise<Session>,
+    create: (size: Size = { rows: 24, cols: 80 }, options: PtyOptions = {}) => this.request('create', { ...size, ...options }) as Promise<Session>,
     attach: async (id: string) => {
       const existing = this.terminals.get(id);
       if (existing) return existing;

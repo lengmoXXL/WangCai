@@ -49,7 +49,7 @@ export function open(context) { context.host.tabs({ id: ${JSON.stringify(id)}, t
 });
 
 exports.mockWorkspace = (home) => exports.mockPlugin(home, 'terminal-agent', {
-  main: `exports.activate = ({ ui }) => {
+  main: `exports.activate = ({ ui, global }) => {
   const rows = [];
   ui.handle('workspaces', () => rows);
   ui.handle('workspace-menu', () => [{ key: 'local', label: '本机' }]);
@@ -62,6 +62,12 @@ exports.mockWorkspace = (home) => exports.mockPlugin(home, 'terminal-agent', {
   ui.handle('workspace-rename', ({ id, name }) => {
     const row = rows.find((item) => item.id === id);
     if (row) row.label = name || '~';
+  });
+  // The plugin reads a workspace's state from a file it watches; the test sets it through this instead.
+  ui.handle('agent-state', ({ id, status }) => {
+    const row = rows.find((item) => item.id === id);
+    if (row) row.status = status;
+    return global.publish('workspaces', undefined);
   });
 };
 `,
