@@ -416,6 +416,10 @@ test('a workspace row shows what its agent is doing, and a click clears a finish
     await drawn(0, 'working');
     await report(0, 'finished');
     await drawn(0, 'finished');
+    // Looking at a workspace clears what it reported, and brings it to the front.
+    await rows.nth(0).click();
+    await drawn(0, 'idle');
+    assert.equal(await rows.nth(0).getAttribute('aria-selected'), 'true', 'looking at a workspace brings it to the front');
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });

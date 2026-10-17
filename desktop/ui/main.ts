@@ -498,7 +498,8 @@ async function start() {
   };
 
   // What an agent in a workspace is doing: the provider reports it with its rows, and a completion the window
-  // has shown is cleared by the click on it, until that workspace reports another state.
+  // has shown is cleared by looking at the row or by the click on its mark, until that workspace reports another
+  // state.
   const acknowledged = new Set<string>();
   const agentStateLabels: Record<WorkspaceStatus, string> = { idle: '空闲', working: '工作中', finished: '已完成' };
   const agentBadge = (row: WorkspaceRow) => {
@@ -536,7 +537,11 @@ async function start() {
     name.className = 'name';
     name.textContent = row.label;
     element.append(name, agentBadge(row));
-    onActivate(element, () => selectWorkspace(row.id));
+    onActivate(element, () => {
+      // Looking at a workspace is what clears the completion it reported, and only that one.
+      if (row.status === 'finished') acknowledged.add(row.id);
+      selectWorkspace(row.id);
+    });
     dragSource(element, () => { draggingRow = row.id; }, () => { draggingRow = undefined; });
     return element;
   };

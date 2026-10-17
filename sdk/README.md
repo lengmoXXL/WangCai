@@ -73,7 +73,7 @@ provider 要保证工作区 id 在所有 provider 的行中唯一识别；`error
 宿主不禁用带 `error` 的菜单项。
 
 `WorkspaceRow.status` 是那行里 agent 的状态，写 `'idle'`、`'working'` 或 `'finished'`，缺省按
-`'idle'` 画；宿主把它在行末画成一个图标，点 `'finished'` 的图标只在窗口里清成 `'idle'`（provider
+`'idle'` 画；宿主把它在行末画成一个图标，点那一行或它行末的图标都只在窗口里清成 `'idle'`（provider
 自己那份不变），那一行报出别的状态之后再报 `'finished'` 才会重新画出来。
 
 约定的公共主题：`workspaces`（行变化，App 重新请求列表）、`workspace:active`
