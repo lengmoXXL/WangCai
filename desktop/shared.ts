@@ -19,6 +19,7 @@ export interface PluginBridge {
   subscribe(event: string, callback: (data: unknown) => void): () => void;
   plugins(): Promise<PluginInfo[]>;
   config(): Promise<Profile>;
+  fullscreen(): Promise<boolean>;
   request<T = any>(id: string, method: string, params?: unknown): Promise<T>;
   install(ids: string[]): Promise<void>;
   installs(): Promise<InstallStatus[]>;

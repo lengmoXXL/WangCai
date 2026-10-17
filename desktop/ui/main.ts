@@ -33,7 +33,13 @@ async function start() {
   document.documentElement.style.setProperty('--wc-font', uiFont);
   const [r, g, b] = getComputedStyle(document.body).backgroundColor.match(/\d+/g)!.map(Number);
   document.documentElement.style.colorScheme = r * 299 + g * 587 + b * 114 > 128_000 ? 'light' : 'dark';
-  window.wangcai.subscribe('fullscreen', (value) => document.documentElement.toggleAttribute('data-fullscreen', value === true));
+  // The window is asked once per load, and followed for every change after that.
+  const applyChrome = (fullscreen: unknown) => {
+    if (fullscreen === true) document.documentElement.style.setProperty('--wc-chrome', '0px');
+    else document.documentElement.style.removeProperty('--wc-chrome');
+  };
+  window.wangcai.subscribe('fullscreen', applyChrome);
+  applyChrome(await window.wangcai.fullscreen());
   root.append(installsPage());
   const left = document.createElement('aside');
   left.className = 'desktop-sidebar sidebar-left';

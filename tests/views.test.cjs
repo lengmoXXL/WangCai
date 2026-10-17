@@ -21,13 +21,41 @@ test('full screen reclaims the window chrome space above the workspaces', { time
     assert.equal(await left.evaluate((element) => getComputedStyle(element).paddingTop), '36px');
     // 36px chrome + 1px card border + 3px window inset.
     assert.equal(await headerTop(), 40);
-    // a real setFullScreen(true) does not enter full screen in this environment, so drive the event the main process forwards
+    // What this covers is the change the main process forwards, so this drives the event that carries it.
     await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].emit('enter-full-screen'); });
     await page.waitForFunction(() => getComputedStyle(document.querySelector('.sidebar-left')).paddingTop === '0px');
     assert.equal(await headerTop(), 4);
     await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].emit('leave-full-screen'); });
     await page.waitForFunction(() => getComputedStyle(document.querySelector('.sidebar-left')).paddingTop === '36px');
     assert.equal(await headerTop(), 40);
+  } finally {
+    await desktop?.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a plugin update that loads the page again keeps the workspaces in the full screen', { timeout: 180000 }, async () => {
+  const home = mkdtempSync(join(tmpdir(), 'wangcai-full-screen-reload-'));
+  const env = testEnv(home);
+  let desktop;
+  try {
+    mockWorkspace(home);
+    writeInit(home, { workspaces: ['terminal-agent'], tabs: [] });
+    desktop = await launchApp(home, env);
+    const page = await desktop.firstWindow();
+    const header = page.locator('.workspace-header');
+    const headerTop = () => header.evaluate((element) => Math.round(element.getBoundingClientRect().top));
+    await waitForShell(page);
+    await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].setFullScreen(true); });
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('.sidebar-left')).paddingTop === '0px');
+    await desktop.evaluate(({ Menu }) => Menu.getApplicationMenu().items[1].submenu.items[0].click());
+    await page.locator('.installs').waitFor();
+    // An update loads the page again, and what comes back is a page that has nothing left to report.
+    await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].webContents.reload(); });
+    await waitForShell(page);
+    await page.locator('.installs').waitFor({ state: 'hidden' });
+    // The full screen keeps the workspaces at the 3px window inset and the 1px card border.
+    assert.equal(await headerTop(), 4);
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });

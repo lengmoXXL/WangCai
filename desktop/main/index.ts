@@ -74,6 +74,7 @@ else {
     ipcMain.handle('wangcai:request', async (_, id: string, method: string, params: unknown) => (await manager.loaded()).request(id, method, params));
     ipcMain.handle('wangcai:config', () => profile);
     ipcMain.handle('wangcai:installs', () => manager.statuses);
+    ipcMain.handle('wangcai:fullscreen', () => window?.isFullScreen() ?? false);
     // What the page's update and retry entries ask for.
     ipcMain.handle('wangcai:install', async (_, ids: string[]) => {
       if (await manager.update(ids)) window?.webContents.reload();

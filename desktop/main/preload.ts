@@ -10,6 +10,7 @@ const api: PluginBridge = {
   },
   plugins: () => ipcRenderer.invoke('wangcai:plugins'),
   config: () => ipcRenderer.invoke('wangcai:config'),
+  fullscreen: () => ipcRenderer.invoke('wangcai:fullscreen'),
   request: (id, method, params) => ipcRenderer.invoke('wangcai:request', id, method, params),
   install: (ids) => ipcRenderer.invoke('wangcai:install', ids),
   installs: () => ipcRenderer.invoke('wangcai:installs'),
