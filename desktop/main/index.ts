@@ -4,9 +4,9 @@ import { pathToFileURL } from 'node:url';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { agentInstaller } from './agent';
 import { pluginManager } from './manager';
-import { homeOverride, loadConfig, storageDirectory, syncSources, tabsPath, userDataDirectory, windowStatePath } from './config';
+import { groupsPath, homeOverride, loadConfig, storageDirectory, syncSources, tabsPath, userDataDirectory, windowStatePath } from './config';
 import type { TabRecord } from '@lengmoxxl/sdk/channel';
-import { previewMessage, previewScheme, previewUrl, uiFont } from '../shared';
+import { previewMessage, previewScheme, previewUrl, uiFont, type WorkspaceGroup } from '../shared';
 
 app.setName('旺财');
 protocol.registerSchemesAsPrivileged([
@@ -79,11 +79,16 @@ else {
     ipcMain.handle('wangcai:install', async (_, ids: string[]) => {
       if (await manager.update(ids)) window?.webContents.reload();
     });
-    ipcMain.handle('wangcai:tabs', () => existsSync(tabsPath) ? JSON.parse(readFileSync(tabsPath, 'utf8')) as TabRecord[] : []);
-    ipcMain.handle('wangcai:save-tabs', (_: unknown, tabs: TabRecord[]) => {
-      writeFileSync(`${tabsPath}.tmp`, JSON.stringify(tabs, null, 2));
-      renameSync(`${tabsPath}.tmp`, tabsPath);
-    });
+    // A list the app keeps in a file of its own: read back as it was written, and replaced in one step.
+    const readList = <T>(path: string) => existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) as T[] : [];
+    const writeList = <T>(path: string, list: T[]) => {
+      writeFileSync(`${path}.tmp`, JSON.stringify(list, null, 2));
+      renameSync(`${path}.tmp`, path);
+    };
+    ipcMain.handle('wangcai:tabs', () => readList<TabRecord>(tabsPath));
+    ipcMain.handle('wangcai:save-tabs', (_: unknown, tabs: TabRecord[]) => writeList(tabsPath, tabs));
+    ipcMain.handle('wangcai:groups', () => readList<WorkspaceGroup>(groupsPath));
+    ipcMain.handle('wangcai:save-groups', (_: unknown, groups: WorkspaceGroup[]) => writeList(groupsPath, groups));
     // A plugin hands the app a link, not a program.
     ipcMain.handle('wangcai:open', (_: unknown, url: unknown) => {
       const address = new URL(String(url));

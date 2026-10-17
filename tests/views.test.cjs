@@ -1,9 +1,9 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { mkdtempSync, rmSync } = require('node:fs');
+const { mkdtempSync, readFileSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { launchApp, mockView, mockWorkspace, newWorkspace, openWorkspaceMenu, testEnv, waitForShell, writeInit } = require('./init.cjs');
+const { drawnOrder, firstInsideLine, launchApp, launchedWithThree, lineAfter, lineBeforeGroup, makeGroup, mockView, mockWorkspace, newWorkspace, onLine, openWorkspaceMenu, rowId, rowIds, testEnv, waitForShell, writeInit } = require('./init.cjs');
 
 test('full screen reclaims the window chrome space above the workspaces', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-full-screen-'));
@@ -118,7 +118,7 @@ test('sidebar tabs can be dragged into a new order', { timeout: 180000 }, async 
   }
 });
 
-test('the workspaces header names what it can open, and a row menu closes or renames it', { timeout: 180000 }, async () => {
+test('the workspaces header names what it can open and what it can group, and a row menu closes or renames it', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-workspace-menu-'));
   const env = testEnv(home);
   let desktop;
@@ -132,10 +132,10 @@ test('the workspaces header names what it can open, and a row menu closes or ren
     const menu = page.locator('#workspace-row-menu');
     const items = () => menu.getByRole('menuitem').allTextContents();
     await openWorkspaceMenu(page);
-    assert.deepEqual(await items(), ['新建 本机'], 'what can be opened is named as a creation');
+    assert.deepEqual(await items(), ['新建 本机', '新建分组'], 'what can be opened is named as a creation, and a group is made beside it');
     await page.keyboard.press('Escape');
     await page.getByRole('tablist', { name: '工作区' }).getByRole('tab').first().click({ button: 'right' });
-    assert.deepEqual(await items(), ['重命名', '关闭工作区'], 'a row is renamed or closed from its menu and nothing else');
+    assert.deepEqual(await items(), ['重命名', '关闭工作区'], 'with no groups, a row is renamed or closed from its menu');
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });
@@ -178,6 +178,182 @@ test('a workspace is renamed in a dialog, and an empty name is left to the provi
     await settled(['~']);
   } finally {
     await desktop?.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a group is made, renamed, folded, moved and remembered', { timeout: 180000 }, async () => {
+  const home = mkdtempSync(join(tmpdir(), 'wangcai-workspace-groups-'));
+  const env = testEnv(home);
+  const stored = () => JSON.parse(readFileSync(join(home, '.local/share/wangcai/groups.json'), 'utf8'));
+  let desktop;
+  try {
+    mockWorkspace(home);
+    writeInit(home, { workspaces: ['terminal-agent'], tabs: [] });
+    desktop = await launchApp(home, env);
+    let page = await desktop.firstWindow();
+    await waitForShell(page);
+    await newWorkspace(page);
+    let group = page.locator('.workspace-group');
+    let bar = page.getByRole('button', { name: '分组 一组' });
+    let menu = page.locator('#workspace-row-menu');
+    let rows = page.locator('.workspaces > .workspace');
+    await makeGroup(page, '一组');
+    assert.equal(await group.locator('.workspace').count(), 0, 'a fresh group holds nothing');
+    // the group icon takes the column a workspace icon takes, so the two line up
+    const leftOf = (locator) => locator.evaluate((element) => element.getBoundingClientRect().left);
+    const aligned = async (a, b) => Math.abs((await leftOf(a)) - (await leftOf(b))) < 1;
+    assert.ok(await aligned(group.locator('.chevron path'), rows.first().locator('.glyph path')), 'the two icons start at the same place');
+    assert.ok(await aligned(group.locator('.name'), rows.first().locator('.name')), 'and their names line up too');
+    // folding is the bar's own click, and the rows come back on the next one
+    const angle = () => group.locator('.chevron').evaluate((element) => {
+      const matrix = getComputedStyle(element).transform;
+      if (matrix === 'none') return 0;
+      const [a, b] = matrix.match(/-?[\d.]+/g).map(Number);
+      return Math.round(Math.atan2(b, a) * 180 / Math.PI);
+    });
+    assert.equal(await angle(), 0, 'an open group points down at the rows it holds');
+    await bar.click();
+    assert.equal(await bar.getAttribute('aria-expanded'), 'false', 'a folded group says so');
+    assert.equal(await angle(), -90, 'a folded group points right, at where they went');
+    assert.equal(await group.locator('.workspace-group-rows').isVisible(), false, 'and its rows are hidden');
+    await bar.click();
+    assert.equal(await bar.getAttribute('aria-expanded'), 'true', 'the next click opens it again');
+    await makeGroup(page, '二组');
+    const bars = page.locator('.workspace-group-bar');
+    assert.deepEqual(await bars.allTextContents(), ['一组', '二组'], 'the second group is drawn under the first');
+    // a group is dragged by its own bar onto the line above another group, and takes that place
+    await bars.last().dragTo(await lineBeforeGroup(page, 0), { targetPosition: onLine });
+    assert.deepEqual(await bars.allTextContents(), ['二组', '一组'], 'the dragged group moved to the line it was dropped on');
+    assert.deepEqual(stored().map((entry) => entry.name), ['二组', '一组'], 'the groups file holds the new order');
+    // dropping a group on the line in front of itself leaves the order of the groups alone
+    await bars.first().dragTo(await lineBeforeGroup(page, 0), { targetPosition: onLine });
+    assert.deepEqual(await bars.allTextContents(), ['二组', '一组'], 'the groups keep their order');
+    assert.deepEqual(stored().map((entry) => entry.name), ['二组', '一组'], 'and the file is left as it was');
+    const deleteGroup = async (target) => {
+      await target.click({ button: 'right' });
+      await menu.getByRole('menuitem', { name: '删除分组', exact: true }).click();
+    };
+    const rowMenu = async (name) => {
+      await page.getByRole('tablist', { name: '工作区' }).getByRole('tab').first().click({ button: 'right' });
+      await menu.getByRole('menuitem', { name, exact: true }).click();
+    };
+    await deleteGroup(bars.first());
+    assert.equal(await bars.count(), 1, 'the group that was deleted is gone');
+    // a row joins the group from its own menu, and leaves it the same way
+    await rowMenu('移入 一组');
+    assert.equal(await group.locator('.workspace').count(), 1, 'the row is drawn under the group');
+    assert.equal(await rows.count(), 0, 'and no longer beside it');
+    await rowMenu('移出分组');
+    assert.equal(await group.locator('.workspace').count(), 0, 'the group is empty again');
+    assert.equal(await rows.count(), 1, 'and the row is back in the list');
+    // filing a row into a folded group unfolds it, so the row lands where the eye goes
+    await bar.click();
+    assert.equal(await bar.getAttribute('aria-expanded'), 'false', 'the group is folded to begin with');
+    await rowMenu('移入 一组');
+    assert.equal(await group.locator('.workspace').count(), 1, 'the row is filed into the folded group');
+    assert.equal(await bar.getAttribute('aria-expanded'), 'true', 'and filing it in unfolds the group');
+    // renaming a group from its own menu keeps an empty name in the dialog and writes the new one down
+    await bar.click({ button: 'right' });
+    await menu.getByRole('menuitem', { name: '重命名分组', exact: true }).click();
+    const rename = page.getByRole('dialog', { name: '重命名分组' });
+    const typed = rename.getByRole('textbox');
+    assert.equal(await typed.inputValue(), '一组', 'the dialog opens on the name the group has');
+    await typed.fill('');
+    await typed.press('Enter');
+    assert.equal(await rename.getByRole('alert').textContent(), '分组名称不能为空', 'an empty name is refused with a note');
+    assert.equal(await rename.isVisible(), true, 'an empty name keeps the dialog open');
+    await typed.fill('改名组');
+    await typed.press('Enter');
+    await rename.waitFor({ state: 'hidden' });
+    assert.equal(await stored()[0].name, '改名组', 'the new name is what the groups file holds');
+    await desktop.close(); desktop = undefined;
+    desktop = await launchApp(home, env);
+    page = await desktop.firstWindow();
+    await waitForShell(page);
+    group = page.locator('.workspace-group');
+    bar = page.getByRole('button', { name: '分组 改名组' });
+    menu = page.locator('#workspace-row-menu');
+    rows = page.locator('.workspaces > .workspace');
+    await bar.waitFor();
+    // A provider that restarts serves its rows afresh, so the two it served before are made again: the group keeps
+    // the row it held, and the other one is beside it again.
+    for (const _ of [1, 2]) await newWorkspace(page);
+    assert.equal(await group.locator('.workspace').count(), 1, 'the group is drawn with the row it holds');
+    assert.equal(await rows.count(), 1, 'one row is left beside the group');
+    // a group that goes away gives its rows back to the list
+    await deleteGroup(bar);
+    assert.equal(await group.count(), 0, 'the deleted group is gone');
+    assert.equal(await rows.count(), 2, 'and both rows are back in the list');
+  } finally {
+    await desktop?.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('workspaces are dragged onto the lines of the list', { timeout: 180000 }, async () => {
+  const { home, desktop, page, rows, groups } = await launchedWithThree();
+  try {
+    // a row dropped on the line under itself keeps its place
+    const kept = await rowIds(rows);
+    await rows.first().dragTo(await lineAfter(page, rows.first()), { targetPosition: onLine });
+    assert.deepEqual(await rowIds(rows), kept, 'the row keeps its place');
+    await makeGroup(page, '甲');
+    const first = groups.first();
+    // a row dropped on the line under a group's bar joins it
+    await rows.first().dragTo(firstInsideLine(first), { targetPosition: onLine });
+    assert.equal(await first.locator('.workspace').count(), 1, 'the row joined the group');
+    assert.equal(await rows.count(), 2, 'and left the list');
+    // a second row filed the same way becomes the group's first row
+    await rows.first().dragTo(firstInsideLine(first), { targetPosition: onLine });
+    const filed = await rowIds(first.locator('.workspace'));
+    assert.equal(filed.length, 2, 'the group holds both rows');
+    await first.locator('.workspace').last().dragTo(firstInsideLine(first), { targetPosition: onLine });
+    assert.deepEqual(await rowIds(first.locator('.workspace')), [filed[1], filed[0]], 'the row moved above the one it was dropped on');
+    // the line that closes the list takes a row back out of its group
+    const out = await rowId(first.locator('.workspace'));
+    await first.locator('.workspace').first().dragTo(page.locator('.workspaces > :last-child'), { targetPosition: onLine });
+    assert.equal(await first.locator('.workspace').count(), 1, 'the row left its group');
+    assert.equal(await rows.count(), 2, 'and stands in the list');
+    assert.equal(await rowId(rows.last()), out, 'at the end of it');
+    // the line at the top stands a row above every group
+    const up = await rowId(first.locator('.workspace'));
+    await first.locator('.workspace').first().dragTo(page.locator('.workspaces > :first-child'), { targetPosition: onLine });
+    assert.equal(await rowId(rows), up, 'the row took the top of the list');
+    assert.equal(await first.locator('.workspace').count(), 0, 'and left the group empty');
+    assert.deepEqual(await drawnOrder(page), ['row', '甲', 'row', 'row'], 'with the group drawn under the row that went above it');
+  } finally {
+    await desktop.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a workspace dropped on a line between two groups keeps that place, and one moved onto another group joins it', { timeout: 180000 }, async () => {
+  const { home, desktop, page, rows, groups } = await launchedWithThree();
+  try {
+    await makeGroup(page, '甲');
+    await makeGroup(page, '乙');
+    const first = groups.first();
+    // the first group takes two rows, and one row is left beside the two empty groups
+    await rows.first().dragTo(firstInsideLine(first), { targetPosition: onLine });
+    await rows.first().dragTo(firstInsideLine(first), { targetPosition: onLine });
+    assert.equal(await first.locator('.workspace').count(), 2, 'both rows joined the first group');
+    assert.equal(await rows.count(), 1, 'one row is left beside the groups');
+    const leftOver = await rowId(rows);
+    assert.deepEqual(await drawnOrder(page), ['row', '甲', '乙'], 'the row is drawn above both groups');
+    // dropping that row on the line between the two groups puts it between them
+    const between = await lineBeforeGroup(page, -1);
+    await rows.first().dragTo(between, { targetPosition: onLine });
+    assert.deepEqual(await drawnOrder(page), ['甲', 'row', '乙'], 'the row stands between the two groups');
+    assert.equal(await rowId(rows), leftOver, 'and it is the row that was dragged');
+    // a row dragged from one group onto the line of another group joins that group
+    const second = groups.last();
+    const fromFirst = await rowId(first.locator('.workspace'));
+    await first.locator('.workspace').first().dragTo(firstInsideLine(second), { targetPosition: onLine });
+    assert.equal(await first.locator('.workspace').count(), 1, 'the row left its group');
+    assert.deepEqual(await rowIds(second.locator('.workspace')), [fromFirst], 'and joined the group it was dropped on');
+  } finally {
+    await desktop.close();
     rmSync(home, { recursive: true, force: true });
   }
 });

@@ -16,6 +16,8 @@ const api: PluginBridge = {
   installs: () => ipcRenderer.invoke('wangcai:installs'),
   loadTabs: () => ipcRenderer.invoke('wangcai:tabs'),
   saveTabs: (tabs) => ipcRenderer.invoke('wangcai:save-tabs', tabs),
+  loadGroups: () => ipcRenderer.invoke('wangcai:groups'),
+  saveGroups: (groups) => ipcRenderer.invoke('wangcai:save-groups', groups),
   open: (url) => ipcRenderer.invoke('wangcai:open', url),
 };
 contextBridge.exposeInMainWorld('wangcai', api);

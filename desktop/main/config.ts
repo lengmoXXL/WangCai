@@ -43,6 +43,7 @@ export const storageDirectory = join(homeDirectory, '.local/share/wangcai');
 export const userDataDirectory = join(homeDirectory, 'electron');
 export const installsPath = join(storageDirectory, 'installs.json');
 export const tabsPath = join(storageDirectory, 'tabs.json');
+export const groupsPath = join(storageDirectory, 'groups.json');
 export const windowStatePath = join(storageDirectory, 'window-state.json');
 
 // What a session's agent reads about this app: the documentation and the images it links to, the SDK and

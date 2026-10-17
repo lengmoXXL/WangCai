@@ -14,6 +14,16 @@ export interface PluginInfo { id: string; config: Record<string, unknown>; ui?: 
 // What a plugin init.ts lists is doing, as the manager page reports it.
 export type InstallStage = 'cloning' | 'updating' | 'installing' | 'building' | 'ready' | 'failed';
 export interface InstallStatus { id: string; stage: InstallStage; message?: string }
+// The left sidebar's own bookkeeping: workspaces a provider serves, gathered under a named group, which the provider
+// never hears of.
+export interface WorkspaceGroup {
+  id: string;
+  name: string;
+  collapsed: boolean;
+  workspaces: string[];
+  // How many top-level rows the group is drawn under, and under every row when it records none.
+  after?: number;
+}
 export interface PluginBridge {
   publish(event: string, data: unknown): Promise<void>;
   subscribe(event: string, callback: (data: unknown) => void): () => void;
@@ -25,6 +35,8 @@ export interface PluginBridge {
   installs(): Promise<InstallStatus[]>;
   loadTabs(): Promise<TabRecord[]>;
   saveTabs(tabs: TabRecord[]): Promise<void>;
+  loadGroups(): Promise<WorkspaceGroup[]>;
+  saveGroups(groups: WorkspaceGroup[]): Promise<void>;
   open(url: string): Promise<void>;
 }
 declare global { interface Window { wangcai: PluginBridge } }
