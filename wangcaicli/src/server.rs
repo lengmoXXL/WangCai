@@ -219,7 +219,7 @@ impl Node {
             .collect()
     }
 
-    fn create(&self, rows: u16, cols: u16, cwd: Option<&str>) -> Result<Value> {
+    fn create(&self, rows: u16, cols: u16, cwd: Option<&str>, env: &HashMap<String, String>) -> Result<Value> {
         let pty = native_pty_system().openpty(PtySize {
             rows,
             cols,
@@ -242,6 +242,9 @@ impl Node {
         command.env("TERM", "xterm-256color");
         command.env("COLORTERM", "truecolor");
         command.env("TERM_PROGRAM", "Wangcai");
+        for (name, value) in env {
+            command.env(name, value);
+        }
         let mut child = pty.slave.spawn_command(command)?;
         drop(pty.slave);
         let pid = child.process_id().context("Shell has no PID")?;
@@ -401,7 +404,14 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                             Ok(json!(sessions))
                         }
                         "cwd" => Ok(json!(node.session(id)?.lock().unwrap().cwd()?)),
-                        "create" => { let (rows, cols) = dimensions(&request)?; node.create(rows, cols, request["cwd"].as_str()) }
+                        "create" => {
+                            let (rows, cols) = dimensions(&request)?;
+                            // The caller's variables for this shell, on top of the node's own environment.
+                            let env: HashMap<String, String> = request["env"].as_object().map(|env| {
+                                env.iter().filter_map(|(name, value)| Some((name.clone(), value.as_str()?.to_owned()))).collect()
+                            }).unwrap_or_default();
+                            node.create(rows, cols, request["cwd"].as_str(), &env)
+                        }
                         "attach" => {
                             let session = node.session(id)?;
                             let terminal = session.lock().unwrap();

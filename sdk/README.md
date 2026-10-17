@@ -72,12 +72,16 @@ SDK 连接本机或 SSH 机器上的旺财后台进程，提供终端、文件�
 provider 要保证工作区 id 在所有 provider 的行中唯一识别；`error` 由 provider 给出并在重试成功后清除，
 宿主不禁用带 `error` 的菜单项。
 
+`WorkspaceRow.status` 是那行里 agent 的状态，写 `'idle'`、`'working'` 或 `'finished'`，缺省按
+`'idle'` 画；宿主把它在行末画成一个图标，点 `'finished'` 的图标只在窗口里清成 `'idle'`（provider
+自己那份不变），那一行报出别的状态之后再报 `'finished'` 才会重新画出来。
+
 约定的公共主题：`workspaces`（行变化，App 重新请求列表）、`workspace:active`
 （`WorkspaceActive | null`，provider 发布）、`workspace:query`（视图请求 provider 再发布
 当前工作区）、`onclick`（`FileClick`）。
 
-字段类型见 SDK 导出的 `WorkspaceRow`、`WorkspaceMenuItem`、`Machine`、`WorkspaceActive`
-与 `FileClick`，定义在 `sdk/types.ts`。
+字段类型见 SDK 导出的 `WorkspaceRow`、`WorkspaceStatus`、`WorkspaceMenuItem`、`Machine`、
+`WorkspaceActive` 与 `FileClick`，定义在 `sdk/types.ts`。
 
 ## 机器、终端与子进程
 
@@ -90,8 +94,9 @@ provider 要保证工作区 id 在所有 provider 的行中唯一识别；`error
 断线会自动重连并重新 attach 已挂载的终端、进程与文件订阅，失败的请求与输入不自动重放，后台进程重启时
 旧 Pty 与进程失效。
 
-`connection.pty`：`list()`、`cwd(id)`、`create(size?, cwd?)`（默认 24 行 80 列；cwd 用绝对目录，
-省略时在后台进程的 HOME 下启动）、`attach(id)`（复用句柄）、`close(id)`（结束 shell 与后台子孙进程）。
+`connection.pty`：`list()`、`cwd(id)`、`create(size?, options?)`（默认 24 行 80 列；`options.cwd` 用绝对
+目录，省略时在后台进程的 HOME 下启动；`options.env` 是额外给这个 shell 的环境变量，值都是字符串）、
+`attach(id)`（复用句柄）、`close(id)`（结束 shell 与后台子孙进程）。
 
 `Size` 用整数：rows 2–300，cols 2–500。
 

@@ -377,3 +377,47 @@ test('the menu bar holds one view menu with the plugin item', { timeout: 180000 
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('a workspace row shows what its agent is doing, and a click clears a finished one', { timeout: 180000 }, async () => {
+  const home = mkdtempSync(join(tmpdir(), 'wangcai-agent-state-'));
+  const env = testEnv(home);
+  let desktop;
+  try {
+    mockWorkspace(home);
+    writeInit(home, { workspaces: ['terminal-agent'], tabs: [] });
+    desktop = await launchApp(home, env);
+    const page = await desktop.firstWindow();
+    await waitForShell(page);
+    await newWorkspace(page);
+    await newWorkspace(page);
+    const rows = page.getByRole('tablist', { name: '工作区' }).getByRole('tab');
+    const badge = (index) => rows.nth(index).locator('.agent-state');
+    const color = (index) => badge(index).evaluate((element) => getComputedStyle(element).color);
+    // The panel draws a report a moment later, on the row that reported it.
+    const drawn = (index, want) => page.waitForFunction(([index, want]) => document.querySelectorAll('.workspace .agent-state')[index]?.dataset.state === want, [index, want]);
+    const report = (index, status) => rows.nth(index).evaluate((row, status) => window.wangcai.request('terminal-agent', 'agent-state', { id: row.dataset.workspace, status }), status);
+    assert.deepEqual([await badge(0).getAttribute('data-state'), await badge(1).getAttribute('data-state')], ['idle', 'idle'], 'a workspace whose agent has said nothing is idle');
+    assert.equal(await color(0), 'rgb(139, 152, 166)', 'idle is drawn in the muted color');
+    await report(0, 'working');
+    await drawn(0, 'working');
+    assert.equal(await color(0), 'rgb(57, 148, 188)', 'work is drawn in the accent');
+    assert.notEqual(await badge(0).locator('svg').evaluate((element) => getComputedStyle(element).animationName), 'none', 'the working mark turns');
+    await report(0, 'finished');
+    await drawn(0, 'finished');
+    assert.equal(await color(0), 'rgb(155, 199, 188)', 'a finished run is drawn in green');
+    assert.equal(await badge(0).getAttribute('aria-label'), '状态：已完成');
+    // The click that clears the mark belongs to the mark, not to the row it sits in.
+    await rows.nth(1).click();
+    await badge(0).click();
+    await drawn(0, 'idle');
+    assert.equal(await rows.nth(1).getAttribute('aria-selected'), 'true', 'clearing a mark does not put another workspace in front');
+    // Another state clears what the click read, so the same finished is drawn again the next time it is reported.
+    await report(0, 'working');
+    await drawn(0, 'working');
+    await report(0, 'finished');
+    await drawn(0, 'finished');
+  } finally {
+    await desktop?.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});

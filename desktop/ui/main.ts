@@ -1,4 +1,4 @@
-import type { WorkspaceMenuItem, WorkspaceRow } from '@lengmoxxl/sdk';
+import type { WorkspaceMenuItem, WorkspaceRow, WorkspaceStatus } from '@lengmoxxl/sdk';
 import type { Dispose, TabContent, TabOptions, TabRecord, UiContext } from '@lengmoxxl/sdk/channel';
 import { previewMessage, previewUrl, uiFont, type WorkspaceGroup } from '../shared';
 import { installsPage } from './installs';
@@ -497,6 +497,31 @@ async function start() {
     return element;
   };
 
+  // What an agent in a workspace is doing: the provider reports it with its rows, and a completion the window
+  // has shown is cleared by the click on it, until that workspace reports another state.
+  const acknowledged = new Set<string>();
+  const agentStateLabels: Record<WorkspaceStatus, string> = { idle: '空闲', working: '工作中', finished: '已完成' };
+  const agentBadge = (row: WorkspaceRow) => {
+    const status = row.status ?? 'idle';
+    // Only a finished row is ever clicked, so any other state leaves nothing of that click to remember.
+    if (status !== 'finished') acknowledged.delete(row.id);
+    const drawn = acknowledged.has(row.id) ? 'idle' : status;
+    const finished = drawn === 'finished';
+    const element = document.createElement(finished ? 'button' : 'span');
+    element.className = 'agent-state';
+    element.dataset.state = drawn;
+    element.setAttribute('aria-label', `状态：${agentStateLabels[drawn]}`);
+    element.innerHTML = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><circle cx="8" cy="8" r="4.5"/></svg>';
+    if (finished) {
+      element.onclick = (event) => {
+        event.stopPropagation();
+        acknowledged.add(row.id);
+        showRows();
+      };
+    }
+    return element;
+  };
+
   const workspaceRow = (row: WorkspaceRow) => {
     const element = document.createElement('div');
     element.className = `workspace${row.id === activeWorkspaceId ? ' selected' : ''}${row.running ? ' running' : ''}`;
@@ -510,7 +535,7 @@ async function start() {
     const name = document.createElement('span');
     name.className = 'name';
     name.textContent = row.label;
-    element.append(name);
+    element.append(name, agentBadge(row));
     onActivate(element, () => selectWorkspace(row.id));
     dragSource(element, () => { draggingRow = row.id; }, () => { draggingRow = undefined; });
     return element;

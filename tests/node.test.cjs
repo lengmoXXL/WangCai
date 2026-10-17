@@ -119,6 +119,20 @@ test('persistent terminal node lifecycle', { timeout: 150000 }, async (t) => {
       await observer.rpc('close', { session_id: second.id });
       assert.equal((await client.rpc('list')).length, 1);
     });
+    await t.test('a terminal starts with the environment it was created with', async () => {
+      const driver = await new Client(info.port).connect(); clients.push(driver);
+      const given = await driver.rpc('create', { rows: 24, cols: 80, env: { WANGCAI_CREATED_ENV: 'given' } });
+      const plain = await driver.rpc('create', { rows: 24, cols: 80 });
+      await driver.rpc('attach', { session_id: given.id });
+      await driver.rpc('attach', { session_id: plain.id });
+      await driver.rpc('input', { session_id: given.id, data: "printf 'CREATED_%s\\n' \"$WANGCAI_CREATED_ENV\"\r" });
+      await until(async () => (await driver.text(given.id)).includes('CREATED_given'), 'the environment its session was created with');
+      // Each session is told only what its own create named, and not what another session was told.
+      await driver.rpc('input', { session_id: plain.id, data: "printf 'PLAIN_%s_\\n' \"$WANGCAI_CREATED_ENV\"\r" });
+      await until(async () => (await driver.text(plain.id)).includes('PLAIN__'), 'a session that named nothing');
+      await driver.rpc('close', { session_id: given.id });
+      await driver.rpc('close', { session_id: plain.id });
+    });
     await t.test('a terminal takes a second viewer, and dimensions are enforced', async () => {
       const viewer = await new Client(info.port).connect(); clients.push(viewer);
       await assert.rejects(viewer.rpc('input', { session_id: first.id, data: 'oops' }), /Attach/);

@@ -28,6 +28,15 @@ body { background: var(--wc-background); color: var(--wc-foreground); font-famil
 .workspace .glyph { flex-shrink: 0; color: var(--wc-muted); fill: none; stroke: currentColor; stroke-width: 1.1; }
 .workspace.running .glyph { color: var(--wc-foreground); }
 .workspace .name, .workspace-group-bar .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* What the agent in the row is doing sits at the row's far end, past the name it follows. */
+.workspace .agent-state { flex-shrink: 0; display: flex; margin-left: auto; padding: 0; border: 0; background: none; color: var(--wc-muted); cursor: default; }
+.workspace .agent-state svg { fill: none; stroke: currentColor; stroke-width: 1.4; }
+.workspace .agent-state[data-state=working] { color: var(--wc-accent); }
+.workspace .agent-state[data-state=working] svg { stroke-dasharray: 9 5; animation: wc-agent-working 1s linear infinite; }
+.workspace .agent-state[data-state=finished] { color: var(--wc-green); cursor: pointer; }
+.workspace .agent-state[data-state=finished] svg { fill: currentColor; stroke: none; }
+.workspace .agent-state[data-state=finished]:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 1px; }
+@keyframes wc-agent-working { to { transform: rotate(360deg); } }
 /* A row a group holds steps in one level from the bar, and a line inside a group starts where that row's icon does. */
 .workspace-group-rows { --wc-group-indent: 20px; }
 .workspace-group-rows .workspace { padding-left: var(--wc-group-indent); }
