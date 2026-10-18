@@ -7,6 +7,10 @@ const { buildSync } = require('esbuild');
 const { Module } = require('node:module');
 const { launchApp, mockWorkspace, testEnv, waitForShell, writeInit } = require('./init.cjs');
 
+const resources = new Module('resources');
+resources._compile(buildSync({ entryPoints: ['desktop/main/resources.ts'], bundle: true, platform: 'node', packages: 'external', write: false }).outputFiles[0].text, 'resources.cjs');
+const { syncSources } = resources.exports;
+
 /** config.ts fixes its home when it loads, so a reader for a temporary home is compiled after that home is set. */
 function configModule(home) {
   const previous = { HOME: process.env.HOME, WANGCAI_HOME: process.env.WANGCAI_HOME };
@@ -50,7 +54,7 @@ test('the trees an agent reads are copied into the data directory, and only a ne
   const home = mkdtempSync(join(tmpdir(), 'wangcai-sources-'));
   const { module: config, restore } = configModule(home);
   try {
-    config.syncSources(process.cwd(), '1.0.0');
+    syncSources(process.cwd(), config.storageDirectory, '1.0.0');
     const manual = join(config.sourcesDirectory, 'docs/plugins.md');
     // One probe per kind the list holds: a page an agent reads, the app's own source, and an image such a
     // page links to.
@@ -59,10 +63,10 @@ test('the trees an agent reads are copied into the data directory, and only a ne
     assert.equal(existsSync(join(config.sourcesDirectory, 'desktop/build/icon.png')), true);
     // The same version does not recopy, so an edit to the copy stands.
     writeFileSync(manual, 'edited\n');
-    config.syncSources(process.cwd(), '1.0.0');
+    syncSources(process.cwd(), config.storageDirectory, '1.0.0');
     assert.equal(readFileSync(manual, 'utf8'), 'edited\n');
     // A version that changes replaces it: what the copy holds is the app's file, not the user's.
-    config.syncSources(process.cwd(), '1.0.1');
+    syncSources(process.cwd(), config.storageDirectory, '1.0.1');
     assert.notEqual(readFileSync(manual, 'utf8'), 'edited\n');
   } finally {
     restore();
@@ -78,7 +82,7 @@ test('a fresh init.ts points at a document the app copies', async () => {
     const init = readFileSync(join(home, '.config/wangcai/init.ts'), 'utf8');
     const named = init.match(/完整说明：(\S+)/)[1];
     assert.equal(named, join(home, '.local/share/wangcai/src/README.md'));
-    config.syncSources(process.cwd(), '1.0.0');
+    syncSources(process.cwd(), config.storageDirectory, '1.0.0');
     assert.equal(existsSync(named), true);
   } finally {
     restore();

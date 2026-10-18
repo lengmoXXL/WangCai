@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { agentCommand } from '@lengmoxxl/sdk';
 import type { Network } from './config';
-import { mirroredUrl } from './install';
 
 const exec = promisify(execFile);
 // Where the agent releases live: each one is under the tag of its own version.
@@ -35,7 +34,8 @@ export function agentInstaller(directory: string, network: Network) {
     const target = TARGETS[platform];
     if (!target) throw new Error(`${platform} 上暂不支持自动安装 agent`);
     if (installed === `wangcai ${await version}`) return;
-    const url = mirroredUrl(`${RELEASES}/agent-v${await version}/wangcai-${target}`, network.mirror);
+    const release = `${RELEASES}/agent-v${await version}/wangcai-${target}`;
+    const url = network.mirror ? `${network.mirror}${release}` : release;
     const deadline = AbortSignal.timeout(DOWNLOAD_TIMEOUT);
     const until = signal ? AbortSignal.any([signal, deadline]) : deadline;
     let binary: Buffer;
