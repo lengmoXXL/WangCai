@@ -16,7 +16,7 @@ permissions:
 jobs:
   # The app goes out on every tag. The agent goes out on its own, under the tag of its own version, and only
   # when wangcaicli changed: an app that ships the same agent keeps the running terminals on the machines it
-  # is installed on.
+  # is installed on. The app's release is the one the repository calls latest; the agent's never is.
   versions:
     runs-on: ubuntu-latest
     outputs:
@@ -58,11 +58,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ "$GITHUB_REF_TYPE" = tag ]; then
-            gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+            gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --latest --generate-notes
           fi
           if [ "${{ steps.read.outputs.agent }}" = true ]; then
             tag=agent-v${{ steps.read.outputs.crate }}
-            gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "$tag" --target "$GITHUB_SHA" --generate-notes
+            gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "$tag" --target "$GITHUB_SHA" --latest=false --generate-notes
           fi
 
   agent:
