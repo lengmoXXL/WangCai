@@ -38,7 +38,7 @@ test('packaged app loads the plugins its config names and carries the node they 
     page = await launch();
     await waitForShell(page);
     await page.locator('[data-plugin=terminal-agent] .probe').waitFor();
-    assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)), ['terminal-agent']);
+    assert.deepEqual(await page.evaluate(async () => (await window.wangcai.call('plugins')).map((plugin) => plugin.id)), ['terminal-agent']);
     assert.equal(await spacing(), '3px');
     // The app carries the node and npm a repository plugin builds with.
     assert.equal(existsSync(join(bundle, 'Resources/node/bin/node')), true);

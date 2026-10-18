@@ -71,10 +71,10 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     });
     desktop = await launchApp(home, env);
     let page = await desktop.firstWindow();
-    assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map((plugin) => plugin.id)),
+    assert.deepEqual(await page.evaluate(async () => (await window.wangcai.call('plugins')).map((plugin) => plugin.id)),
       ['absent', 'alpha', 'beta', 'broken', 'failed-ui', 'missing', 'syntax']);
-    assert.equal(await page.evaluate(() => window.wangcai.request('alpha', 'sharedConnect')), true);
-    assert.equal(await page.evaluate(() => window.wangcai.request('beta', 'sharedConnect')), true);
+    assert.equal(await page.evaluate(() => window.wangcai.call('request', 'alpha', 'sharedConnect')), true);
+    assert.equal(await page.evaluate(() => window.wangcai.call('request', 'beta', 'sharedConnect')), true);
     await page.waitForFunction(() => document.querySelector('[data-plugin=alpha]')?.dataset.font);
     assert.equal(await page.locator('[data-plugin=alpha]').getAttribute('data-font'), '{"family":"alpha Font","size":30}');
     assert.equal(await page.locator('[data-plugin=beta]').getAttribute('data-font'), '{"family":"beta Font","size":10}');
@@ -85,14 +85,14 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     await page.getByText('beta v1', { exact: true }).click();
     await page.waitForFunction(() => document.querySelector('[data-plugin=beta]')?.getAttribute('data-reply') === 'beta:hello');
     await page.waitForFunction(() => document.querySelector('[data-plugin=alpha]')?.getAttribute('data-channel') === 'beta');
-    assert.deepEqual(await page.evaluate(() => window.wangcai.request('beta', 'received')), ['alpha', 'beta']);
-    await page.evaluate(() => window.wangcai.request('alpha', 'unsubscribe'));
-    await page.evaluate(() => window.wangcai.request('beta', 'publish', 'main-event'));
+    assert.deepEqual(await page.evaluate(() => window.wangcai.call('request', 'beta', 'received')), ['alpha', 'beta']);
+    await page.evaluate(() => window.wangcai.call('request', 'alpha', 'unsubscribe'));
+    await page.evaluate(() => window.wangcai.call('request', 'beta', 'publish', 'main-event'));
     await page.waitForFunction(() => document.querySelector('[data-plugin=beta]')?.getAttribute('data-channel') === 'main-event');
-    assert.deepEqual(await page.evaluate(() => window.wangcai.request('alpha', 'received')), ['alpha', 'beta']);
-    assert.deepEqual(await page.evaluate(() => window.wangcai.request('beta', 'received')), ['alpha', 'beta', 'main-event']);
-    await page.evaluate(() => window.wangcai.request('alpha', 'stop'));
-    await page.evaluate(() => window.wangcai.publish('onclick', 'after-unsubscribe'));
+    assert.deepEqual(await page.evaluate(() => window.wangcai.call('request', 'alpha', 'received')), ['alpha', 'beta']);
+    assert.deepEqual(await page.evaluate(() => window.wangcai.call('request', 'beta', 'received')), ['alpha', 'beta', 'main-event']);
+    await page.evaluate(() => window.wangcai.call('request', 'alpha', 'stop'));
+    await page.evaluate(() => window.wangcai.call('publish', 'onclick', 'after-unsubscribe'));
     await page.waitForFunction(() => document.querySelector('[data-plugin=beta]')?.getAttribute('data-channel') === 'after-unsubscribe');
     assert.equal(await page.locator('[data-plugin=alpha]').getAttribute('data-channel'), 'main-event');
     assert.equal(existsSync(join(readFileSync(join(home, 'broken-data-directory'), 'utf8'), 'leaked')), false);

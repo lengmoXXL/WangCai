@@ -475,7 +475,7 @@ test('a workspace row shows what its agent is doing, and a click clears a finish
     const color = (index) => badge(index).evaluate((element) => getComputedStyle(element).color);
     // The panel draws a report a moment later, on the row that reported it.
     const drawn = (index, want) => page.waitForFunction(([index, want]) => document.querySelectorAll('.workspace .agent-state')[index]?.dataset.state === want, [index, want]);
-    const report = (index, status) => rows.nth(index).evaluate((row, status) => window.wangcai.request('terminal-agent', 'agent-state', { id: row.dataset.workspace, status }), status);
+    const report = (index, status) => rows.nth(index).evaluate((row, status) => window.wangcai.call('request', 'terminal-agent', 'agent-state', { id: row.dataset.workspace, status }), status);
     const shapes = (index) => badge(index).evaluate((element) => [...element.querySelectorAll('.ring, .dot, .check')].filter((shape) => getComputedStyle(shape).display !== 'none').map((shape) => shape.getAttribute('class')));
     assert.deepEqual([await badge(0).getAttribute('data-state'), await badge(1).getAttribute('data-state')], ['idle', 'idle'], 'a workspace whose agent has said nothing is idle');
     assert.equal(await color(0), 'rgb(139, 152, 166)', 'idle is drawn in the muted color');

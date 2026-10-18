@@ -32,7 +32,7 @@ test('the app keeps one connection per machine for every plugin that asks for it
   try {
     desktop = await launchApp(home, env);
     const page = await desktop.firstWindow();
-    const request = (id, method) => page.evaluate(([plugin, name]) => window.wangcai.request(plugin, name), [id, method]);
+    const request = (id, method) => page.evaluate(([plugin, name]) => window.wangcai.call('request', plugin, name), [id, method]);
     // Both plugins ask before either has a connection: the second one waits for the connection the first
     // one is opening rather than opening its own.
     const [first, second] = await Promise.all([request('holder', 'hold'), request('other', 'hold')]);

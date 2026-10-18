@@ -3,7 +3,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { bridge, corePageTopic, coreScheme, coreStatusTopic, pluginPageTopic, pluginScheme, previewScheme, type InstallStage } from '../../core/shared';
+import { corePageTopic, coreScheme, coreStatusTopic, link, pluginPageTopic, pluginScheme, previewScheme, type InstallStage } from '../../core/shared';
 import type { Network } from '../../core/main/config';
 import type { Core, CoreHost } from '../../core/main/host';
 import { coreDirectory, loadCore, rebuildCore } from './core';
@@ -51,8 +51,8 @@ else {
     const rebuild = async (network: Network) => {
       if (rebuilding) return;
       rebuilding = true;
-      const report = (stage: InstallStage, message?: string) => send(bridge.channel, coreStatusTopic, { stage, message });
-      send(bridge.channel, corePageTopic);
+      const report = (stage: InstallStage, message?: string) => send(link.channel, coreStatusTopic, { stage, message });
+      send(link.channel, corePageTopic);
       try {
         const changed = await rebuildCore({ storage: storageDirectory, node, network, report });
         report('ready', changed ? '已重建，正在重启' : '已是最新');
@@ -80,9 +80,8 @@ else {
       version: app.getVersion(),
       sources: app.isPackaged ? join(process.resourcesPath, 'src') : join(app.getAppPath(), '..'),
       protocol: { handle: (scheme, handler) => protocol.handle(scheme, handler) },
-      ipc: { handle: (channel, handler) => ipcMain.handle(channel, (_event, ...args) => handler(...args)) },
       fetch: (url, options) => net.fetch(url, options),
-      send: (topic, data) => send(bridge.channel, topic, data),
+      send: (topic, data) => send(link.channel, topic, data),
       setProxy: (rules) => session.defaultSession.setProxy({ proxyRules: rules }).then(() => undefined),
       openExternal: async (url) => {
         // A plugin hands the app a link, not a program.
@@ -91,6 +90,8 @@ else {
         await shell.openExternal(address.toString());
       },
       reload: () => window?.webContents.reload(),
+      // Fetching, building and restarting Core is the shell's own business, so the window asks for it here.
+      updateCore: () => { void rebuild(running.network); },
       fullscreen: () => window?.isFullScreen() ?? false,
     };
     const running: Core = await core.activate(host);
@@ -113,8 +114,8 @@ else {
     });
     window = win;
     if (unfocused) win.showInactive();
-    win.on('enter-full-screen', () => send(bridge.channel, 'fullscreen', true));
-    win.on('leave-full-screen', () => send(bridge.channel, 'fullscreen', false));
+    win.on('enter-full-screen', () => send(link.channel, 'fullscreen', true));
+    win.on('leave-full-screen', () => send(link.channel, 'fullscreen', false));
     if (maximized) win.maximize();
     win.on('close', () => {
       writeFileSync(`${windowStatePath}.tmp`, JSON.stringify({ ...win.getNormalBounds(), maximized: win.isMaximized() }));
@@ -136,8 +137,8 @@ else {
     });
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', (event) => event.preventDefault());
-    // The window's own Core page asks for the same rebuild the menu runs.
-    ipcMain.handle(bridge.coreUpdate, () => { void rebuild(running.network); });
+    // One name comes over the wire, and one table answers it: Core's, which the app only forwards to.
+    ipcMain.handle(link.invoke, (_event, method: string, ...args: unknown[]) => running.dispatch(method, ...args));
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { label: '旺财', submenu: [
         { role: 'about' },
@@ -147,7 +148,7 @@ else {
         { role: 'quit' },
       ] },
       { label: '视图', submenu: [
-        { label: '插件', click: () => send(bridge.channel, pluginPageTopic) },
+        { label: '插件', click: () => send(link.channel, pluginPageTopic) },
       ] },
     ]));
     let cleaned = false;

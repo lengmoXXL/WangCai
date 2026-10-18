@@ -68,7 +68,7 @@ test('repository plugins are cloned, built and rebuilt when their commit moves',
     assert.deepEqual(await stages(), [['terminal-agent', 'ready'], ['good', 'ready'], ['broken', 'failed']]);
     assert.match(await page.locator('.installs li[data-stage=failed] .install-message').innerText(), /deadbeef/);
     // The plugin that did not install is not loaded at all: no error panel, and the rest of the app runs.
-    assert.deepEqual(await page.evaluate(async () => (await window.wangcai.plugins()).map(({ id, error }) => [id, Boolean(error)])), [['good', false], ['terminal-agent', false]]);
+    assert.deepEqual(await page.evaluate(async () => (await window.wangcai.call('plugins')).map(({ id, error }) => [id, Boolean(error)])), [['good', false], ['terminal-agent', false]]);
     assert.equal(await page.locator('.plugin-error').count(), 0);
   } finally {
     await desktop?.close();

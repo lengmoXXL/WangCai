@@ -1,24 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { bridge, type PluginBridge } from '../../core/shared';
+import { link } from '../../core/shared';
 
-const api: PluginBridge = {
-  publish: (event, data) => ipcRenderer.invoke(bridge.publish, event, data),
-  subscribe: (event, callback) => {
+// What the window Core draws is given: one method asked for by name, and one channel for the topics it publishes.
+// Which methods exist is Core's business — this side only forwards.
+contextBridge.exposeInMainWorld('wangcai', {
+  call: (method: string, ...args: unknown[]) => ipcRenderer.invoke(link.invoke, method, ...args),
+  subscribe: (event: string, callback: (data: unknown) => void) => {
     const listener = (_: unknown, name: string, data: unknown) => { if (name === event) void Promise.resolve().then(() => callback(data)).catch(console.error); };
-    ipcRenderer.on(bridge.channel, listener);
-    return () => { ipcRenderer.removeListener(bridge.channel, listener); };
+    ipcRenderer.on(link.channel, listener);
+    return () => { ipcRenderer.removeListener(link.channel, listener); };
   },
-  plugins: () => ipcRenderer.invoke(bridge.plugins),
-  config: () => ipcRenderer.invoke(bridge.config),
-  fullscreen: () => ipcRenderer.invoke(bridge.fullscreen),
-  request: (id, method, params) => ipcRenderer.invoke(bridge.request, id, method, params),
-  install: (ids) => ipcRenderer.invoke(bridge.install, ids),
-  installs: () => ipcRenderer.invoke(bridge.installs),
-  coreUpdate: () => ipcRenderer.invoke(bridge.coreUpdate),
-  loadTabs: () => ipcRenderer.invoke(bridge.loadTabs),
-  saveTabs: (tabs) => ipcRenderer.invoke(bridge.saveTabs, tabs),
-  loadGroups: () => ipcRenderer.invoke(bridge.loadGroups),
-  saveGroups: (groups) => ipcRenderer.invoke(bridge.saveGroups, groups),
-  open: (url) => ipcRenderer.invoke(bridge.open, url),
-};
-contextBridge.exposeInMainWorld('wangcai', api);
+});
