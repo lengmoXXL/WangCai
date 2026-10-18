@@ -3,40 +3,20 @@ const assert = require('node:assert/strict');
 const { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { buildSync } = require('esbuild');
-const { Module } = require('node:module');
-const { launchApp, mockWorkspace, testEnv, waitForShell, writeInit } = require('./init.cjs');
+const { coreModule, launchApp, mockWorkspace, testEnv, waitForShell, writeInit } = require('./init.cjs');
 
-const resources = new Module('resources');
-resources._compile(buildSync({ entryPoints: ['desktop/main/resources.ts'], bundle: true, platform: 'node', packages: 'external', write: false }).outputFiles[0].text, 'resources.cjs');
-const { syncSources } = resources.exports;
+const { syncSources } = coreModule('core/main/resources.ts');
 
-/** config.ts fixes its home when it loads, so a reader for a temporary home is compiled after that home is set. */
-function configModule(home) {
-  const previous = { HOME: process.env.HOME, WANGCAI_HOME: process.env.WANGCAI_HOME };
-  process.env.HOME = home;
-  // A development run names a home of its own, which the reader prefers; these tests want the temporary one.
-  process.env.WANGCAI_HOME = '';
-  const compiled = new Module('config');
-  compiled._compile(buildSync({ entryPoints: ['desktop/main/config.ts'], bundle: true, platform: 'node', packages: 'external', write: false }).outputFiles[0].text, 'config.cjs');
-  return {
-    module: compiled.exports,
-    restore: () => {
-      if (previous.HOME === undefined) delete process.env.HOME; else process.env.HOME = previous.HOME;
-      if (previous.WANGCAI_HOME === undefined) delete process.env.WANGCAI_HOME; else process.env.WANGCAI_HOME = previous.WANGCAI_HOME;
-    },
-  };
-}
+/** Where a run under this home keeps its files: the shell decides these, and Core is told them. */
+const paths = (home) => ({ config: join(home, '.config/wangcai'), storage: join(home, '.local/share/wangcai'), resources: join(home, 'resources'), node: 'node' });
+
+/** One reader of init.ts, for the home this test made. */
+const configModule = (home) => coreModule('core/main/config.ts', paths(home));
 
 async function readConfig(home, source) {
-  const { module: config, restore } = configModule(home);
-  try {
-    mkdirSync(join(home, '.config/wangcai'), { recursive: true });
-    writeFileSync(join(home, '.config/wangcai/init.ts'), source);
-    return await config.loadConfig();
-  } finally {
-    restore();
-  }
+  mkdirSync(join(home, '.config/wangcai'), { recursive: true });
+  writeFileSync(join(home, '.config/wangcai/init.ts'), source);
+  return await configModule(home).loadConfig();
 }
 
 test('an entry that names no source is read from the official repository of its id', async () => {
@@ -52,40 +32,39 @@ test('an entry that names no source is read from the official repository of its 
 
 test('the trees an agent reads are copied into the data directory, and only a new version replaces them', () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-sources-'));
-  const { module: config, restore } = configModule(home);
+  const storage = paths(home).storage;
+  const sources = join(storage, 'src');
   try {
-    syncSources(process.cwd(), config.storageDirectory, '1.0.0');
-    const manual = join(config.sourcesDirectory, 'docs/plugins.md');
-    // One probe per kind the list holds: a page an agent reads, the app's own source, and an image such a
-    // page links to.
+    syncSources(process.cwd(), storage, '1.0.0');
+    const manual = join(sources, 'docs/plugins.md');
+    // One probe per kind the list holds: a page an agent reads, the shell's source, the kernel's source, and
+    // an image such a page links to.
     assert.equal(existsSync(manual), true);
-    assert.equal(existsSync(join(config.sourcesDirectory, 'desktop/main/config.ts')), true);
-    assert.equal(existsSync(join(config.sourcesDirectory, 'desktop/build/icon.png')), true);
+    assert.equal(existsSync(join(sources, 'desktop/main/index.ts')), true);
+    assert.equal(existsSync(join(sources, 'core/main/config.ts')), true);
+    assert.equal(existsSync(join(sources, 'desktop/build/icon.png')), true);
     // The same version does not recopy, so an edit to the copy stands.
     writeFileSync(manual, 'edited\n');
-    syncSources(process.cwd(), config.storageDirectory, '1.0.0');
+    syncSources(process.cwd(), storage, '1.0.0');
     assert.equal(readFileSync(manual, 'utf8'), 'edited\n');
     // A version that changes replaces it: what the copy holds is the app's file, not the user's.
-    syncSources(process.cwd(), config.storageDirectory, '1.0.1');
+    syncSources(process.cwd(), storage, '1.0.1');
     assert.notEqual(readFileSync(manual, 'utf8'), 'edited\n');
   } finally {
-    restore();
     rmSync(home, { recursive: true, force: true });
   }
 });
 
 test('a fresh init.ts points at a document the app copies', async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-guide-'));
-  const { module: config, restore } = configModule(home);
   try {
-    await config.loadConfig();
+    await configModule(home).loadConfig();
     const init = readFileSync(join(home, '.config/wangcai/init.ts'), 'utf8');
     const named = init.match(/完整说明：(\S+)/)[1];
     assert.equal(named, join(home, '.local/share/wangcai/src/README.md'));
-    syncSources(process.cwd(), config.storageDirectory, '1.0.0');
+    syncSources(process.cwd(), paths(home).storage, '1.0.0');
     assert.equal(existsSync(named), true);
   } finally {
-    restore();
     rmSync(home, { recursive: true, force: true });
   }
 });

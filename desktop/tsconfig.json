@@ -13,8 +13,6 @@
   },
   "include": [
     "main/**/*.ts",
-    "ui/**/*.ts",
-    "shared.ts",
     "electron.vite.config.ts"
   ]
 }

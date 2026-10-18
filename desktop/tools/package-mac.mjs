@@ -15,6 +15,7 @@ const desktop = fileURLToPath(new URL('..', import.meta.url));
 const run = (command, args, cwd) => execFileSync(command, args, { cwd, stdio: 'inherit' });
 
 run('npm', ['run', 'build:sdk'], root);
+run('npm', ['run', 'build:core'], root);
 run('npm', ['run', 'typecheck:app'], root);
 run('cargo', ['build', '--release', '--target', target, '--manifest-path', 'wangcaicli/Cargo.toml'], root);
 // electron-builder takes the agent from one path, whichever architecture it was built for.

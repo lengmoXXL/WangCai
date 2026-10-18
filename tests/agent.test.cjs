@@ -4,22 +4,12 @@ const { createHash } = require('node:crypto');
 const { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { buildSync } = require('esbuild');
-const { Module } = require('node:module');
+const { coreModule } = require('./init.cjs');
 
-// The installer downloads through electron's net.fetch and asks the SDK how a machine is addressed; the
-// bundle is compiled against those packages and these stand in for them, so a test steers the download.
-const { agentCommand } = require('@lengmoxxl/sdk');
+// The installer asks the SDK how a machine is addressed, and downloads whatever the caller hands it: the
+// test steers the download by passing its own.
 let download = async () => new Response('', { status: 404, statusText: 'Not Found' });
-const stubs = { electron: { net: { fetch: (url, init) => download(url, init) } }, '@lengmoxxl/sdk': { agentCommand } };
-const installer = new Module('agent-installer');
-const load = Module._load;
-Module._load = function (request, ...rest) {
-  return stubs[request] ?? load.call(this, request, ...rest);
-};
-installer._compile(buildSync({ entryPoints: ['desktop/main/agent.ts'], bundle: true, platform: 'node', packages: 'external', write: false }).outputFiles[0].text, 'agent-installer.cjs');
-Module._load = load;
-const { agentInstaller } = installer.exports;
+const { agentInstaller } = coreModule('core/main/agent.ts');
 // The agent the app ships: the installer reads its version and installs that release.
 const shipped = '#!/bin/sh\n[ "$1" = --version ] && echo "wangcai 0.1.0"\n';
 // The release publishes each asset with its digest beside it; the stub serves both from the same body.
@@ -45,7 +35,7 @@ async function machine(platform, assets = {}, network = {}) {
     if (!name) return new Response('', { status: 404, statusText: 'Not Found' });
     return new Response(sum ? digest(assets[name]) : assets[name], { status: 200 });
   };
-  const install = agentInstaller(resources, network);
+  const install = agentInstaller(resources, network, (url, init) => download(url, init));
   return {
     requests,
     home,

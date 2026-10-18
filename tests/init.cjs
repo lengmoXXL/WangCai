@@ -2,6 +2,28 @@ const { mkdirSync, mkdtempSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { _electron: electron } = require('playwright');
+const { buildSync } = require('esbuild');
+const { Module } = require('node:module');
+
+const root = join(__dirname, '..');
+
+/**
+ * One module of Core, compiled and loaded the way the shell loads a whole Core: the paths of the run are set
+ * before it starts. Core never imports electron, so a test only has to say where the run keeps its files.
+ */
+exports.coreModule = (entry, paths = {}) => {
+  const filename = join(root, entry);
+  const contents = [
+    `import { paths } from ${JSON.stringify(join(root, 'core/main/paths.ts'))};`,
+    `Object.assign(paths, ${JSON.stringify(paths)});`,
+    `export * from ${JSON.stringify(filename)};`,
+  ].join('\n');
+  // Dependencies are bundled, the way Core's own build bundles them, so the module stands on its own.
+  const compiled = new Module(filename);
+  const text = buildSync({ stdin: { contents, resolveDir: root, loader: 'ts' }, bundle: true, platform: 'node', target: 'node22', external: ['bufferutil', 'utf-8-validate'], write: false }).outputFiles[0].text;
+  compiled._compile(text, `${filename}.cjs`);
+  return compiled.exports;
+};
 
 exports.testEnv = (home) => {
   const env = { ...process.env, HOME: home, WANGCAI_HOME: '', SHELL: '/bin/bash', ELECTRON_RENDERER_URL: '' };

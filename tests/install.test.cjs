@@ -4,14 +4,10 @@ const { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 const { createServer } = require('node:net');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { buildSync } = require('esbuild');
-const { Module } = require('node:module');
-const { launchApp, mockWorkspace, testEnv, writeInit } = require('./init.cjs');
+const { coreModule, launchApp, mockWorkspace, testEnv, writeInit } = require('./init.cjs');
 const { makePluginRepo } = require('./plugin-repo.cjs');
 
-const compiled = new Module('install');
-compiled._compile(buildSync({ entryPoints: ['desktop/main/install.ts'], bundle: true, platform: 'node', packages: 'external', write: false }).outputFiles[0].text, 'install.cjs');
-const { mirroredUrl } = compiled.exports;
+const { mirroredUrl } = coreModule('core/main/install.ts');
 
 test('a GitHub URL goes out through the prefix init.ts names, and other URLs are used as they are', () => {
   const repository = 'https://github.com/lengmoXXL/WangCai-git';

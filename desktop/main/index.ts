@@ -1,32 +1,37 @@
-import { app, BrowserWindow, ipcMain, Menu, net, protocol, session, shell } from 'electron';
-import { join, resolve, relative, isAbsolute, sep } from 'node:path';
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, session, shell } from 'electron';
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { agentInstaller } from './agent';
-import { pluginManager } from './manager';
-import { groupsPath, homeOverride, loadConfig, storageDirectory, tabsPath, userDataDirectory, windowStatePath } from './config';
-import { syncSources } from './resources';
-import type { TabRecord } from '@lengmoxxl/sdk/channel';
-import { previewMessage, previewScheme, previewUrl, uiFont, type WorkspaceGroup } from '../shared';
+import { bridge, coreId, coreScheme, coreStatusTopic, pluginPageTopic, pluginScheme, previewScheme, type InstallStage } from '../../core/shared';
+import type { Network } from '../../core/main/config';
+import type { Core, CoreHost } from '../../core/main/host';
+import { coreDirectory, loadCore, rebuildCore } from './core';
 
+// The app is a shell: it draws the window, carries Core, and is the only thing that can replace it. What the
+// window is made of, what a plugin is and where a workspace comes from all live in the Core it loads.
 app.setName('旺财');
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'wangcai-plugin', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
+  // The page the window draws comes out of one of these; Core answers for the other two.
+  { scheme: coreScheme, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
+  { scheme: pluginScheme, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
   { scheme: previewScheme, privileges: { standard: true, secure: true } },
 ]);
-// A previewed page is made of inline scripts and remote assets, which the renderer's CSP forbids; serving it
-// from its own scheme gives it a policy of its own, and the sandboxed frame keeps the page off the app.
-const PREVIEW_CSP = "default-src 'none'; script-src 'unsafe-inline' http: https:; style-src 'unsafe-inline' http: https: data:; img-src http: https: data: blob:; font-src http: https: data:; connect-src http: https: data:; media-src http: https: data: blob:; frame-src http: https: data: blob:; base-uri 'none'";
-// Writing the page into this document, rather than setting innerHTML, is what runs its scripts. The base font
-// keeps an unstyled page readable next to the editor that the same file shows in source form; document.open()
-// discards the document, so the style goes in afterwards and sits first, where the page's own rules override it.
-const previewDocument = () => `<!doctype html><meta charset="utf-8"><script>parent.postMessage('${previewMessage}', '*'); addEventListener('message', (event) => { document.open(); document.write(event.data); document.close(); const base = document.createElement('style'); base.textContent = ${JSON.stringify(`html { font-family: ${uiFont}; font-size: 13px; line-height: 1.6; }`)}; document.head.prepend(base); });</script>`;
 let window: BrowserWindow | undefined;
-// A plugin event can outlive the window that would show it.
+// A Core event can outlive the window that would show it.
 const send = (channel: string, ...args: unknown[]) => { if (window && !window.isDestroyed()) window.webContents.send(channel, ...args); };
 
-// Electron keeps the instance lock in its user data, which an installed app is holding, so a
-// development run takes its own.
+// Where this run keeps the files it writes. A development run can be pointed somewhere else, so it cannot
+// change the files an installed app is using.
+const homeOverride = process.env.WANGCAI_HOME || undefined;
+const home = homeOverride ?? homedir();
+const configDirectory = join(home, '.config/wangcai');
+const storageDirectory = join(home, '.local/share/wangcai');
+const userDataDirectory = join(home, 'electron');
+const windowStatePath = join(storageDirectory, 'window-state.json');
+
+// Electron keeps the instance lock in its user data, which an installed app is holding, so a development run
+// takes its own.
 if (homeOverride) app.setPath('userData', userDataDirectory);
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
@@ -38,84 +43,78 @@ else {
     const unfocused = process.argv.includes('--unfocused');
     // An unfocused window belongs to an app that never comes to the front, so it holds no dock icon either.
     if (unfocused) app.dock?.hide();
-    const { profile, plugins: specs, network } = await loadConfig();
-    // A request the app makes of its own goes through the default session, so the proxy init.ts names is set
-    // before anything is fetched. Chromium has no remote-DNS scheme: its socks5 already resolves out there.
-    if (network.proxy) await session.defaultSession.setProxy({ proxyRules: network.proxy.replace(/^socks5h:\/\//, 'socks5://') });
-    // The window opens before the plugins do: a plugin may have to be cloned and built first, and the
-    // manager page reports each stage while it happens.
-    mkdirSync(storageDirectory, { recursive: true });
-    syncSources(app.isPackaged ? join(process.resourcesPath, 'src') : join(app.getAppPath(), '..'), storageDirectory, app.getVersion());
     const node = app.isPackaged ? join(process.resourcesPath, 'node/bin/node') : join(app.getAppPath(), 'node/bin/node');
     const resourcesDirectory = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug');
-    const manager = pluginManager({
-      resourcesDirectory,
-      agent: agentInstaller(resourcesDirectory, network),
-      profile, network, specs, node,
-      broadcast: (event, data) => send('wangcai:channel', event, data),
-    });
-    // Serves a loaded plugin's files to the renderer; the directories exist once loading is done.
-    protocol.handle('wangcai-plugin', async (request) => {
-      const url = new URL(request.url);
-      if (url.host !== 'plugins') return new Response('Not found', { status: 404 });
-      const [, id, ...parts] = decodeURIComponent(url.pathname).split('/');
-      const directory = (await manager.loaded()).directories.get(id);
-      if (!directory) return new Response('Not found', { status: 404 });
-      const path = resolve(directory, parts.join('/'));
-      const local = relative(directory, path);
-      if (!local || local === '..' || local.startsWith(`..${sep}`) || isAbsolute(local)) return new Response('Not found', { status: 404 });
-      const response = await net.fetch(pathToFileURL(path).toString());
-      const headers = new Headers(response.headers);
-      headers.set('Access-Control-Allow-Origin', '*');
-      // A plugin's files are read from disk, so nothing about them is worth keeping: a plugin that was
-      // built again under the same URL is what the next load has to see.
-      headers.set('Cache-Control', 'no-store');
-      return new Response(response.body, { status: response.status, headers });
-    });
-    protocol.handle(previewScheme, (request) => request.url === previewUrl
-      ? new Response(previewDocument(), { headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': PREVIEW_CSP } })
-      : new Response('Not found', { status: 404 }));
-    ipcMain.handle('wangcai:publish', async (_, event: string, data: unknown) => (await manager.loaded()).publish(event, data));
-    ipcMain.handle('wangcai:plugins', async () => (await manager.loaded()).plugins);
-    ipcMain.handle('wangcai:request', async (_, id: string, method: string, params: unknown) => (await manager.loaded()).request(id, method, params));
-    ipcMain.handle('wangcai:config', () => profile);
-    ipcMain.handle('wangcai:installs', () => manager.statuses);
-    ipcMain.handle('wangcai:fullscreen', () => window?.isFullScreen() ?? false);
-    // What the page's update and retry entries ask for.
-    ipcMain.handle('wangcai:install', async (_, ids: string[]) => {
-      if (await manager.update(ids)) window?.webContents.reload();
-    });
-    // A list the app keeps in a file of its own: read back as it was written, and replaced in one step.
-    const readList = <T>(path: string) => existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) as T[] : [];
-    const writeList = <T>(path: string, list: T[]) => {
-      writeFileSync(`${path}.tmp`, JSON.stringify(list, null, 2));
-      renameSync(`${path}.tmp`, path);
+    // Rebuilding Core is the shell's own business: a Core that will not load is exactly when it is needed, so
+    // nothing about it runs through Core. The run after this one is what reads the result.
+    let rebuilding = false;
+    const rebuild = async (network: Network) => {
+      if (rebuilding) return;
+      rebuilding = true;
+      const report = (stage: InstallStage, message?: string) => send(bridge.channel, coreStatusTopic, { id: coreId, stage, message });
+      send(bridge.channel, pluginPageTopic);
+      try {
+        const changed = await rebuildCore({ storage: storageDirectory, node, network, report });
+        report('ready', changed ? '已重建，正在重启' : '已是最新');
+        if (changed) { app.relaunch(); app.quit(); }
+      } catch (error) {
+        report('failed', error instanceof Error ? error.message : String(error));
+      } finally {
+        rebuilding = false;
+      }
     };
-    ipcMain.handle('wangcai:tabs', () => readList<TabRecord>(tabsPath));
-    ipcMain.handle('wangcai:save-tabs', (_: unknown, tabs: TabRecord[]) => writeList(tabsPath, tabs));
-    ipcMain.handle('wangcai:groups', () => readList<WorkspaceGroup>(groupsPath));
-    ipcMain.handle('wangcai:save-groups', (_: unknown, groups: WorkspaceGroup[]) => writeList(groupsPath, groups));
-    // A plugin hands the app a link, not a program.
-    ipcMain.handle('wangcai:open', (_: unknown, url: unknown) => {
-      const address = new URL(String(url));
-      if (address.protocol !== 'http:' && address.protocol !== 'https:') throw new Error(`Only http and https links open in a browser: ${url}`);
-      return shell.openExternal(address.toString());
+    const directory = coreDirectory({ packaged: app.isPackaged, storage: storageDirectory, app: app.getAppPath() });
+    const core = await loadCore(directory).catch(async (error: Error) => {
+      // The window is Core's to draw, so a Core that will not load is answered by the app itself: there is no
+      // menu yet, and rebuilding it is the way back.
+      const { response } = await dialog.showMessageBox({ type: 'error', message: 'Core 加载失败', detail: error.message, buttons: ['重建 Core', '退出'], defaultId: 0, cancelId: 1 });
+      if (response === 0) await rebuild({});
+      app.quit();
+      return undefined;
     });
-    Menu.setApplicationMenu(Menu.buildFromTemplate([
-      { label: '旺财', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'quit' }] },
-      { label: '视图', submenu: [{ label: '插件', click: () => send('wangcai:channel', 'plugin-page') }] },
-    ]));
+    if (!core) return;
+    // Everything Electron owns is lent to Core here: it asks for the window, the session and the system, and
+    // answers for the protocols and channels the window calls.
+    const host: CoreHost = {
+      paths: { config: configDirectory, storage: storageDirectory, resources: resourcesDirectory, node },
+      version: app.getVersion(),
+      sources: app.isPackaged ? join(process.resourcesPath, 'src') : join(app.getAppPath(), '..'),
+      protocol: { handle: (scheme, handler) => protocol.handle(scheme, handler) },
+      ipc: { handle: (channel, handler) => ipcMain.handle(channel, (_event, ...args) => handler(...args)) },
+      fetch: (url, options) => net.fetch(url, options),
+      send: (topic, data) => send(bridge.channel, topic, data),
+      setProxy: (rules) => session.defaultSession.setProxy({ proxyRules: rules }).then(() => undefined),
+      openExternal: async (url) => {
+        // A plugin hands the app a link, not a program.
+        const address = new URL(String(url));
+        if (address.protocol !== 'http:' && address.protocol !== 'https:') throw new Error(`Only http and https links open in a browser: ${url}`);
+        await shell.openExternal(address.toString());
+      },
+      reload: () => window?.webContents.reload(),
+      fullscreen: () => window?.isFullScreen() ?? false,
+    };
+    const running: Core = await core.activate(host);
+    // The page the window draws is Core's own bundle, which only this run's directory holds: what a rebuilt
+    // Core wrote is what the next start serves.
+    const ui = join(directory, 'ui');
+    protocol.handle(coreScheme, async (request) => {
+      const url = new URL(request.url);
+      const path = resolve(ui, decodeURIComponent(url.pathname).replace(/^\/+/, '') || 'index.html');
+      const local = relative(ui, path);
+      if (!local || local.startsWith(`..${sep}`) || isAbsolute(local)) return new Response('Not found', { status: 404 });
+      return net.fetch(pathToFileURL(path).toString());
+    });
     const { maximized, ...bounds } = existsSync(windowStatePath) ? JSON.parse(readFileSync(windowStatePath, 'utf8')) : { width: 1180, height: 780 };
     const win = new BrowserWindow({
       ...bounds, minWidth: 740, minHeight: 460,
-      backgroundColor: profile.theme.background, title: '旺财', titleBarStyle: 'hiddenInset',
+      backgroundColor: running.background, title: '旺财', titleBarStyle: 'hiddenInset',
       show: !unfocused, focusable: !unfocused,
       webPreferences: { preload: join(__dirname, '../preload/preload.js') },
     });
     window = win;
     if (unfocused) win.showInactive();
-    win.on('enter-full-screen', () => send('wangcai:channel', 'fullscreen', true));
-    win.on('leave-full-screen', () => send('wangcai:channel', 'fullscreen', false));
+    win.on('enter-full-screen', () => send(bridge.channel, 'fullscreen', true));
+    win.on('leave-full-screen', () => send(bridge.channel, 'fullscreen', false));
     if (maximized) win.maximize();
     win.on('close', () => {
       writeFileSync(`${windowStatePath}.tmp`, JSON.stringify({ ...win.getNormalBounds(), maximized: win.isMaximized() }));
@@ -137,15 +136,21 @@ else {
     });
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', (event) => event.preventDefault());
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+      { label: '旺财', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'quit' }] },
+      { label: '视图', submenu: [
+        { label: '插件', click: () => send(bridge.channel, pluginPageTopic) },
+        { label: '重建 Core', click: () => void rebuild(running.network) },
+      ] },
+    ]));
     let cleaned = false;
     let cleanup: Promise<void> | undefined;
     app.on('before-quit', (event) => {
       if (cleaned) return;
       event.preventDefault();
-      cleanup ??= manager.loaded().then((plugins) => plugins.dispose(), () => undefined).finally(() => { cleaned = true; app.quit(); });
+      cleanup ??= running.dispose().then(() => undefined, () => undefined).finally(() => { cleaned = true; app.quit(); });
     });
-    if (process.env.ELECTRON_RENDERER_URL) await win.loadURL(process.env.ELECTRON_RENDERER_URL);
-    else await win.loadFile(join(__dirname, '../ui/index.html'));
+    await win.loadURL(`${coreScheme}://core/index.html`);
   }).catch((error) => { console.error(error); app.quit(); });
   app.on('window-all-closed', () => app.quit());
 }

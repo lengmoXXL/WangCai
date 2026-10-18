@@ -14,8 +14,7 @@
     "artifactName": "wangcai-${version}-${arch}.${ext}",
     "files": [
       "dist/main/**/*",
-      "dist/preload/**/*",
-      "dist/ui/**/*"
+      "dist/preload/**/*"
     ],
     "extraResources": [
       {
@@ -43,16 +42,24 @@
         "to": "src/README.md"
       },
       {
+        "from": "../core/dist",
+        "to": "core"
+      },
+      {
+        "from": "../core/main",
+        "to": "src/core/main"
+      },
+      {
+        "from": "../core/ui",
+        "to": "src/core/ui"
+      },
+      {
+        "from": "../core/shared.ts",
+        "to": "src/core/shared.ts"
+      },
+      {
         "from": "main",
         "to": "src/desktop/main"
-      },
-      {
-        "from": "ui",
-        "to": "src/desktop/ui"
-      },
-      {
-        "from": "shared.ts",
-        "to": "src/desktop/shared.ts"
       },
       {
         "from": "build/icon.png",

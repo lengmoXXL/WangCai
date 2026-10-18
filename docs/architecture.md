@@ -6,13 +6,25 @@
 代码里的 terminal node / Node 指 Rust 后台进程，不是 Node.js；agent 指 App 装到远端的那份
 `wangcai`，不是编码 agent。
 
+## 壳与 Core
+
+App（本仓库）只是壳：起窗口、装 preload 桥、打包，以及加载和重建业务内核。业务内核在
+[WangCai-Core](https://github.com/lengmoXXL/WangCai-Core)，作为 submodule 钉在本仓库的 `core/`：
+配置（init.ts）、插件管理、机器连接、工作区与插件页面都是它。凡是 Electron 独有的能力——窗口、协议、
+IPC、session、系统——壳都通过 `CoreHost` 借给 Core。
+
+发布时壳把 Core 构建好的 `dist/` 放进 `Resources/core`；运行时也可以从菜单「重建 Core」拉取 Core
+仓库，用 App 自带的 Node 重新构建到数据目录，重启后生效：换业务逻辑不需要发布 App。
+
 ## 进程与通信全景
 
 ```text
 App 所在机器
-  Electron Renderer（窗口、工作区、插件 ui.js）
+  壳 Electron Main（窗口、preload 桥、打包、Core 加载与重建）
+        | CoreHost：协议、IPC、session、系统
+  Core Main（配置、插件 main.cjs、连接池、agent 安装）
         | preload + Electron IPC：请求、结果与事件
-  Electron Main（配置、插件 main.cjs、连接池、agent 安装）
+  Core Renderer（窗口内容、工作区、插件 ui.js）
         | SDK
         +-- 本机 WebSocket ------> 本机 Rust 后台进程（PTY / 文件 / 子进程）
         +-- 本地转发端口 -- SSH --> 远端 Rust 后台进程（PTY / 文件 / 子进程）

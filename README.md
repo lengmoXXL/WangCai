@@ -5,6 +5,10 @@
 旺财是一个面向本地与 SSH 远程机器的 macOS 桌面终端工作台：工作区、持久终端和文件视图
 在同一个窗口里，窗口提供布局与插件管理，具体功能由插件实现。
 
+App 只是壳：窗口、preload 桥与打包。业务逻辑在
+[WangCai-Core](https://github.com/lengmoXXL/WangCai-Core)（本仓库的 `core/` submodule）里，
+因此业务逻辑可以原地重建，不必重新发布 App。
+
 <p align="center"><img src="docs/assets/screenshot.png" width="880" alt="旺财窗口：左侧是工作区与终端，右侧是文件视图"></p>
 
 ## 为什么写旺财

@@ -392,7 +392,7 @@ test('a workspace dropped on a line between two groups keeps that place, and one
   }
 });
 
-test('the menu bar holds one view menu with the plugin item', { timeout: 180000 }, async () => {
+test('the menu bar holds one view menu with the plugin page and the Core rebuild', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-menu-'));
   const env = testEnv(home);
   let desktop;
@@ -405,7 +405,8 @@ test('the menu bar holds one view menu with the plugin item', { timeout: 180000 
       return [items.map((item) => item.label), items[1].submenu.items.map((item) => item.label)];
     });
     assert.deepEqual(labels, ['旺财', '视图']);
-    assert.deepEqual(viewItems, ['插件']);
+    // The page the plugins report to, and the entry that replaces Core itself.
+    assert.deepEqual(viewItems, ['插件', '重建 Core']);
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });
