@@ -179,6 +179,24 @@ test('persistent terminal node lifecycle', { timeout: 150000 }, async (t) => {
       await until(() => { try { process.kill(pid, 0); return false; } catch { return true; } }, 'background cleanup');
       await until(() => { try { process.kill(session.pid, 0); return false; } catch { return true; } }, 'shell cleanup');
     });
+    await t.test('a terminal that stops reading its input holds up nothing else', async () => {
+      const driver = await new Client(info.port).connect(); clients.push(driver);
+      const observer = await new Client(info.port).connect(); clients.push(observer);
+      const session = await driver.rpc('create');
+      await driver.rpc('attach', { session_id: session.id });
+      // Raw mode with no echo is a pty whose input buffer fills and stays full: the shell prints without ever
+      // reading what was typed at it.
+      await driver.rpc('input', { session_id: session.id, data: "stty -echo raw; printf 'RAWREADY\\r\\n'; while :; do printf 'TICK\\r\\n'; sleep 0.2; done\r" });
+      await until(async () => (await driver.text(session.id)).includes('RAWREADY'), 'the shell to stop reading its input');
+      const paste = Promise.all(Array.from({ length: 8 }, () => driver.rpc('input', { session_id: session.id, data: 'x'.repeat(8000) }))).catch(() => {});
+      await delay(500);
+      // Nothing here waits for the paste: what it waits for is the pty alone.
+      assert.equal((await observer.rpc('list')).some((entry) => entry.id === session.id), true);
+      const seen = driver.raw(session.id).length;
+      await until(() => driver.raw(session.id).length > seen, 'output while the paste waits');
+      await observer.rpc('close', { session_id: session.id });
+      await paste;
+    });
     await t.test('instance identity, stop and restart', async () => {
       await assert.rejects(clients.at(-1).rpc('stop', { instance_id: 'wrong' }), /instance/);
       cli('stop');

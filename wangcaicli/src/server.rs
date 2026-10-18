@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use std::{
     collections::HashMap,
     io::{Read, Write},
-    sync::{Arc, Mutex, atomic::{AtomicU64, Ordering}},
+    sync::{Arc, Mutex, MutexGuard, PoisonError, atomic::{AtomicU64, Ordering}},
     time::Duration,
 };
 use tokio::{
@@ -22,22 +22,52 @@ use tokio_tungstenite::{accept_async, tungstenite::Message};
 // has come back for it: a window that reconnects attaches its processes again and keeps them running.
 const REAP: Duration = Duration::from_secs(60);
 
+// Writes waiting for the pty to take them. A terminal that stops reading its input fills this queue, and the
+// next write waits for room in it, which is backpressure rather than a stalled node.
+const WRITE_QUEUE: usize = 32;
+
+/// A lock whose holder panicked is not a reason to end the node: the terminals the panic did not touch are
+/// still the ones a window expects to find, and only the request that panicked is gone.
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 struct Terminal {
     id: String,
     title: String,
     pid: u32,
     master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
+    // The terminal's input belongs to its writer thread rather than to this struct.
+    input: mpsc::Sender<Vec<u8>>,
     parser: vt100::Parser,
     seq: u64,
     exit_code: Option<u32>,
     output: broadcast::Sender<Message>,
 }
 
+struct Input(mpsc::Sender<Vec<u8>>);
+
+impl Input {
+    async fn write(&self, data: &str) -> Result<()> {
+        if data.len() > 65_536 {
+            bail!("Input chunk is too large");
+        }
+        // A queue whose receiver is gone belongs to a terminal that has ended, which its exit event tells.
+        self.0.send(data.as_bytes().to_vec()).await.context("Shell has exited")
+    }
+}
+
 impl Terminal {
     fn summary(&self) -> Value {
         let (rows, cols) = self.parser.screen().size();
         json!({"id":self.id,"title":self.title,"pid":self.pid,"rows":rows,"cols":cols,"exit_code":self.exit_code})
+    }
+
+    fn input(&self) -> Result<Input> {
+        if self.exit_code.is_some() {
+            bail!("Shell has exited");
+        }
+        Ok(Input(self.input.clone()))
     }
 
     fn cwd(&self) -> Result<std::path::PathBuf> {
@@ -187,18 +217,14 @@ struct Node {
 
 impl Node {
     fn session(&self, id: &str) -> Result<Arc<Mutex<Terminal>>> {
-        self.sessions
-            .lock()
-            .unwrap()
+        lock(&self.sessions)
             .get(id)
             .cloned()
             .context("Terminal no longer exists")
     }
 
     fn process(&self, id: &str) -> Result<Arc<AsyncMutex<Process>>> {
-        self.processes
-            .lock()
-            .unwrap()
+        lock(&self.processes)
             .get(id)
             .map(|held| held.process.clone())
             .context("Process no longer exists")
@@ -207,7 +233,7 @@ impl Node {
     /// The processes one connection's end leaves behind: the ones it started that no later connection
     /// attached again.
     fn abandoned(&self, connection: u64) -> Vec<Arc<AsyncMutex<Process>>> {
-        let mut processes = self.processes.lock().unwrap();
+        let mut processes = lock(&self.processes);
         let ids: Vec<String> = processes
             .iter()
             .filter(|(_, held)| held.connection == connection)
@@ -252,19 +278,21 @@ impl Node {
         let writer = pty.master.take_writer()?;
         let id = uuid::Uuid::new_v4().to_string();
         let (output, _) = broadcast::channel(256);
+        let (input, queue) = mpsc::channel(WRITE_QUEUE);
         let terminal = Arc::new(Mutex::new(Terminal {
             id: id.clone(),
             title: format!("{} · {}", shell.rsplit('/').next().unwrap(), pid),
             pid,
             master: pty.master,
-            writer,
+            input,
             parser: vt100::Parser::new(rows, cols, 10_000),
             seq: 0,
             exit_code: None,
             output,
         }));
-        let summary = terminal.lock().unwrap().summary();
-        self.sessions.lock().unwrap().insert(id, terminal.clone());
+        std::thread::spawn(move || write_input(writer, queue));
+        let summary = lock(&terminal).summary();
+        lock(&self.sessions).insert(id, terminal.clone());
         let read_terminal = terminal.clone();
         let reader_thread = std::thread::spawn(move || {
             let mut bytes = [0; 8192];
@@ -272,7 +300,7 @@ impl Node {
                 match reader.read(&mut bytes) {
                     Ok(0) => break,
                     Ok(n) => {
-                        let mut terminal = read_terminal.lock().unwrap();
+                        let mut terminal = lock(&read_terminal);
                         terminal.parser.process(&bytes[..n]);
                         terminal.seq += 1;
                         let _ = terminal.output.send(packet(
@@ -290,12 +318,21 @@ impl Node {
             let code = child.wait().map(|status| status.exit_code()).unwrap_or(1);
             // Consume trailing output before announcing exit.
             let _ = reader_thread.join();
-            let mut terminal = terminal.lock().unwrap();
+            let mut terminal = lock(&terminal);
             terminal.exit_code = Some(code);
             let _ = changed.send(());
         });
         let _ = self.changed.send(());
         Ok(summary)
+    }
+}
+
+fn write_input(mut writer: Box<dyn Write + Send>, mut queue: mpsc::Receiver<Vec<u8>>) {
+    while let Some(bytes) = queue.blocking_recv() {
+        // A pty that refuses the bytes belongs to a terminal that has ended, which its exit event tells.
+        if writer.write_all(&bytes).is_err() {
+            break;
+        }
     }
 }
 
@@ -399,11 +436,17 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                             Ok(json!({}))
                         }
                         "list" => {
-                            let mut sessions: Vec<_> = node.sessions.lock().unwrap().values().map(|s| s.lock().unwrap().summary()).collect();
+                            // The session map lock goes before any terminal is read, so a terminal that is busy for a moment
+                            // cannot hold up create, close and cwd, which need the map.
+                            let terminals: Vec<_> = lock(&node.sessions).values().cloned().collect();
+                            let mut sessions: Vec<_> = terminals.iter().map(|s| lock(&s).summary()).collect();
                             sessions.sort_by_key(|s| s["pid"].as_u64());
                             Ok(json!(sessions))
                         }
-                        "cwd" => Ok(json!(node.session(id)?.lock().unwrap().cwd()?)),
+                        "cwd" => {
+                            let session = node.session(id)?;
+                            Ok(json!(lock(&session).cwd()?))
+                        }
                         "create" => {
                             let (rows, cols) = dimensions(&request)?;
                             // The caller's variables for this shell, on top of the node's own environment.
@@ -414,7 +457,7 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                         }
                         "attach" => {
                             let session = node.session(id)?;
-                            let terminal = session.lock().unwrap();
+                            let terminal = lock(&session);
                             if let Some(task) = attachments.remove(id) { task.abort(); }
                             // Subscribe under the same lock as the snapshot's sequence boundary.
                             let mut events = terminal.output.subscribe();
@@ -427,7 +470,7 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                                     let message = match events.recv().await {
                                         Ok(message) => message,
                                         Err(broadcast::error::RecvError::Lagged(_)) => {
-                                            let terminal = session.lock().unwrap();
+                                            let terminal = lock(&session);
                                             events = terminal.output.subscribe();
                                             terminal.snapshot()
                                         }
@@ -446,13 +489,14 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                         "input" | "resize" => {
                             let session = node.session(id)?;
                             if !attachments.contains_key(id) { bail!("Attach the terminal before writing or resizing"); }
-                            let mut terminal = session.lock().unwrap();
                             if op == "input" {
-                                if terminal.exit_code.is_some() { bail!("Shell has exited"); }
                                 let data = request["data"].as_str().context("Missing input data")?;
-                                if data.len() > 65_536 { bail!("Input chunk is too large"); }
-                                terminal.writer.write_all(data.as_bytes())?;
+                                // The lock goes before the bytes are queued: a terminal that is slow to read its
+                                // input delays this reply without ever holding up its own output or its close.
+                                let input = lock(&session).input()?;
+                                input.write(data).await?;
                             } else {
+                                let mut terminal = lock(&session);
                                 let (rows, cols) = dimensions(&request)?;
                                 terminal.master.resize(PtySize {rows, cols, pixel_width: 0, pixel_height: 0})?;
                                 terminal.parser.screen_mut().set_size(rows, cols);
@@ -461,8 +505,8 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                         }
                         "close" => {
                             let session = node.session(id)?;
-                            session.lock().unwrap().terminate();
-                            node.sessions.lock().unwrap().remove(id);
+                            lock(&session).terminate();
+                            lock(&node.sessions).remove(id);
                             if let Some(task) = attachments.remove(id) { task.abort(); }
                             let _ = node.changed.send(());
                             Ok(json!({}))
@@ -470,7 +514,7 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                         "spawn" => {
                             let (id, process) = crate::process::spawn(request.clone())?;
                             let summary = process.lock().await.summary();
-                            node.processes.lock().unwrap().insert(id, Held { process, connection });
+                            lock(&node.processes).insert(id, Held { process, connection });
                             Ok(summary)
                         }
                         "process_attach" => {
@@ -502,7 +546,7 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                                 }
                             });
                             attachments.insert(id.into(), task);
-                            if let Some(held) = node.processes.lock().unwrap().get_mut(id) { held.connection = connection; }
+                            if let Some(held) = lock(&node.processes).get_mut(id) { held.connection = connection; }
                             Ok(process.lock().await.summary())
                         }
                         "process_write" => {
@@ -518,7 +562,7 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                         "process_close" => {
                             let process = node.process(id)?;
                             process.lock().await.terminate();
-                            node.processes.lock().unwrap().remove(id);
+                            lock(&node.processes).remove(id);
                             if let Some(task) = attachments.remove(id) { task.abort(); }
                             Ok(json!({}))
                         }
@@ -580,10 +624,10 @@ pub async fn run(listener: TcpListener, info: ServerInfo) -> Result<()> {
             }
         }
     }
-    for session in node.sessions.lock().unwrap().values() {
-        session.lock().unwrap().terminate();
+    for session in lock(&node.sessions).values() {
+        lock(&session).terminate();
     }
-    let processes: Vec<_> = node.processes.lock().unwrap().values().map(|held| held.process.clone()).collect();
+    let processes: Vec<_> = lock(&node.processes).values().map(|held| held.process.clone()).collect();
     for process in processes {
         process.lock().await.terminate();
     }
