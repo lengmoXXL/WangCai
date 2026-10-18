@@ -396,15 +396,19 @@ test('a workspace row shows what its agent is doing, and a click clears a finish
     // The panel draws a report a moment later, on the row that reported it.
     const drawn = (index, want) => page.waitForFunction(([index, want]) => document.querySelectorAll('.workspace .agent-state')[index]?.dataset.state === want, [index, want]);
     const report = (index, status) => rows.nth(index).evaluate((row, status) => window.wangcai.request('terminal-agent', 'agent-state', { id: row.dataset.workspace, status }), status);
+    const shapes = (index) => badge(index).evaluate((element) => [...element.querySelectorAll('.ring, .dot, .check')].filter((shape) => getComputedStyle(shape).display !== 'none').map((shape) => shape.getAttribute('class')));
     assert.deepEqual([await badge(0).getAttribute('data-state'), await badge(1).getAttribute('data-state')], ['idle', 'idle'], 'a workspace whose agent has said nothing is idle');
     assert.equal(await color(0), 'rgb(139, 152, 166)', 'idle is drawn in the muted color');
+    assert.deepEqual(await shapes(0), ['dot'], 'an idle row draws only the dot');
     await report(0, 'working');
     await drawn(0, 'working');
     assert.equal(await color(0), 'rgb(57, 148, 188)', 'work is drawn in the accent');
-    assert.notEqual(await badge(0).locator('svg').evaluate((element) => getComputedStyle(element).animationName), 'none', 'the working mark turns');
+    assert.deepEqual(await shapes(0), ['ring'], 'a working row draws the ring, not the dot');
+    assert.notEqual(await badge(0).evaluate((element) => getComputedStyle(element, '::before').animationName), 'none', 'the working mark turns');
     await report(0, 'finished');
     await drawn(0, 'finished');
     assert.equal(await color(0), 'rgb(155, 199, 188)', 'a finished run is drawn in green');
+    assert.deepEqual(await shapes(0), ['check'], 'a finished row draws only the check');
     assert.equal(await badge(0).getAttribute('aria-label'), '状态：已完成');
     // The click that clears the mark belongs to the mark, not to the row it sits in.
     await rows.nth(1).click();

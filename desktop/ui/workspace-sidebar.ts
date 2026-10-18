@@ -393,8 +393,13 @@ export async function workspaceSidebar(options: {
     element.className = 'agent-state';
     element.dataset.state = drawn;
     element.setAttribute('aria-label', `状态：${agentStateLabels[drawn]}`);
-    const mark = finished ? '<path d="M3.5 8.5l3 3 6-7"/>' : `<circle cx="8" cy="8" r="${drawn === 'working' ? 4 : 2.5}"/>`;
-    element.innerHTML = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">${mark}</svg>`;
+    // Every state carries all three shapes; data-state picks which one the stylesheet draws.
+    element.innerHTML =
+      '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">' +
+      '<circle class="ring" cx="8" cy="8" r="5.5"></circle>' +
+      '<circle class="dot" cx="8" cy="8" r="2.5"></circle>' +
+      '<path class="check" d="M3.5 8.5l3 3 6-7"></path>' +
+      '</svg>';
     if (finished) {
       element.onclick = (event) => {
         event.stopPropagation();

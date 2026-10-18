@@ -26,15 +26,20 @@ body { background: var(--wc-background); color: var(--wc-foreground); font-famil
 .workspace.selected { position: relative; color: var(--wc-foreground); background: var(--wc-background); }
 .workspace.selected::after { content: ''; position: absolute; inset: 0; border: 1px solid var(--wc-border); border-radius: inherit; pointer-events: none; }
 .workspace .name, .workspace-group-bar .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The status mark leads the row, in front of the workspace name. */
-.workspace .agent-state { flex-shrink: 0; display: flex; padding: 0; border: 0; background: none; color: var(--wc-muted); cursor: default; }
+/* The status mark leads the row: a dot at rest, a swept ring while the agent works, a check once it is done. */
+.workspace .agent-state { position: relative; flex-shrink: 0; display: flex; padding: 0; border: 0; background: none; color: var(--wc-muted); cursor: default; }
 .workspace .agent-state svg { fill: currentColor; }
+.workspace .agent-state .ring, .workspace .agent-state .dot, .workspace .agent-state .check { display: none; }
+.workspace .agent-state[data-state=idle] .dot { display: block; }
 .workspace .agent-state[data-state=working] { color: var(--wc-accent); }
-.workspace .agent-state[data-state=working] svg { animation: wc-agent-working 1.2s ease-in-out infinite; }
+.workspace .agent-state[data-state=working] .ring { display: block; fill: none; stroke: currentColor; stroke-width: 1.4; opacity: .18; }
+/* The same conic light spun inside the ring's stroke: the mark stays put while the light travels. */
+.workspace .agent-state[data-state=working]::before { content: ''; position: absolute; inset: 0; background: conic-gradient(transparent 0 150deg, var(--wc-accent) 344deg, transparent 360deg); -webkit-mask: radial-gradient(closest-side, transparent 57%, #000 60%, #000 78%, transparent 81%); animation: wc-agent-sweep 1.7s linear infinite; }
 .workspace .agent-state[data-state=finished] { color: var(--wc-green); cursor: pointer; }
-.workspace .agent-state[data-state=finished] svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.workspace .agent-state[data-state=finished] .check { display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.workspace .agent-state[data-state=finished]::after { content: ''; position: absolute; inset: -2px; background: radial-gradient(circle, color-mix(in srgb, var(--wc-green) 24%, transparent), transparent 70%); pointer-events: none; }
 .workspace .agent-state[data-state=finished]:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 1px; }
-@keyframes wc-agent-working { 50% { transform: scale(.72); opacity: .5; } }
+@keyframes wc-agent-sweep { to { transform: rotate(360deg); } }
 /* A row a group holds steps in one level from the bar, and a line inside a group starts where that row's icon does. */
 .workspace-group-rows { --wc-group-indent: 16px; }
 .workspace-group-rows .workspace { padding-left: var(--wc-group-indent); }
