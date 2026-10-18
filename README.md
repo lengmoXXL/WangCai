@@ -28,12 +28,6 @@
 3. 首次启动会安装官方工作区、文件和终端插件，需要系统 `git` 与网络；
    App 自带构建插件所需的 Node 与 npm。
 
-配置好 [SSH 机器](#连接-ssh-机器) 后，首次连接会按平台安装或更新远端 `~/.local/bin/wangcai`：
-macOS `x86_64 / arm64` 与 Linux `x86_64`。
-
-下载在 App 所在机器完成，远端不需要 Node、npm、curl，也不需要访问 GitHub，
-但要有可用的 SSH 服务和可写的安装目录。
-
 ## 配置
 
 入口是 `~/.config/wangcai/init.ts`，数据目录是 `~/.local/share/wangcai`。
@@ -69,6 +63,8 @@ export default {
 ```
 
 顶层有 `theme`、`network`、`workspaces`、`tabs`；省略 `network` 表示直连，省略后两者表示列表为空，不会补回官方插件。
+
+### 插件配置
 
 工作区条目提供工作区列表与创建菜单，标签页条目提供侧栏视图，两者条目格式相同：
 
@@ -117,19 +113,27 @@ network: {
 [git](https://github.com/lengmoXXL/WangCai-git) 支持 `font.family / size / lineHeight`，
 terminal-agent 还有 `machines` 与 `images.maxCount`；更多选项以各自仓库的 schema 为准。
 
-### 连接 SSH 机器
-
-在 `terminal-agent.config.machines` 里加 `{ name, host, env }`；`host` 交给系统 `ssh`，可以用
-`~/.ssh/config` 别名。`env` 是节点启动时带上的环境，节点的子进程（终端、agent、语言服务）都继承；
+`env` 是节点启动时带上的环境，节点的子进程（终端、agent、语言服务）都继承；
 值里的 `$NAME` 在那台机器上展开，名字只能是 shell 标识符。
 
-本机无需声明，创建菜单里始终有“本机”；要改它的名字或加环境变量，就写 `{ name: '本机', host: 'local', env: { … } }`（`name` 可省）。
+本机无需声明，创建菜单里始终有“本机”；要改它的名字或加环境变量，就写
+`{ name: '本机', host: 'local', env: { … } }`（`name` 可省）。
+
+### 连接 SSH 机器
 
 先确认免交互认证与主机指纹已经配好，App 不弹出 SSH 密码输入框：
 
 ```sh
 ssh -o BatchMode=yes dev-box 'uname -s -m'
 ```
+
+远端需要可用的 SSH 服务和可写的安装目录，支持 macOS `x86_64 / arm64` 与 Linux `x86_64`。
+下载在 App 所在机器完成，远端不需要 Node、npm、curl，也不需要访问 GitHub。
+
+在 `terminal-agent.config.machines` 里加 `{ name, host, env }`；`host` 交给系统 `ssh`，可以用
+`~/.ssh/config` 别名。
+
+首次连接会按平台安装或更新远端 `~/.local/bin/wangcai`。
 
 ## 开发文档
 
