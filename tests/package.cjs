@@ -16,7 +16,7 @@ test('packaged app loads the plugins its config names and carries the node they 
   const bundle = resolve(process.env.WANGCAI_APP_DIR ?? 'desktop/dist/package/mac', '旺财.app/Contents');
   let page;
   const launch = async (environment = env) => {
-    desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/旺财'), args: [`--user-data-dir=${join(home, 'electron')}`], env: environment });
+    desktop = await electron.launch({ executablePath: join(bundle, 'MacOS/旺财'), args: ['--unfocused', `--user-data-dir=${join(home, 'electron')}`], env: environment });
     return desktop.firstWindow();
   };
   const spacing = () => page.locator('[data-plugin=terminal-agent] .probe').evaluate((element) => getComputedStyle(element).letterSpacing);

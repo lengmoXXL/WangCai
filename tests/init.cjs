@@ -11,7 +11,7 @@ exports.testEnv = (home) => {
 
 const pluginDirectory = (home, id) => join(home, '.local/share/wangcai/plugins', id);
 
-exports.launchApp = (home, env) => electron.launch({ args: ['desktop', `--user-data-dir=${join(home, 'electron')}`], env });
+exports.launchApp = (home, env) => electron.launch({ args: ['desktop', '--unfocused', `--user-data-dir=${join(home, 'electron')}`], env });
 
 /**
  * The app loads only what init.ts lists, so a test that wants plugins writes the file first. An entry

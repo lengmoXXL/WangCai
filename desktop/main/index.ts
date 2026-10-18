@@ -32,6 +32,11 @@ else {
   app.on('second-instance', () => { window?.show(); window?.focus(); });
   void app.whenReady().then(async () => {
     if (!app.isPackaged) app.dock?.setIcon(join(app.getAppPath(), 'build/icon.png'));
+    // The tests launch the app with --unfocused, so that driving its window never takes the focus of whoever
+    // works at the machine.
+    const unfocused = process.argv.includes('--unfocused');
+    // An unfocused window belongs to an app that never comes to the front, so it holds no dock icon either.
+    if (unfocused) app.dock?.hide();
     const { profile, plugins: specs, network } = await loadConfig();
     // A request the app makes of its own goes through the default session, so the proxy init.ts names is set
     // before anything is fetched. Chromium has no remote-DNS scheme: its socks5 already resolves out there.
@@ -103,9 +108,11 @@ else {
     const win = new BrowserWindow({
       ...bounds, minWidth: 740, minHeight: 460,
       backgroundColor: profile.theme.background, title: '旺财', titleBarStyle: 'hiddenInset',
+      show: !unfocused, focusable: !unfocused,
       webPreferences: { preload: join(__dirname, '../preload/preload.js') },
     });
     window = win;
+    if (unfocused) win.showInactive();
     win.on('enter-full-screen', () => send('wangcai:channel', 'fullscreen', true));
     win.on('leave-full-screen', () => send('wangcai:channel', 'fullscreen', false));
     if (maximized) win.maximize();
