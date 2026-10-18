@@ -131,6 +131,12 @@ exports.lineAfter = async (page, row) => {
   return lineAt(page, at);
 };
 
+// The line right in front of a row of the list: the place a group dropped above that row would take.
+exports.lineBefore = async (page, row) => {
+  const at = await row.evaluate((element) => [...element.parentElement.children].indexOf(element) - 1);
+  return lineAt(page, at);
+};
+
 // Where a line is dropped on: its own one pixel, a little in from the left edge.
 exports.onLine = { x: 40, y: 0 };
 

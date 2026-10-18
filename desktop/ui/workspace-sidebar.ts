@@ -352,11 +352,12 @@ export async function workspaceSidebar(options: {
     const element = dropLine('workspace-line', accepts, () => {
       if (draggingGroup !== undefined) {
         const group = groupById(takenGroup())!;
-        // A group dropped on a line takes the place in front of the entry the line belongs to; the line in front of
-        // the group itself leaves that order alone.
-        if (below !== undefined && below !== group) {
+        // A group dropped on a line takes the place in front of the entry under it, unless that entry is the group
+        // itself. A line with no entry under it — above a row or closing the list — ends after every group at its
+        // place: the array only orders the groups drawn at one place.
+        if (below !== group) {
           groups.splice(groups.indexOf(group), 1);
-          groups.splice(groups.indexOf(below), 0, group);
+          groups.splice(below === undefined ? groups.length : groups.indexOf(below), 0, group);
         }
         group.after = slot;
         saveGroupsAndDraw();

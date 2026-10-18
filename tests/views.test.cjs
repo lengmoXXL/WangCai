@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { mkdtempSync, readFileSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { drawnOrder, firstInsideLine, launchApp, launchedWithThree, lineAfter, lineBeforeGroup, makeGroup, mockView, mockWorkspace, newWorkspace, onLine, openWorkspaceMenu, rowId, rowIds, testEnv, waitForShell, writeInit } = require('./init.cjs');
+const { drawnOrder, firstInsideLine, launchApp, launchedWithThree, lineAfter, lineBefore, lineBeforeGroup, makeGroup, mockView, mockWorkspace, newWorkspace, onLine, openWorkspaceMenu, rowId, rowIds, testEnv, waitForShell, writeInit } = require('./init.cjs');
 
 test('full screen reclaims the window chrome space above the workspaces', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-full-screen-'));
@@ -287,6 +287,40 @@ test('a group is made, renamed, folded, moved and remembered', { timeout: 180000
     assert.equal(await rows.count(), 2, 'and both rows are back in the list');
   } finally {
     await desktop?.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a group dropped on the line that closes the list comes last', { timeout: 180000 }, async () => {
+  const { home, desktop, page } = await launchedWithThree();
+  const stored = () => JSON.parse(readFileSync(join(home, '.local/share/wangcai/groups.json'), 'utf8')).map((group) => group.name);
+  try {
+    await makeGroup(page, '甲');
+    await makeGroup(page, '乙');
+    const bars = page.locator('.workspace-group-bar');
+    assert.deepEqual(await bars.allTextContents(), ['甲', '乙'], 'the groups stand in the order they were made');
+    await bars.first().dragTo(page.locator('.workspaces > :last-child'), { targetPosition: onLine });
+    assert.deepEqual(await bars.allTextContents(), ['乙', '甲'], 'the dragged group ends the list');
+    assert.deepEqual(await stored(), ['乙', '甲'], 'and the groups file holds that order');
+  } finally {
+    await desktop.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a group dropped on the line above a row stands after the groups at that place', { timeout: 180000 }, async () => {
+  const { home, desktop, page, rows } = await launchedWithThree();
+  const stored = () => JSON.parse(readFileSync(join(home, '.local/share/wangcai/groups.json'), 'utf8')).map((group) => group.name);
+  try {
+    await makeGroup(page, '甲');
+    await makeGroup(page, '乙');
+    // Both groups are put in the same place, the one in front of the second row.
+    await page.getByRole('button', { name: '分组 乙' }).dragTo(await lineBefore(page, rows.nth(1)), { targetPosition: onLine });
+    await page.getByRole('button', { name: '分组 甲' }).dragTo(await lineBefore(page, rows.nth(1)), { targetPosition: onLine });
+    assert.deepEqual(await drawnOrder(page), ['row', '乙', '甲', 'row', 'row'], 'the group put there last stands after the one already there');
+    assert.deepEqual(await stored(), ['乙', '甲'], 'and the groups file holds that order');
+  } finally {
+    await desktop.close();
     rmSync(home, { recursive: true, force: true });
   }
 });
