@@ -484,7 +484,8 @@ export async function workspaceSidebar(options: {
     element.className = 'agent-state';
     element.dataset.state = drawn;
     element.setAttribute('aria-label', `状态：${agentStateLabels[drawn]}`);
-    element.innerHTML = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><circle cx="8" cy="8" r="4.5"/></svg>';
+    const mark = finished ? '<path d="M3.5 8.5l3 3 6-7"/>' : `<circle cx="8" cy="8" r="${drawn === 'working' ? 4 : 2.5}"/>`;
+    element.innerHTML = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">${mark}</svg>`;
     if (finished) {
       element.onclick = (event) => {
         event.stopPropagation();
@@ -497,18 +498,17 @@ export async function workspaceSidebar(options: {
 
   const workspaceRow = (row: WorkspaceRow) => {
     const element = document.createElement('div');
-    element.className = `workspace${row.id === active ? ' selected' : ''}${row.running ? ' running' : ''}`;
+    element.className = `workspace${row.id === active ? ' selected' : ''}`;
     element.setAttribute('role', 'tab');
     element.setAttribute('aria-selected', String(row.id === active));
     element.setAttribute('aria-label', `${row.label} · ${row.machine}`);
     element.dataset.workspace = row.id;
     element.tabIndex = 0;
     element.draggable = true;
-    element.innerHTML = '<svg class="glyph" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M1.6 3.2c0-.6.5-1.1 1.1-1.1h3l1.1 1.4h5.5c.6 0 1.1.5 1.1 1.1v6.2c0 .6-.5 1.1-1.1 1.1H2.7c-.6 0-1.1-.5-1.1-1.1z"/></svg>';
     const name = document.createElement('span');
     name.className = 'name';
     name.textContent = row.label;
-    element.append(name, agentBadge(row));
+    element.append(agentBadge(row), name);
     onActivate(element, () => {
       // Looking at a workspace is what clears the completion it reported, and only that one.
       if (row.status === 'finished') acknowledged.add(row.id);

@@ -19,24 +19,22 @@ body { background: var(--wc-background); color: var(--wc-foreground); font-famil
 .workspaces { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 0 8px; -webkit-app-region: no-drag; }
 /* A bar here would take its width out of the rows, which run to the column hairline; the list still scrolls by wheel. */
 .workspaces::-webkit-scrollbar { display: none; }
-/* The bar's icon takes the column a row's icon takes, so a group and the workspaces beside it line up. */
+/* The bar's icon takes the column a row's status mark takes, so a group and the workspaces beside it line up. */
 .workspace, .workspace-group-bar { display: flex; gap: 7px; align-items: center; height: 24px; padding: 0 8px; color: var(--wc-muted); font-size: 12px; cursor: pointer; }
 .workspace-group-bar { font-weight: 600; }
 /* The hairline cannot be a border (layout) or an outline (focus ring), so it is a pseudo-element. */
 .workspace.selected { position: relative; color: var(--wc-foreground); background: var(--wc-background); }
 .workspace.selected::after { content: ''; position: absolute; inset: 0; border: 1px solid var(--wc-border); border-radius: inherit; pointer-events: none; }
-.workspace .glyph { flex-shrink: 0; color: var(--wc-muted); fill: none; stroke: currentColor; stroke-width: 1.1; }
-.workspace.running .glyph { color: var(--wc-foreground); }
 .workspace .name, .workspace-group-bar .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* What the agent in the row is doing sits at the row's far end, past the name it follows. */
-.workspace .agent-state { flex-shrink: 0; display: flex; margin-left: auto; padding: 0; border: 0; background: none; color: var(--wc-muted); cursor: default; }
-.workspace .agent-state svg { fill: none; stroke: currentColor; stroke-width: 1.4; }
+/* The status mark leads the row, in front of the workspace name. */
+.workspace .agent-state { flex-shrink: 0; display: flex; padding: 0; border: 0; background: none; color: var(--wc-muted); cursor: default; }
+.workspace .agent-state svg { fill: currentColor; }
 .workspace .agent-state[data-state=working] { color: var(--wc-accent); }
-.workspace .agent-state[data-state=working] svg { stroke-dasharray: 9 5; animation: wc-agent-working 1s linear infinite; }
+.workspace .agent-state[data-state=working] svg { animation: wc-agent-working 1.2s ease-in-out infinite; }
 .workspace .agent-state[data-state=finished] { color: var(--wc-green); cursor: pointer; }
-.workspace .agent-state[data-state=finished] svg { fill: currentColor; stroke: none; }
+.workspace .agent-state[data-state=finished] svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .workspace .agent-state[data-state=finished]:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 1px; }
-@keyframes wc-agent-working { to { transform: rotate(360deg); } }
+@keyframes wc-agent-working { 50% { transform: scale(.72); opacity: .5; } }
 /* A row a group holds steps in one level from the bar, and a line inside a group starts where that row's icon does. */
 .workspace-group-rows { --wc-group-indent: 16px; }
 .workspace-group-rows .workspace { padding-left: var(--wc-group-indent); }
@@ -54,10 +52,8 @@ body { background: var(--wc-background); color: var(--wc-foreground); font-famil
 .workspace-line.inside::after { left: var(--wc-group-indent); }
 .workspace-line[data-drop=line]::after { background: var(--wc-accent); }
 .workspace:focus-visible, .workspace-group-bar:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: -2px; }
-/* The twistie is VS Code's codicon chevron-down: filled, not stroked like the outline icons around it. Its ink
-   is narrower than the folder glyph's, so it shifts left to share that glyph's edge, and a relative offset
-   leaves its place in the row alone. */
-.workspace-group-bar .chevron { position: relative; left: -1px; flex-shrink: 0; fill: currentColor; }
+/* The twistie is VS Code's codicon chevron-down: filled, not stroked. */
+.workspace-group-bar .chevron { flex-shrink: 0; fill: currentColor; }
 .workspace-group:has(.workspace-group-rows[hidden]) .chevron { transform: rotate(-90deg); }
 /* A bar in the tab strip would take its height out of the tabs, so the strip scrolls with no bar of its own. */
 .sidebar-tabs::-webkit-scrollbar { display: none; }
