@@ -392,7 +392,7 @@ test('a workspace dropped on a line between two groups keeps that place, and one
   }
 });
 
-test('the menu bar holds one view menu with the plugin page and the Core rebuild', { timeout: 180000 }, async () => {
+test('the app menu carries the Core update, and the view menu holds the plugin page', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-menu-'));
   const env = testEnv(home);
   let desktop;
@@ -400,13 +400,58 @@ test('the menu bar holds one view menu with the plugin page and the Core rebuild
     writeInit(home, { workspaces: [], tabs: [] });
     desktop = await launchApp(home, env);
     await desktop.firstWindow();
-    const [labels, viewItems] = await desktop.evaluate(({ Menu }) => {
+    const [labels, appItems, viewItems] = await desktop.evaluate(({ Menu }) => {
       const items = Menu.getApplicationMenu().items;
-      return [items.map((item) => item.label), items[1].submenu.items.map((item) => item.label)];
+      return [
+        items.map((item) => item.label),
+        items[0].submenu.items.map((item) => item.label),
+        items[1].submenu.items.map((item) => item.label),
+      ];
     });
     assert.deepEqual(labels, ['旺财', '视图']);
-    // The page the plugins report to, and the entry that replaces Core itself.
-    assert.deepEqual(viewItems, ['插件', '重建 Core']);
+    // Replacing Core is the shell's own affair, so it sits with the app; the view menu holds pages.
+    assert.ok(appItems.includes('更新核心组件'));
+    assert.deepEqual(viewItems, ['插件']);
+  } finally {
+    await desktop?.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the Core page draws what the shell reports about a rebuild, and asks for the next one', { timeout: 180000 }, async () => {
+  const home = mkdtempSync(join(tmpdir(), 'wangcai-core-page-'));
+  const env = testEnv(home);
+  let desktop;
+  try {
+    writeInit(home, { workspaces: [], tabs: [] });
+    desktop = await launchApp(home, env);
+    const page = await desktop.firstWindow();
+    await waitForShell(page);
+    const core = page.locator('.core-page');
+    const update = core.locator('button', { hasText: '更新' });
+    // What the shell says over the bridge is what the page draws, so the topics are sent by hand.
+    const tell = (topic, data) => desktop.evaluate(({ BrowserWindow }, [topic, data]) => {
+      BrowserWindow.getAllWindows()[0].webContents.send('wangcai:channel', topic, data);
+    }, [topic, data]);
+    assert.equal(await core.isVisible(), false, 'nothing about Core is drawn before the shell says something');
+    await tell('core-page');
+    await core.waitFor();
+    assert.equal(await core.locator('h1').innerText(), '核心组件');
+    assert.equal(await page.locator('.installs').isVisible(), false, 'the Core page is not the plugin page');
+    await tell('core-status', { stage: 'building', message: 'npm run build' });
+    await page.locator('.core-page .core-stage').filter({ hasText: '构建中' }).waitFor();
+    assert.equal(await core.locator('.core-message').innerText(), 'npm run build');
+    assert.equal(await update.isDisabled(), true, 'a rebuild in flight is not asked for twice');
+    // A report that has not finished opens the page again, so a failure is read rather than missed.
+    await core.locator('button', { hasText: '关闭' }).click();
+    await core.waitFor({ state: 'hidden' });
+    await tell('core-status', { stage: 'ready', message: '已是最新' });
+    assert.equal(await core.isVisible(), false, 'a finished rebuild stays closed');
+    assert.equal(await update.isDisabled(), false);
+    await tell('core-status', { stage: 'failed', message: 'git clone 失败' });
+    await core.waitFor();
+    await page.locator('.core-page .core-stage[data-stage=failed]').waitFor();
+    assert.equal(await core.locator('.core-message').innerText(), 'git clone 失败');
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });

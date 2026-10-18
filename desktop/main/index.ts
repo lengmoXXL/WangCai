@@ -3,7 +3,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { bridge, coreId, coreScheme, coreStatusTopic, pluginPageTopic, pluginScheme, previewScheme, type InstallStage } from '../../core/shared';
+import { bridge, corePageTopic, coreScheme, coreStatusTopic, pluginPageTopic, pluginScheme, previewScheme, type InstallStage } from '../../core/shared';
 import type { Network } from '../../core/main/config';
 import type { Core, CoreHost } from '../../core/main/host';
 import { coreDirectory, loadCore, rebuildCore } from './core';
@@ -51,8 +51,8 @@ else {
     const rebuild = async (network: Network) => {
       if (rebuilding) return;
       rebuilding = true;
-      const report = (stage: InstallStage, message?: string) => send(bridge.channel, coreStatusTopic, { id: coreId, stage, message });
-      send(bridge.channel, pluginPageTopic);
+      const report = (stage: InstallStage, message?: string) => send(bridge.channel, coreStatusTopic, { stage, message });
+      send(bridge.channel, corePageTopic);
       try {
         const changed = await rebuildCore({ storage: storageDirectory, node, network, report });
         report('ready', changed ? '已重建，正在重启' : '已是最新');
@@ -67,7 +67,7 @@ else {
     const core = await loadCore(directory).catch(async (error: Error) => {
       // The window is Core's to draw, so a Core that will not load is answered by the app itself: there is no
       // menu yet, and rebuilding it is the way back.
-      const { response } = await dialog.showMessageBox({ type: 'error', message: 'Core 加载失败', detail: error.message, buttons: ['重建 Core', '退出'], defaultId: 0, cancelId: 1 });
+      const { response } = await dialog.showMessageBox({ type: 'error', message: 'Core 加载失败', detail: error.message, buttons: ['更新核心组件', '退出'], defaultId: 0, cancelId: 1 });
       if (response === 0) await rebuild({});
       app.quit();
       return undefined;
@@ -136,11 +136,18 @@ else {
     });
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', (event) => event.preventDefault());
+    // The window's own Core page asks for the same rebuild the menu runs.
+    ipcMain.handle(bridge.coreUpdate, () => { void rebuild(running.network); });
     Menu.setApplicationMenu(Menu.buildFromTemplate([
-      { label: '旺财', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'quit' }] },
+      { label: '旺财', submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { label: '更新核心组件', click: () => void rebuild(running.network) },
+        { type: 'separator' },
+        { role: 'quit' },
+      ] },
       { label: '视图', submenu: [
         { label: '插件', click: () => send(bridge.channel, pluginPageTopic) },
-        { label: '重建 Core', click: () => void rebuild(running.network) },
       ] },
     ]));
     let cleaned = false;

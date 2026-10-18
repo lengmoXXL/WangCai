@@ -14,6 +14,7 @@ const api: PluginBridge = {
   request: (id, method, params) => ipcRenderer.invoke(bridge.request, id, method, params),
   install: (ids) => ipcRenderer.invoke(bridge.install, ids),
   installs: () => ipcRenderer.invoke(bridge.installs),
+  coreUpdate: () => ipcRenderer.invoke(bridge.coreUpdate),
   loadTabs: () => ipcRenderer.invoke(bridge.loadTabs),
   saveTabs: (tabs) => ipcRenderer.invoke(bridge.saveTabs, tabs),
   loadGroups: () => ipcRenderer.invoke(bridge.loadGroups),
