@@ -106,7 +106,7 @@ test('a plugin that failed is installed again from the entry its row offers', { 
     desktop = await launchApp(home, env);
     const page = await desktop.firstWindow();
     await page.locator('.installs li[data-stage=failed]').waitFor();
-    assert.match(await page.locator('.installs .install-message').innerText(), /later-repository/);
+    assert.match(await page.locator('.installs li .install-message').innerText(), /later-repository/);
     // The helper's directory for an id is `<id>-repository`, which is the path the entry names.
     makePluginRepo(home, 'later');
     await page.locator('.installs li[data-stage=failed] button').click();

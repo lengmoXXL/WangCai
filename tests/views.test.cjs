@@ -5,7 +5,7 @@ const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { drawnOrder, firstInsideLine, launchApp, launchedWithThree, lineAfter, lineBefore, lineBeforeGroup, makeGroup, mockView, mockWorkspace, newWorkspace, onLine, openWorkspaceMenu, rowId, rowIds, testEnv, waitForShell, writeInit } = require('./init.cjs');
 
-const { corePageTopic, coreStatusTopic, link } = require('@lengmoxxl/sdk/bridge');
+const { coreId, installStatusesTopic, link, pluginPageTopic } = require('@lengmoxxl/sdk/bridge');
 
 test('full screen reclaims the window chrome space above the workspaces', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-full-screen-'));
@@ -396,7 +396,7 @@ test('a workspace dropped on a line between two groups keeps that place, and one
   }
 });
 
-test('the app menu carries the Core update, and the view menu holds the plugin page', { timeout: 180000 }, async () => {
+test('the app menu holds no Core entry of its own, and the view menu holds the plugin page', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-menu-'));
   const env = testEnv(home);
   let desktop;
@@ -413,17 +413,17 @@ test('the app menu carries the Core update, and the view menu holds the plugin p
       ];
     });
     assert.deepEqual(labels, ['旺财', '视图']);
-    // Replacing Core is the app's own affair, so its entry sits in the app menu; the view menu holds pages.
-    assert.ok(appItems.includes('更新核心组件'));
+    // The Core the app installs itself is a row of the plugin page, so the app menu carries nothing about it;
+    // the view menu holds pages.
+    assert.equal(appItems.includes('更新核心组件'), false);
     assert.deepEqual(viewItems, ['插件']);
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });
   }
 });
-
-test('the Core page draws what the app reports about a rebuild, and holds the button for a finished one', { timeout: 180000 }, async () => {
-  const home = mkdtempSync(join(tmpdir(), 'wangcai-core-page-'));
+test('the plugin page draws Core above its plugins, and holds the button that asks for a rebuild', { timeout: 180000 }, async () => {
+  const home = mkdtempSync(join(tmpdir(), 'wangcai-core-row-'));
   const env = testEnv(home);
   let desktop;
   try {
@@ -431,31 +431,37 @@ test('the Core page draws what the app reports about a rebuild, and holds the bu
     desktop = await launchApp(home, env);
     const page = await desktop.firstWindow();
     await waitForShell(page);
-    const core = page.locator('.core-page');
-    const update = core.locator('button', { hasText: '更新' });
-    // What the app says over the bridge is what the page draws, so the topics are sent by hand.
+    const installs = page.locator('.installs');
+    const core = installs.locator('.core');
+    const update = core.locator('button');
+    // What the app says over the bridge is what the page draws, so the topics are sent by hand. Core is a row of
+    // the same list the plugins are rows of, so one report carries both.
     const tell = (topic, data) => desktop.evaluate(({ BrowserWindow }, [channel, topic, data]) => {
       BrowserWindow.getAllWindows()[0].webContents.send(channel, topic, data);
     }, [link.channel, topic, data]);
-    assert.equal(await core.isVisible(), false, 'nothing about Core is drawn before the app says something');
-    await tell(corePageTopic);
-    await core.waitFor();
-    assert.equal(await core.locator('h1').innerText(), '核心组件');
-    assert.equal(await page.locator('.installs').isVisible(), false, 'the Core page is not the plugin page');
-    await tell(coreStatusTopic, { stage: 'building', message: 'npm run build' });
-    await page.locator('.core-page .core-stage').filter({ hasText: '构建中' }).waitFor();
-    assert.equal(await core.locator('.core-message').innerText(), 'npm run build');
+    assert.equal(await installs.isVisible(), false, 'the page is closed until it is asked for');
+    await tell(pluginPageTopic);
+    await installs.waitFor();
+    await tell(installStatusesTopic, [{ id: coreId, stage: 'building', message: 'npm run build' }]);
+    await page.locator('.installs .core[data-stage=building]').waitFor();
+    assert.equal(await core.locator('.install-id').innerText(), '核心组件');
+    assert.equal(await core.locator('.install-stage').innerText(), '构建中');
+    assert.equal(await core.locator('.install-message').innerText(), 'npm run build');
     assert.equal(await update.isDisabled(), true, 'a rebuild in flight is not asked for twice');
-    // A report that has not finished opens the page again, so a failure is read rather than missed.
-    await core.locator('button', { hasText: '关闭' }).click();
-    await core.waitFor({ state: 'hidden' });
-    await tell(coreStatusTopic, { stage: 'ready', message: '已是最新' });
-    assert.equal(await core.isVisible(), false, 'a finished rebuild stays closed');
+    assert.equal(await installs.locator('li').count(), 0, 'Core is a row of the page, not one of the plugin list');
+    // A row with something left to do opens the page, and one that is done leaves it as it was found.
+    await installs.locator('header button', { hasText: '关闭' }).click();
+    await installs.waitFor({ state: 'hidden' });
+    await tell(installStatusesTopic, [{ id: coreId, stage: 'ready', message: '已是最新' }, { id: 'files', stage: 'ready' }]);
+    assert.equal(await installs.isVisible(), false, 'a finished install leaves the page closed');
     assert.equal(await update.isDisabled(), false);
-    await tell(coreStatusTopic, { stage: 'failed', message: 'git clone 失败' });
-    await core.waitFor();
-    await page.locator('.core-page .core-stage[data-stage=failed]').waitFor();
-    assert.equal(await core.locator('.core-message').innerText(), 'git clone 失败');
+    assert.equal(await update.innerText(), '更新');
+    assert.deepEqual(await page.locator('.installs li .install-id').allInnerTexts(), ['files']);
+    await tell(installStatusesTopic, [{ id: coreId, stage: 'failed', message: 'git clone 失败' }]);
+    await installs.waitFor();
+    await page.locator('.installs .core[data-stage=failed]').waitFor();
+    assert.equal(await update.innerText(), '重试');
+    assert.equal(await core.locator('.install-message').innerText(), 'git clone 失败');
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });

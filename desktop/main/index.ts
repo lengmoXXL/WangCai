@@ -3,7 +3,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { contractVersion, corePageTopic, coreScheme, coreStatusTopic, fullscreenTopic, installStatusesTopic, link, pluginPageTopic, pluginScheme, previewScheme, type InstallStage } from '@lengmoxxl/sdk/bridge';
+import { contractVersion, coreId, coreScheme, fullscreenTopic, installStatusesTopic, link, pluginPageTopic, pluginScheme, previewScheme, type InstallStage, type InstallStatus } from '@lengmoxxl/sdk/bridge';
 import { loadConfig } from './config';
 import { coreDirectory, coreReady, installCore, loadCore, type CoreHost } from './core';
 import { pluginInstaller } from './plugins';
@@ -56,13 +56,19 @@ else {
     // refuses to put that one in full screen at all.
     let fullscreen = false;
     let rebuilding = false;
-    // Nothing about installing or replacing Core runs through Core: the app fetches the repository and builds it
+    // The page draws one list of rows, and these two report into it: the Core this app installs itself, under the
+    // id the bridge names, and the plugins init.ts lists. The plugin rows are held here because the installer that
+    // owns them is made only once a Core is loaded — which a run that starts without one installs first.
+    // Nothing about installing or replacing a Core runs through Core: the app fetches the repository and builds it
     // with the Node it carries, and what it writes is read by a run that starts after it.
-    const report = (stage: InstallStage, message?: string) => send(coreStatusTopic, { stage, message });
-    const install = async (follow: boolean) => {
-      send(corePageTopic);
-      return await installCore({ storage: storageDirectory, node, network, report, follow });
+    const coreRow: InstallStatus = { id: coreId, stage: 'ready' };
+    let pluginRows: InstallStatus[] = [];
+    const statuses = () => [coreRow, ...pluginRows];
+    const report = (stage: InstallStage, message?: string) => {
+      Object.assign(coreRow, { stage, message });
+      send(installStatusesTopic, statuses());
     };
+    const install = async (follow: boolean) => installCore({ storage: storageDirectory, node, network, report, follow });
     const rebuild = async () => {
       if (rebuilding) return;
       rebuilding = true;
@@ -88,6 +94,7 @@ else {
     if (!coreReady(storageDirectory)) {
       try {
         await install(false);
+        report('ready');
       } catch (error) {
         await refuse('Core 安装失败', error instanceof Error ? error.message : String(error));
         return;
@@ -101,7 +108,7 @@ else {
     if (!core) return;
     const installer = pluginInstaller(specs, {
       storage: storageDirectory, node, network,
-      report: (statuses) => send(installStatusesTopic, statuses),
+      report: (rows) => { pluginRows = rows; send(installStatusesTopic, statuses()); },
     });
     const host: CoreHost = {
       paths: { storage: storageDirectory, resources: resourcesDirectory },
@@ -109,8 +116,15 @@ else {
       sources: app.isPackaged ? join(process.resourcesPath, 'src') : join(app.getAppPath(), '..'),
       config: { profile, network },
       plugins: installer.plugins,
-      statuses: installer.statuses,
-      install: installer.install,
+      statuses,
+      install: async (ids: string[]) => {
+        // What a plugin install built is answered back, since Core is what reloads the page a plugin runs in; a Core
+        // is read by the next start instead, so a rebuild goes last — it is the one that takes the app away.
+        const wanted = ids.filter((id) => id !== coreId);
+        const changed = wanted.length > 0 && await installer.install(wanted);
+        if (ids.includes(coreId)) await rebuild();
+        return changed;
+      },
       protocol: { handle: (scheme, handler) => protocol.handle(scheme, handler) },
       fetch: (url, options) => net.fetch(url, options),
       send,
@@ -122,7 +136,6 @@ else {
         await shell.openExternal(address.toString());
       },
       reload: () => window?.webContents.reload(),
-      updateCore: rebuild,
       fullscreen: () => fullscreen,
     };
     const running = await core.activate(host).catch(async (error: Error) => {
@@ -180,8 +193,6 @@ else {
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { label: '旺财', submenu: [
         { role: 'about' },
-        { type: 'separator' },
-        { label: '更新核心组件', click: () => void rebuild() },
         { type: 'separator' },
         { role: 'quit' },
       ] },

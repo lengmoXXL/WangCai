@@ -23,7 +23,6 @@ export interface CoreHost {
   setProxy(rules: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   reload(): void;
-  updateCore(): void;
   fullscreen(): boolean;
 }
 

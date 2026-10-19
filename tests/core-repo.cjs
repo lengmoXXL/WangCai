@@ -1,6 +1,7 @@
 const { execFileSync } = require('node:child_process');
 const { mkdirSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
+const { contractVersion } = require('@lengmoxxl/sdk/bridge');
 
 /**
  * A Core repository that needs no network: installing it runs the repository's own build script, which writes
@@ -14,7 +15,7 @@ exports.makeCoreRepo = (home) => {
   writeFileSync(join(directory, 'build.mjs'), [
     "import { mkdirSync, writeFileSync } from 'node:fs';",
     "mkdirSync(new URL('./dist/ui/', import.meta.url), { recursive: true });",
-    "writeFileSync(new URL('./dist/main.cjs', import.meta.url), 'exports.activate = async () => ({ contract: 1, dispatch: () => undefined, dispose: async () => {} });\\n');",
+    `writeFileSync(new URL('./dist/main.cjs', import.meta.url), 'exports.activate = async () => ({ contract: ${contractVersion}, dispatch: () => undefined, dispose: async () => {} });\\n');`,
     "writeFileSync(new URL('./dist/ui/index.html', import.meta.url), '<!doctype html><meta charset=\"utf-8\"><div id=\"core-marker\">a core of its own</div>\\n');",
   ].join('\n'));
   const git = (...args) => execFileSync('git', ['-C', directory, ...args], { encoding: 'utf8' });

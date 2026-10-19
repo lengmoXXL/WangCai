@@ -8,7 +8,7 @@
 App 只是壳：窗口、preload 桥与打包，另外读 `init.ts` 把插件装好，再确认 Core 是否已经装好。业务逻辑在
 [WangCai-Core](https://github.com/lengmoXXL/WangCai-Core) 里，本仓库不再带它：启动时数据目录里没有构建好的
 Core 就 clone 一份并用自带的 Node 构建（`~/.local/share/wangcai/core-src` 与 `core`），已经有了就直接用，
-菜单「更新核心组件」才去重新拉取。
+插件页里 Core 那一行的「更新」才去重新拉取。
 
 <p align="center"><img src="docs/assets/screenshot.png" width="880" alt="旺财窗口：左侧是工作区与终端，右侧是文件视图"></p>
 

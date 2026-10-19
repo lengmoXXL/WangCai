@@ -6,7 +6,7 @@
 // What a Core expects of the shell it is given, and reports back. The shell refuses a build that reports nothing
 // (made before the number existed) or an older number; one that reports a newer number is let through, since the
 // way back from a refusal is to rebuild Core, which fetches the newest one.
-export const contractVersion = 1;
+export const contractVersion = 2;
 
 // The shell's own font, which plugins do not inherit.
 export const uiFont = '"DejaVuSansM Nerd Font Mono", monospace';
@@ -27,12 +27,12 @@ export const previewMessage = 'wangcai-preview';
 // The two channels the shell's preload and Core share: one asks for a method by name, one carries topics.
 export const link = { invoke: 'wangcai:invoke', channel: 'wangcai:channel' } as const;
 
-// What the shell says to the window over the bridge channel: which page to open, what its install rows are doing,
-// and what rebuilding Core is doing. The page a topic names is the one that draws it.
+// What the shell says to the window over the bridge channel: which page to open, and what its install rows are
+// doing. One of those rows is the Core the shell installs itself, under the id below, and both it and a plugin
+// are drawn by the page these topics name.
 export const pluginPageTopic = 'plugin-page';
 export const installStatusesTopic = 'install-statuses';
-export const corePageTopic = 'core-page';
-export const coreStatusTopic = 'core-status';
+export const coreId = 'core';
 // Not a page: whether the window is full screen, which the chrome around a page follows.
 export const fullscreenTopic = 'fullscreen';
 
@@ -49,11 +49,8 @@ export interface PluginInfo { id: string; config: Record<string, unknown>; ui?: 
 // The stages one clone-and-build goes through, for a plugin or for Core itself.
 export type InstallStage = 'cloning' | 'updating' | 'installing' | 'building' | 'ready' | 'failed';
 
-// What a plugin init.ts lists is doing, as the shell's installer reports it and the plugin page draws it.
+// What one row of the plugin page is doing: a plugin init.ts lists, or the Core the shell installs itself.
 export interface InstallStatus { id: string; stage: InstallStage; message?: string }
-
-// What rebuilding Core reports: the same stages, without a plugin's id.
-export type CoreStatus = Omit<InstallStatus, 'id'>;
 
 // What a stage is called on the page that reports it.
 export const stageNames: Record<InstallStage, string> = { cloning: '克隆中', updating: '同步中', installing: '安装依赖', building: '构建中', ready: '就绪', failed: '失败' };
