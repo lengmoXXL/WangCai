@@ -4,6 +4,7 @@ const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { buildSync } = require('esbuild');
 const { _electron: electron } = require('playwright');
+const { coreScheme } = require('@lengmoxxl/sdk/bridge');
 
 const root = join(__dirname, '..');
 
@@ -136,6 +137,13 @@ exports.mockWorkspace = (home) => exports.mockPlugin(home, 'terminal-agent', {
 });
 
 exports.waitForShell = (page) => page.locator('.workspaces').waitFor();
+/** The window Core's page is drawn in: a start that has to install a Core says what it is doing in a window of its
+ * own first, so a case waits for the page rather than for the first window. */
+exports.coreWindow = async (desktop) => {
+  const drawn = () => desktop.windows().find((page) => page.url().startsWith(`${coreScheme}://`));
+  while (!drawn()) await desktop.waitForEvent('window');
+  return drawn();
+};
 
 exports.openWorkspaceMenu = (page) => page.locator('.workspace-header').click({ button: 'right' });
 

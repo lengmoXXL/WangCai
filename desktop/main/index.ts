@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { contractVersion, coreId, coreScheme, fullscreenTopic, installStatusesTopic, link, pluginPageTopic, pluginScheme, previewScheme, type InstallStage, type InstallStatus } from '@lengmoxxl/sdk/bridge';
 import { loadConfig } from './config';
 import { coreDirectory, coreReady, installCore, loadCore, type CoreHost } from './core';
+import { bootstrap } from './bootstrap';
 import { pluginInstaller } from './plugins';
 
 // The app is a shell: it draws the window, installs the plugins init.ts lists, and is the only thing that can
@@ -56,6 +57,8 @@ else {
     // refuses to put that one in full screen at all.
     let fullscreen = false;
     let rebuilding = false;
+    // What the shell says about installing Core before there is a page of Core's to say it in.
+    let bootstrapWindow: ReturnType<typeof bootstrap> | undefined;
     // The page draws one list of rows, and these two report into it: the Core this app installs itself, under the
     // id the bridge names, and the plugins init.ts lists. The plugin rows are held here because the installer that
     // owns them is made only once a Core is loaded — which a run that starts without one installs first.
@@ -67,6 +70,7 @@ else {
     const report = (stage: InstallStage, message?: string) => {
       Object.assign(coreRow, { stage, message });
       send(installStatusesTopic, statuses());
+      bootstrapWindow?.report(stage, message);
     };
     const install = async (follow: boolean) => installCore({ storage: storageDirectory, node, network, report, follow });
     const rebuild = async () => {
@@ -85,13 +89,18 @@ else {
     // The window is Core's to draw, so a Core that will not run is answered by the app itself: there is no menu
     // yet, and rebuilding it is the way back.
     const refuse = async (title: string, detail: string) => {
+      // A Core that will not run is not something the install window can say anything more about, and the dialog
+      // needs the app alive: the window is hidden rather than destroyed, since a run with no window quits.
+      bootstrapWindow?.hide();
       const { response } = await dialog.showMessageBox({ type: 'error', message: title, detail, buttons: ['更新核心组件', '退出'], defaultId: 0, cancelId: 1 });
       if (response === 0) await rebuild();
       app.quit();
     };
-    // A Core is not carried by the app: the run that finds none installs one before there is anything to load, and
-    // what an install reports goes nowhere — no page of Core's is drawn yet, so a failure is the app's to answer.
+    // A Core is not carried by the app: a run that finds none installs one before there is a page to report it in, so
+    // a window of the shell's own says what the install is doing until Core's page takes the window over. A failure
+    // is still the app's to answer, since a run that cannot install a Core has nothing to draw.
     if (!coreReady(storageDirectory)) {
+      bootstrapWindow = bootstrap(profile.theme);
       try {
         await install(false);
         report('ready');
@@ -164,6 +173,10 @@ else {
       webPreferences: { preload: join(__dirname, '../preload/preload.js') },
     });
     window = win;
+    // The window that said what the install was doing goes away now that this one exists: a run whose windows are
+    // all gone quits, which is why it is not destroyed the moment the install ends.
+    bootstrapWindow?.destroy();
+    bootstrapWindow = undefined;
     if (unfocused) win.showInactive();
     win.on('enter-full-screen', () => { fullscreen = true; send(fullscreenTopic, true); });
     win.on('leave-full-screen', () => { fullscreen = false; send(fullscreenTopic, false); });

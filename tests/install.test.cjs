@@ -88,7 +88,9 @@ test('the plugin page is styled by the app theme while a plugin is still install
     // The theme is the app's, so the page has it before any plugin has loaded.
     await page.locator('.installs li[data-stage=building]').waitFor();
     assert.equal(await page.evaluate(() => getComputedStyle(document.body).backgroundColor), 'rgb(18, 19, 20)');
-    assert.equal(await page.locator('.installs li').evaluate((row) => getComputedStyle(row).backgroundColor), 'rgb(25, 26, 27)');
+    // The Core row and a plugin row are drawn the same way, out of the theme's own border.
+    const drawn = await page.locator('.installs .core, .installs li').evaluateAll((nodes) => nodes.slice(0, 2).map((node) => [getComputedStyle(node).borderBottomColor, getComputedStyle(node).paddingTop]));
+    assert.deepEqual(drawn, [['rgb(51, 53, 54)', '10px'], ['rgb(51, 53, 54)', '10px']]);
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });
