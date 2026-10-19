@@ -1,23 +1,20 @@
 import type { ProcessEvent, ProcessOutput } from './types';
+import { Stream } from './stream';
 
 // The node takes one base64 payload per write request, and applies them in the order they arrive.
 const CHUNK = 32 * 1024;
 
-export class Process {
-  private sequence = -1;
-  private error?: Error;
+export class Process extends Stream<ProcessOutput> {
   private ended = false;
   private code?: number;
-  private buffered: ProcessOutput[] = [];
-  private outputs = new Set<(event: ProcessOutput) => void>();
   private exits = new Set<(code?: number) => void>();
 
   constructor(readonly id: string,
     private request: (op: string, params: Record<string, unknown>) => Promise<unknown>,
-  ) {}
+  ) { super(); }
 
   receive(event: ProcessEvent) {
-    if (this.error) return;
+    if (this.failure) return;
     if (event.event === 'exit' || event.event === 'lost') {
       this.ended = true;
       this.code = event.event === 'exit' ? event.code : undefined;
@@ -25,18 +22,7 @@ export class Process {
       this.exits.clear();
       return;
     }
-    if (event.seq <= this.sequence) return;
-    this.sequence = event.seq;
-    const output: ProcessOutput = { data: event.data, seq: event.seq, stream: event.event };
-    if (!this.outputs.size) this.buffered.push(output);
-    for (const callback of this.outputs) callback(output);
-  }
-
-  onData(callback: (event: ProcessOutput) => void) {
-    this.outputs.add(callback);
-    for (const event of this.buffered) callback(event);
-    this.buffered = [];
-    return () => { this.outputs.delete(callback); };
+    this.deliver({ data: event.data, seq: event.seq, stream: event.event });
   }
 
   /** Its exit code, or nothing when the node lost the stream and the process may still be running. */
@@ -47,7 +33,7 @@ export class Process {
   }
 
   async write(data: Uint8Array) {
-    if (this.error) throw this.error;
+    if (this.failure) throw this.failure;
     const requests: Promise<unknown>[] = [];
     for (let offset = 0; offset < data.length; offset += CHUNK) {
       const chunk = Buffer.from(data.subarray(offset, offset + CHUNK)).toString('base64');
@@ -57,8 +43,7 @@ export class Process {
   }
 
   release(error = new Error('Process detached')) {
-    this.error = error;
-    this.outputs.clear(); this.exits.clear();
-    this.buffered = [];
+    super.release(error);
+    this.exits.clear();
   }
 }

@@ -1,31 +1,25 @@
 import type { Output, Snapshot, TerminalEvent, Size } from './types';
+import { Stream } from './stream';
 
-export class Pty {
-  private sequence = -1;
-  private error?: Error;
+export class Pty extends Stream<Output> {
   private snapshot?: Snapshot;
-  private buffered: Output[] = [];
   private snapshots = new Set<(event: Snapshot) => void>();
-  private outputs = new Set<(event: Output) => void>();
 
   constructor(readonly id: string,
     private request: (op: string, params: Record<string, unknown>) => Promise<unknown>,
     private remove: () => void,
-  ) {}
+  ) { super(); }
 
   receive(event: TerminalEvent) {
-    if (this.error) return;
+    if (this.failure) return;
+    // A snapshot replaces the screen and the order before it, so what no reader has taken is dropped.
     if (event.event === 'snapshot') {
-      this.sequence = event.seq;
-      this.buffered = [];
       this.snapshot = event;
+      this.reset(event.seq);
       for (const callback of this.snapshots) callback(event);
       return;
     }
-    if (event.seq <= this.sequence) return;
-    this.sequence = event.seq;
-    if (!this.outputs.size) this.buffered.push(event);
-    for (const callback of this.outputs) callback(event);
+    this.deliver(event);
   }
 
   onSnapshot(callback: (event: Snapshot) => void) {
@@ -34,15 +28,8 @@ export class Pty {
     return () => { this.snapshots.delete(callback); };
   }
 
-  onData(callback: (event: Output) => void) {
-    this.outputs.add(callback);
-    for (const event of this.buffered) callback(event);
-    this.buffered = [];
-    return () => { this.outputs.delete(callback); };
-  }
-
   async write(data: string) {
-    if (this.error) throw this.error;
+    if (this.failure) throw this.failure;
     const parts = Array.from(data);
     const requests: Promise<unknown>[] = [];
     for (let offset = 0; offset < parts.length; offset += 8000) {
@@ -52,21 +39,20 @@ export class Pty {
   }
 
   async resize(size: Size) {
-    if (this.error) throw this.error;
+    if (this.failure) throw this.failure;
     await this.request('resize', { session_id: this.id, ...size });
   }
 
   async detach() {
-    if (this.error) return;
+    if (this.failure) return;
     this.remove();
     this.release();
     await this.request('detach', { session_id: this.id });
   }
 
   release(error = new Error('Terminal detached')) {
-    this.error = error;
-    this.snapshots.clear(); this.outputs.clear();
+    super.release(error);
+    this.snapshots.clear();
     this.snapshot = undefined;
-    this.buffered = [];
   }
 }

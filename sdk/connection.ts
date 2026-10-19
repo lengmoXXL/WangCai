@@ -42,6 +42,8 @@ export class MachineConnection {
   private epoch = 0;
   private serial = 0;
   private refs = 1;
+  // What a held stream sends its requests through.
+  private call = (op: string, params: Record<string, unknown>) => this.request(op, params);
 
   constructor(private options: ConnectionOptions) {
     this.state = { status: 'connecting', sessions: [], generation: 0 };
@@ -89,20 +91,8 @@ export class MachineConnection {
     list: () => this.request('list') as Promise<Session[]>,
     cwd: (id: string) => this.request('cwd', { session_id: id }) as Promise<string>,
     create: (size: Size = { rows: 24, cols: 80 }, options: PtyOptions = {}) => this.request('create', { ...size, ...options }) as Promise<Session>,
-    attach: async (id: string) => {
-      const existing = this.terminals.get(id);
-      if (existing) return existing;
-      const terminal = new Pty(id, (op, params) => this.request(op, params), () => { this.terminals.delete(id); });
-      this.terminals.set(id, terminal);
-      try { await this.request('attach', { session_id: id }); }
-      catch (error) { this.terminals.delete(id); terminal.release(); throw error; }
-      return terminal;
-    },
-    close: async (id: string) => {
-      await this.request('close', { session_id: id });
-      this.terminals.get(id)?.release();
-      this.terminals.delete(id);
-    },
+    attach: (id: string) => this.openStream(this.terminals, id, (drop) => new Pty(id, this.call, drop), 'attach'),
+    close: (id: string) => this.closeStream(this.terminals, id, 'close'),
   };
 
   fs = {
@@ -131,21 +121,40 @@ export class MachineConnection {
       return { stdout: Buffer.from(result.stdout, 'base64'), stderr: Buffer.from(result.stderr, 'base64'), code: result.code };
     },
     spawn: (program: string, args: string[], options: ExecOptions) => this.request('spawn', { program, args, ...options }) as Promise<ProcessInfo>,
-    attach: async (id: string) => {
-      const existing = this.processes.get(id);
-      if (existing) return existing;
-      const process = new Process(id, (op, params) => this.request(op, params));
-      this.processes.set(id, process);
-      try { await this.request('process_attach', { session_id: id }); }
-      catch (error) { this.processes.delete(id); process.release(); throw error; }
-      return process;
-    },
-    close: async (id: string) => {
-      await this.request('process_close', { session_id: id });
-      this.processes.get(id)?.release();
-      this.processes.delete(id);
-    },
+    attach: (id: string) => this.openStream(this.processes, id, () => new Process(id, this.call), 'process_attach'),
+    close: (id: string) => this.closeStream(this.processes, id, 'process_close'),
   };
+
+  /** The stream a map holds under `id`, or one made and attached now: a failed attach leaves neither. */
+  private async openStream<T extends Pty | Process>(held: Map<string, T>, id: string, make: (drop: () => void) => T, op: string): Promise<T> {
+    const existing = held.get(id);
+    if (existing) return existing;
+    const entry = make(() => { held.delete(id); });
+    held.set(id, entry);
+    try { await this.request(op, { session_id: id }); }
+    catch (error) { held.delete(id); entry.release(); throw error; }
+    return entry;
+  }
+
+  private async closeStream<T extends Pty | Process>(held: Map<string, T>, id: string, op: string) {
+    await this.request(op, { session_id: id });
+    held.get(id)?.release();
+    held.delete(id);
+  }
+
+  /** A stream lives in the connection that asked for it, so it is attached to the one that is up again; one the
+   * node no longer has is released. False once the connection has moved on. */
+  private async reattachStreams<T extends Pty | Process>(held: Map<string, T>, op: string, current: () => boolean) {
+    for (const [id, entry] of held) {
+      try { await this.request(op, { session_id: id }); }
+      catch (error) {
+        if (!current()) return false;
+        entry.release(error as Error);
+        held.delete(id);
+      }
+    }
+    return true;
+  }
 
   private cleanup() {
     this.epoch++;
@@ -256,22 +265,8 @@ export class MachineConnection {
         this.processes.clear();
       }
       this.instance = actual.instance_id;
-      for (const [id, terminal] of this.terminals) {
-        try { await this.request('attach', { session_id: id }); }
-        catch (error) {
-          if (!current()) return;
-          terminal.release(error as Error);
-          this.terminals.delete(id);
-        }
-      }
-      for (const [id, process] of this.processes) {
-        try { await this.request('process_attach', { session_id: id }); }
-        catch (error) {
-          if (!current()) return;
-          process.release(error as Error);
-          this.processes.delete(id);
-        }
-      }
+      if (!(await this.reattachStreams(this.terminals, 'attach', current))) return;
+      if (!(await this.reattachStreams(this.processes, 'process_attach', current))) return;
       // A watch lives in the connection that asked for it, so it is armed again on the one that is up; one
       // that cannot be armed yet stays registered, and the next connection tries it again.
       for (const [watchId, watcher] of this.watchers) {

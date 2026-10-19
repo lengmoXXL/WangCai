@@ -143,46 +143,35 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                     Err(_) => continue,
                 };
                 let op = request["op"].as_str().unwrap_or("");
-                if op == "exec" {
-                    let out = out.clone();
-                    commands.spawn(async move {
-                        let id = request["id"].clone();
-                        let reply = match crate::subprocess::exec(request).await {
-                            Ok(value) => json!({"id":id,"result":value}),
-                            Err(error) => json!({"id":id,"error":error.to_string()}),
-                        };
-                        let _ = out.send(Message::text(reply.to_string())).await;
-                    });
-                    continue;
-                }
-                if op == "watch" || op == "unwatch" {
-                    let watch_id = request["watch_id"].as_str().unwrap_or("").to_owned();
-                    let reply = if op == "watch" {
-                        match crate::watch::start(request["path"].as_str().unwrap_or(""), request["recursive"].as_bool().unwrap_or(false), &watch_id, batches.clone()) {
-                            Ok(task) => {
-                                if let Some(previous) = watchers.insert(watch_id, task) { previous.abort(); }
-                                json!({"id":request["id"],"result":{}})
-                            }
-                            Err(error) => json!({"id":request["id"],"error":error.to_string()}),
-                        }
-                    } else {
-                        if let Some(task) = watchers.remove(&watch_id) { task.abort(); }
-                        json!({"id":request["id"],"result":{}})
-                    };
-                    if out.send(Message::text(reply.to_string())).await.is_err() { break; }
-                    continue;
-                }
-                if op == "read_file" || op == "read_directory" || op == "stat" {
-                    let reply = match crate::files::read(op, request["path"].as_str().unwrap_or("")).await {
-                        Ok(value) => json!({"id":request["id"],"result":value}),
-                        Err(error) => json!({"id":request["id"],"error":error.to_string()}),
-                    };
-                    if out.send(Message::text(reply.to_string())).await.is_err() { break; }
-                    continue;
-                }
                 let id = request["session_id"].as_str().unwrap_or("");
                 let result: Result<Value> = async {
                     match op {
+                        // The requests that need no session: exec answers from the task that runs it, since
+                        // that is where its end is known; the rest read or watch the machine here.
+                        "exec" => {
+                            let request = request.clone();
+                            let out = out.clone();
+                            commands.spawn(async move {
+                                let id = request["id"].clone();
+                                let reply = match crate::subprocess::exec(request).await {
+                                    Ok(value) => json!({"id":id,"result":value}),
+                                    Err(error) => json!({"id":id,"error":error.to_string()}),
+                                };
+                                let _ = out.send(Message::text(reply.to_string())).await;
+                            });
+                            Ok(Value::Null)
+                        }
+                        "watch" => {
+                            let watch_id = request["watch_id"].as_str().unwrap_or("").to_owned();
+                            let task = crate::watch::start(request["path"].as_str().unwrap_or(""), request["recursive"].as_bool().unwrap_or(false), &watch_id, batches.clone())?;
+                            if let Some(previous) = watchers.insert(watch_id, task) { previous.abort(); }
+                            Ok(json!({}))
+                        }
+                        "unwatch" => {
+                            if let Some(task) = watchers.remove(request["watch_id"].as_str().unwrap_or("")) { task.abort(); }
+                            Ok(json!({}))
+                        }
+                        "read_file" | "read_directory" | "stat" => Ok(crate::files::read(op, request["path"].as_str().unwrap_or("")).await?),
                         "info" => Ok(serde_json::to_value(&node.info)?),
                         "stop" => {
                             if request["instance_id"].as_str() != Some(&node.info.instance_id) { bail!("Node instance changed"); }
@@ -327,11 +316,14 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                     }
                 }.await;
                 let should_stop = op == "stop" && result.is_ok();
-                let reply = match result {
-                    Ok(value) => json!({"id":request["id"],"result":value}),
-                    Err(error) => json!({"id":request["id"],"error":error.to_string()}),
-                };
-                if out.send(Message::text(reply.to_string())).await.is_err() { break; }
+                // exec answers from its own task, so nothing is due here.
+                if op != "exec" {
+                    let reply = match result {
+                        Ok(value) => json!({"id":request["id"],"result":value}),
+                        Err(error) => json!({"id":request["id"],"error":error.to_string()}),
+                    };
+                    if out.send(Message::text(reply.to_string())).await.is_err() { break; }
+                }
                 if should_stop {
                     let node = node.clone();
                     tokio::spawn(async move { tokio::time::sleep(Duration::from_millis(100)).await; node.stop.notify_one(); });
