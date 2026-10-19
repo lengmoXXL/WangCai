@@ -17,9 +17,16 @@ use std::{
     os::unix::process::CommandExt,
     path::PathBuf,
     process::{Command, Stdio},
+    sync::{Mutex, MutexGuard, PoisonError},
     time::Duration,
 };
 use tokio_tungstenite::tungstenite::{self, Message};
+
+/// A lock whose holder panicked is not a reason to end the node: what the panic did not touch is still what
+/// a window expects to find, and only the request that panicked is gone.
+pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
 
 #[derive(Parser)]
 #[command(name = "wangcai", version, about = "Persistent terminal node")]

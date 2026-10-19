@@ -1,4 +1,5 @@
 use crate::ServerInfo;
+use crate::lock;
 use crate::process::{Event, Process};
 use crate::terminal::{self, Terminal};
 use crate::watch::Batch;
@@ -7,7 +8,10 @@ use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex, MutexGuard, PoisonError, atomic::{AtomicU64, Ordering}},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
     time::Duration,
 };
 use tokio::{
@@ -21,14 +25,11 @@ use tokio_tungstenite::{accept_async, tungstenite::Message};
 // has come back for it: a window that reconnects attaches its processes again and keeps them running.
 const REAP: Duration = Duration::from_secs(60);
 
-/// A lock whose holder panicked is not a reason to end the node: the terminals the panic did not touch are
-/// still the ones a window expects to find, and only the request that panicked is gone.
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
 fn snapshot_packet(id: &str, snapshot: terminal::Snapshot) -> Message {
-    packet(json!({"event":"snapshot","session_id":id,"seq":snapshot.seq,"rows":snapshot.rows,"cols":snapshot.cols}), &snapshot.data)
+    packet(
+        json!({"event":"snapshot","session_id":id,"seq":snapshot.seq,"rows":snapshot.rows,"cols":snapshot.cols}),
+        &snapshot.data,
+    )
 }
 
 fn packet(header: Value, data: &[u8]) -> Message {
@@ -383,7 +384,10 @@ pub async fn run(listener: TcpListener, info: ServerInfo) -> Result<()> {
     for session in lock(&node.sessions).values() {
         lock(&session).terminate();
     }
-    let processes: Vec<_> = lock(&node.processes).values().map(|held| held.process.clone()).collect();
+    let processes: Vec<_> = lock(&node.processes)
+        .values()
+        .map(|held| held.process.clone())
+        .collect();
     for process in processes {
         process.lock().await.terminate();
     }

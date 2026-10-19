@@ -206,6 +206,7 @@ connection.disconnect();
 `agentCommand(command, env)` 返回拼接后的 shell 命令：在 PATH 前加入远端 `$HOME/.local/bin`，
 再带上当前进程的 WANGCAI_HOME 与配置要求的环境；值里的 `$NAME` 留给远端 shell 展开。命令本身
 不转义，只传可信内容。
+
 ## 壳与内核的约定
 
 `@lengmoxxl/sdk/bridge` 是壳（App）与业务内核共享的那份契约：窗口的三个 scheme、桥的两个 channel、

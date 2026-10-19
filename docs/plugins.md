@@ -54,29 +54,9 @@ npm run build
 `host` 留空表示本机，填写 SSH 别名表示远端。
 `directory` 是该机器上的绝对路径。
 
-```ts
-import type { MainContext } from '@lengmoxxl/sdk/channel';
-
-export const config = {
-  host: { type: 'string', default: '' },
-  directory: { type: 'string', default: '/' },
-};
-
-export function activate(context: MainContext) {
-  return context.ui.handle<{ path: string }>('list', async ({ path }) => {
-    const machine = await context.connect({
-      host: context.host.config.host || undefined,
-    });
-    try {
-      const entries = await machine.fs.readDirectory(path);
-      context.ui.publish('listed', { path, count: entries.length });
-      return entries;
-    } finally {
-      machine.disconnect();
-    }
-  });
-}
-```
+[main.ts](../examples/directory-plugin/main.ts) 声明 `config` schema，在 `activate` 里用
+`context.ui.handle<{ path: string }>('list', …)` 响应请求：`context.connect` 取得机器，
+`machine.fs.readDirectory` 读目录，`context.ui.publish('listed', …)` 通知前端。
 
 `handle<{ path: string }>` 描述传入参数，handler 的返回值成为
 `context.ui.request` 的结果。泛型只提供 TypeScript 检查，
@@ -86,76 +66,13 @@ export function activate(context: MainContext) {
 
 前端只用 `import type` 引入 SDK 类型，不把 Node SDK 打包到浏览器。
 
-```ts
-import type { DirectoryEntry } from '@lengmoxxl/sdk';
-import type { TabRecord, UiContext } from '@lengmoxxl/sdk/channel';
-
-export const title = 'Directory';
-
-export function mount() {}
-
-export function open(context: UiContext, record?: TabRecord) {
-  const path = record?.id ?? context.host.config.directory;
-  context.host.tabs({
-    id: path,
-    title,
-    tooltip: path,
-    workspaceId: record?.workspaceId,
-    mount(panel) {
-      const button = document.createElement('button');
-      button.textContent = 'Read directory';
-      const status = document.createElement('p');
-      const output = document.createElement('pre');
-      panel.append(button, status, output);
-
-      const off = context.ui.subscribe<{ path: string; count: number }>(
-        'listed',
-        (value) => { status.textContent = `${value.path}: ${value.count} entries`; },
-      );
-      button.onclick = async () => {
-        button.disabled = true;
-        try {
-          const entries = await context.ui.request<DirectoryEntry[]>(
-            'list', { path },
-          );
-          output.textContent = entries.map(
-            (entry) => entry.name + (entry.isDirectory ? '/' : ''),
-          ).join('\n');
-        } catch (error) {
-          output.textContent = error instanceof Error
-            ? error.message : String(error);
-        } finally {
-          button.disabled = false;
-        }
-      };
-
-      return {
-        dispose: off,
-        onSelect() { button.focus(); },
-      };
-    },
-  });
-}
-```
+[ui.ts](../examples/directory-plugin/ui.ts) 导出 `title` 与 `mount`，在 `open` 里用 `context.host.tabs` 开标签页：
+`mount(panel)` 画按钮与输出区，`context.ui.subscribe` 订阅后端事件，按钮里用 `context.ui.request('list', …)` 取结果。
 
 ### 4. 构建方式
 
-宿主按 CommonJS 加载 `main.cjs`，按 ES module 加载 `ui.js`。
-
-```js
-import { build } from 'esbuild';
-
-await Promise.all([
-  build({
-    entryPoints: ['main.ts'], outfile: 'main.cjs',
-    bundle: true, platform: 'node', format: 'cjs', target: 'node22',
-  }),
-  build({
-    entryPoints: ['ui.ts'], outfile: 'ui.js',
-    bundle: true, platform: 'browser', format: 'esm', target: 'es2022',
-  }),
-]);
-```
+宿主按 CommonJS 加载 `main.cjs`，按 ES module 加载 `ui.js`。[build.mjs](../examples/directory-plugin/build.mjs)
+用 esbuild 分别产出这两份：`platform` 一个取 `node`、一个取 `browser`。
 
 浏览器依赖、worker、字体等资源必须留在插件目录中，并能被相对引用。
 
@@ -187,8 +104,8 @@ npm run build
 WANGCAI_HOME=/tmp/wangcai-plugin-demo npm start
 ```
 
-首次启动会在 `/tmp/wangcai-plugin-demo/.config/wangcai/init.ts` 生成入口；它会先在数据目录里 clone 并构建
-Core（本仓库不再带 Core，这一回启动因此要走网络、也慢些；已经装好就直接用），把同一条目加进去，再重启 App
+首次启动会在 `/tmp/wangcai-plugin-demo/.config/wangcai/init.ts` 生成入口；这一回启动要先装好 Core
+（见 [壳与 Core](architecture.md#壳与-core)，因此要走网络、也慢些），把同一条目加进去，再重启 App
 即可看到该插件。
 
 ## 发布与扩展

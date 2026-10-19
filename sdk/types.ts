@@ -1,27 +1,6 @@
 /** What puts the agent on an ssh machine, which the SDK calls before it connects to it. */
 export type InstallAgent = (host: string, signal?: AbortSignal) => Promise<void>;
 
-/**
- * The workspace protocol. A plugin that init.ts lists under `workspaces` is a workspace provider, and
- * the app drives it through these `ui` methods:
- *
- *   workspaces()              -> WorkspaceRow[]        one flat row per workspace, in draw order; the window may
- *                                                      draw rows under groups of its own, whose rows keep this order
- *   workspace-menu()          -> WorkspaceMenuItem[]   what the menu offers to open; an entry that carries
- *                                                      an error stays listed with its reason, and a click retries it
- *   workspace-create({ key }) -> { id: string }        the id of the workspace it made
- *   workspace-select({ id })
- *   workspace-close({ id })
- *   workspace-rename({ id, name })                     an empty name gives the workspace back to the name it followed
- *   workspace-move({ id, before? })
- *
- * Every view that follows the workspace in front shares these channel topics, whatever the provider
- * behind it is:
- *
- *   'workspaces'       a provider published that its rows changed
- *   'workspace:active' the workspace in front, or null; published by its provider
- *   'workspace:query'  a view asks for 'workspace:active' again
- */
 /** What the agent in a workspace is doing, which the app draws at the right end of its row. */
 export type WorkspaceStatus = 'idle' | 'working' | 'finished';
 export interface WorkspaceRow { id: string; label: string; machine: string; running: boolean; status?: WorkspaceStatus }

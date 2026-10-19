@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { mkdtempSync, readFileSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { drawnOrder, firstInsideLine, launchApp, launchedWithThree, lineAfter, lineBefore, lineBeforeGroup, makeGroup, mockView, mockWorkspace, newWorkspace, onLine, openWorkspaceMenu, rowId, rowIds, testEnv, waitForShell, writeInit } = require('./init.cjs');
+const { drawnOrder, firstInsideLine, headerTop, launchApp, launchedWithThree, lineAfter, lineBefore, lineBeforeGroup, makeGroup, mockView, mockWorkspace, newWorkspace, onLine, openWorkspaceMenu, rowId, rowIds, setFullScreen, testEnv, waitForShell, writeInit } = require('./init.cjs');
 
 const { coreId, installStatusesTopic, link, pluginPageTopic } = require('@lengmoxxl/sdk/bridge');
 
@@ -17,19 +17,15 @@ test('full screen reclaims the window chrome space above the workspaces', { time
     desktop = await launchApp(home, env);
     const page = await desktop.firstWindow();
     const left = page.locator('.sidebar-left');
-    const header = page.locator('.workspace-header');
     await waitForShell(page);
-    const headerTop = () => header.evaluate((element) => Math.round(element.getBoundingClientRect().top));
     assert.equal(await left.evaluate((element) => getComputedStyle(element).paddingTop), '36px');
     // 36px chrome + 1px card border + 3px window inset.
-    assert.equal(await headerTop(), 40);
+    assert.equal(await headerTop(page), 40);
     // What this covers is the change the main process forwards, so this drives the event that carries it.
-    await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].emit('enter-full-screen'); });
-    await page.waitForFunction(() => getComputedStyle(document.querySelector('.sidebar-left')).paddingTop === '0px');
-    assert.equal(await headerTop(), 4);
-    await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].emit('leave-full-screen'); });
-    await page.waitForFunction(() => getComputedStyle(document.querySelector('.sidebar-left')).paddingTop === '36px');
-    assert.equal(await headerTop(), 40);
+    await setFullScreen(desktop, page, true);
+    assert.equal(await headerTop(page), 4);
+    await setFullScreen(desktop, page, false);
+    assert.equal(await headerTop(page), 40);
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });
@@ -45,13 +41,8 @@ test('a plugin update that loads the page again keeps the workspaces in the full
     writeInit(home, { workspaces: ['terminal-agent'], tabs: [] });
     desktop = await launchApp(home, env);
     const page = await desktop.firstWindow();
-    const header = page.locator('.workspace-header');
-    const headerTop = () => header.evaluate((element) => Math.round(element.getBoundingClientRect().top));
     await waitForShell(page);
-    // What this covers is the change the main process forwards, so this drives the event that carries it: the
-    // test window belongs to an app that never comes to the front, which the system will not put in full screen.
-    await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].emit('enter-full-screen'); });
-    await page.waitForFunction(() => getComputedStyle(document.querySelector('.sidebar-left')).paddingTop === '0px');
+    await setFullScreen(desktop, page, true);
     await desktop.evaluate(({ Menu }) => Menu.getApplicationMenu().items.flatMap((item) => item.submenu.items).find((item) => item.label === '插件').click());
     await page.locator('.installs').waitFor();
     // An update loads the page again, and what comes back is a page that has nothing left to report.
@@ -59,7 +50,7 @@ test('a plugin update that loads the page again keeps the workspaces in the full
     await waitForShell(page);
     await page.locator('.installs').waitFor({ state: 'hidden' });
     // The full screen keeps the workspaces at the 3px window inset and the 1px card border.
-    assert.equal(await headerTop(), 4);
+    assert.equal(await headerTop(page), 4);
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });

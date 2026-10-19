@@ -5,10 +5,8 @@
 旺财是一个面向本地与 SSH 远程机器的 macOS 桌面终端工作台：工作区、持久终端和文件视图
 在同一个窗口里，窗口提供布局与插件管理，具体功能由插件实现。
 
-App 只是壳：窗口、preload 桥与打包，另外读 `init.ts` 把插件装好，再确认 Core 是否已经装好。业务逻辑在
-[WangCai-Core](https://github.com/lengmoXXL/WangCai-Core) 里，本仓库不再带它：启动时数据目录里没有构建好的
-Core 就 clone 一份并用自带的 Node 构建（`~/.local/share/wangcai/core-src` 与 `core`），已经有了就直接用，
-插件页里 Core 那一行的「更新」才去重新拉取。
+业务逻辑在 [WangCai-Core](https://github.com/lengmoXXL/WangCai-Core) 里；壳与 Core 的职责划分、Core 的
+来源见 [App 架构与通信](docs/architecture.md#壳与-core)。
 
 <p align="center"><img src="docs/assets/screenshot.png" width="880" alt="旺财窗口：左侧是工作区与终端，右侧是文件视图"></p>
 
@@ -30,8 +28,9 @@ Core 就 clone 一份并用自带的 Node 构建（`~/.local/share/wangcai/core-
    Intel 选 `x64`，Apple Silicon 选 `arm64`。
 2. 当前包是 ad-hoc 签名；若 macOS 阻止打开，确认来源后在
    “系统设置 → 隐私与安全性”中允许打开。
-3. 首次启动会先 clone 并构建业务内核 Core（见上，需要系统 `git` 与网络），再安装官方工作区、文件
-   和终端插件；App 自带构建它们所需的 Node 与 npm。之后的启动用已经装好的那份，不再联网。
+3. 首次启动会先 clone 并构建业务内核 Core（需要系统 `git` 与网络，见
+   [壳与 Core](docs/architecture.md#壳与-core)），再安装官方工作区、文件和终端插件；App 自带构建它们
+   所需的 Node 与 npm。之后的启动用已经装好的那份，不再联网。
 
 ## 配置
 

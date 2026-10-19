@@ -1,18 +1,17 @@
+use crate::lock;
 use anyhow::{Context, Result, bail};
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 use serde::Serialize;
-use std::{collections::HashMap, io::{Read, Write}, sync::{Arc, Mutex, MutexGuard, PoisonError}};
+use std::{
+    collections::HashMap,
+    io::{Read, Write},
+    sync::{Arc, Mutex},
+};
 use tokio::sync::{broadcast, mpsc};
 
 // Writes waiting for the pty to take them. A terminal that stops reading its input fills this queue, and the
 // next write waits for room in it, which is backpressure rather than a stalled node.
 const WRITE_QUEUE: usize = 32;
-
-/// A lock whose holder panicked is not a reason to end the node: the terminals the panic did not touch are
-/// still the ones a window expects to find, and only the request that panicked is gone.
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
-}
 
 #[derive(Serialize)]
 pub struct Summary {
@@ -58,14 +57,24 @@ impl Input {
             bail!("Input chunk is too large");
         }
         // A queue whose receiver is gone belongs to a terminal that has ended, which its exit event tells.
-        self.0.send(data.as_bytes().to_vec()).await.context("Shell has exited")
+        self.0
+            .send(data.as_bytes().to_vec())
+            .await
+            .context("Shell has exited")
     }
 }
 
 impl Terminal {
     pub fn summary(&self) -> Summary {
         let (rows, cols) = self.parser.screen().size();
-        Summary { id: self.id.clone(), title: self.title.clone(), pid: self.pid, rows, cols, exit_code: self.exit_code }
+        Summary {
+            id: self.id.clone(),
+            title: self.title.clone(),
+            pid: self.pid,
+            rows,
+            cols,
+            exit_code: self.exit_code,
+        }
     }
 
     pub fn input(&self) -> Result<Input> {
@@ -138,7 +147,12 @@ impl Terminal {
             bytes.extend(b"\x1b[?1049h");
             bytes.extend(screen.state_formatted());
         }
-        Snapshot { seq: self.seq, rows, cols, data: bytes }
+        Snapshot {
+            seq: self.seq,
+            rows,
+            cols,
+            data: bytes,
+        }
     }
 
     pub fn terminate(&mut self) {
@@ -195,13 +209,24 @@ impl Terminal {
     }
 
     pub fn resize(&mut self, rows: u16, cols: u16) -> Result<()> {
-        self.master.resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })?;
+        self.master.resize(PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        })?;
         self.parser.screen_mut().set_size(rows, cols);
         Ok(())
     }
 }
 
-pub fn create(rows: u16, cols: u16, cwd: Option<&str>, env: &HashMap<String, String>, changed: broadcast::Sender<()>) -> Result<Arc<Mutex<Terminal>>> {
+pub fn create(
+    rows: u16,
+    cols: u16,
+    cwd: Option<&str>,
+    env: &HashMap<String, String>,
+    changed: broadcast::Sender<()>,
+) -> Result<Arc<Mutex<Terminal>>> {
     let pty = native_pty_system().openpty(PtySize {
         rows,
         cols,
@@ -257,7 +282,10 @@ pub fn create(rows: u16, cols: u16, cwd: Option<&str>, env: &HashMap<String, Str
                     let mut terminal = lock(&read_terminal);
                     terminal.parser.process(&bytes[..n]);
                     terminal.seq += 1;
-                    let _ = terminal.output.send(Output { seq: terminal.seq, data: Arc::from(&bytes[..n]) });
+                    let _ = terminal.output.send(Output {
+                        seq: terminal.seq,
+                        data: Arc::from(&bytes[..n]),
+                    });
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
                 Err(_) => break,

@@ -49,7 +49,6 @@ export const coreReady = (storage: string) => {
 /** What a built Core exports: the one call the app makes, and the host it is handed. */
 interface CoreModule { activate(host: CoreHost): Promise<Core> }
 
-/** Imports the `main.cjs` a directory holds. */
 export async function loadCore(directory: string) {
   return import(pathToFileURL(join(directory, 'main.cjs')).href) as Promise<CoreModule>;
 }

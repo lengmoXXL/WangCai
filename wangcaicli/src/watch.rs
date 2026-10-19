@@ -14,7 +14,11 @@ const QUIET: Duration = Duration::from_millis(200);
 const MAX_WAIT: Duration = Duration::from_secs(2);
 
 #[derive(Clone, Copy)]
-enum Change { Created, Modified, Removed }
+enum Change {
+    Created,
+    Modified,
+    Removed,
+}
 
 fn record(pending: &mut BTreeMap<String, Change>, event: Event, root: &Path, given: &str) {
     let change = match event.kind {
@@ -59,7 +63,12 @@ pub struct Batch {
 
 /// Watches one path and reports what changed under it. The task owns the watcher: dropping it, which is
 /// what aborting the task does, ends the watch.
-pub fn start(path: &str, recursive: bool, watch_id: &str, batches: mpsc::Sender<Batch>) -> Result<JoinHandle<()>> {
+pub fn start(
+    path: &str,
+    recursive: bool,
+    watch_id: &str,
+    batches: mpsc::Sender<Batch>,
+) -> Result<JoinHandle<()>> {
     let path = PathBuf::from(path);
     if !path.is_absolute() {
         bail!("Watch path must be absolute");
@@ -70,14 +79,28 @@ pub fn start(path: &str, recursive: bool, watch_id: &str, batches: mpsc::Sender<
     let given = path.to_string_lossy().into_owned();
     let root = std::fs::canonicalize(&path)?;
     let (changes, mut events) = mpsc::unbounded_channel();
-    let mut watcher = RecommendedWatcher::new(move |event| { let _ = changes.send(event); }, Config::default())?;
-    watcher.watch(&path, if recursive { RecursiveMode::Recursive } else { RecursiveMode::NonRecursive })?;
+    let mut watcher = RecommendedWatcher::new(
+        move |event| {
+            let _ = changes.send(event);
+        },
+        Config::default(),
+    )?;
+    watcher.watch(
+        &path,
+        if recursive {
+            RecursiveMode::Recursive
+        } else {
+            RecursiveMode::NonRecursive
+        },
+    )?;
     let watch_id = watch_id.to_owned();
     Ok(tokio::spawn(async move {
         let _watcher = watcher;
         let mut pending: BTreeMap<String, Change> = BTreeMap::new();
         loop {
-            let Some(event) = next(&mut events).await else { break };
+            let Some(event) = next(&mut events).await else {
+                break;
+            };
             let opened = Instant::now();
             record(&mut pending, event, &root, &given);
             while opened.elapsed() < MAX_WAIT {
@@ -98,7 +121,18 @@ pub fn start(path: &str, recursive: bool, watch_id: &str, batches: mpsc::Sender<
                 };
                 bucket.push(path);
             }
-            if batches.send(Batch { watch_id: watch_id.clone(), created, modified, removed }).await.is_err() { break; }
+            if batches
+                .send(Batch {
+                    watch_id: watch_id.clone(),
+                    created,
+                    modified,
+                    removed,
+                })
+                .await
+                .is_err()
+            {
+                break;
+            }
         }
     }))
 }

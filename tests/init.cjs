@@ -201,6 +201,19 @@ exports.lineBefore = async (page, row) => {
 // Where a line is dropped on: its own one pixel, a little in from the left edge.
 exports.onLine = { x: 40, y: 0 };
 
+// The workspace header's distance from the window's top: what the chrome above it takes.
+exports.headerTop = (page) => page.locator('.workspace-header').evaluate((element) => Math.round(element.getBoundingClientRect().top));
+
+// A test window belongs to an app that never comes to the front, which the system will not put in full screen, so
+// the event the main process forwards is emitted instead, and what it leaves behind is waited for.
+exports.setFullScreen = async (desktop, page, on) => {
+  await desktop.evaluate(({ BrowserWindow }, enter) => {
+    BrowserWindow.getAllWindows()[0].emit(enter ? 'enter-full-screen' : 'leave-full-screen');
+  }, on);
+  const padding = on ? '0px' : '36px';
+  await page.waitForFunction((value) => getComputedStyle(document.querySelector('.sidebar-left')).paddingTop === value, padding);
+};
+
 // A launched app with three workspaces, and the locators the row list is read through.
 exports.launchedWithThree = async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-lines-'));
