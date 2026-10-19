@@ -9,7 +9,7 @@ const { coreModule } = require('./init.cjs');
 // The installer asks the SDK how a machine is addressed, and downloads whatever the caller hands it: the
 // test steers the download by passing its own.
 let download = async () => new Response('', { status: 404, statusText: 'Not Found' });
-const { agentInstaller } = coreModule('core/main/agent.ts');
+const { agentInstaller } = coreModule('main/agent.ts');
 // The agent the app ships: the installer reads its version and installs that release.
 const shipped = '#!/bin/sh\n[ "$1" = --version ] && echo "wangcai 0.1.0"\n';
 // The release publishes each asset with its digest beside it; the stub serves both from the same body.

@@ -3,9 +3,9 @@ const assert = require('node:assert/strict');
 const { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { appModule, coreModule, launchApp, mockWorkspace, testEnv, waitForShell, writeInit } = require('./init.cjs');
+const { appModule, coreModule, installCore, launchApp, mockWorkspace, testEnv, waitForShell, writeInit } = require('./init.cjs');
 
-const { syncSources } = coreModule('core/main/resources.ts');
+const { syncSources } = coreModule('main/resources.ts');
 const { loadConfig } = appModule('main/config.ts');
 
 /** Where a run under this home reads and writes what these cases touch. */
@@ -33,6 +33,7 @@ test('an entry that names no source is read from the official repository of its 
 test('the trees an agent reads are copied into the data directory, and only a new version replaces them', () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-sources-'));
   const storage = paths(home).storage;
+  installCore(home);
   const sources = join(storage, 'src');
   try {
     syncSources(process.cwd(), storage, '1.0.0');
@@ -47,6 +48,11 @@ test('the trees an agent reads are copied into the data directory, and only a ne
     writeFileSync(manual, 'edited\n');
     syncSources(process.cwd(), storage, '1.0.0');
     assert.equal(readFileSync(manual, 'utf8'), 'edited\n');
+    // A Core that was rebuilt replaces it as well: those files move without the shell's version changing.
+    writeFileSync(join(storage, 'core/commit'), 'a newer core\n');
+    syncSources(process.cwd(), storage, '1.0.0');
+    assert.notEqual(readFileSync(manual, 'utf8'), 'edited\n');
+    writeFileSync(manual, 'edited\n');
     // A version that changes replaces it: what the copy holds is the app's file, not the user's.
     syncSources(process.cwd(), storage, '1.0.1');
     assert.notEqual(readFileSync(manual, 'utf8'), 'edited\n');
@@ -63,6 +69,7 @@ test('a fresh init.ts points at a document the sources copy carries', async () =
     const init = readFileSync(join(pathsForHome.config, 'init.ts'), 'utf8');
     const named = init.match(/完整说明：(\S+)/)[1];
     assert.equal(named, join(pathsForHome.storage, 'src/README.md'));
+    installCore(home);
     syncSources(process.cwd(), pathsForHome.storage, '1.0.0');
     assert.equal(existsSync(named), true);
   } finally {

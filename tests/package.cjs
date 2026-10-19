@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { _electron: electron } = require('playwright');
-const { mockPlugin, testEnv, waitForShell, writeInit } = require('./init.cjs');
+const { mockPlugin, installCore, testEnv, waitForShell, writeInit } = require('./init.cjs');
 const { existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
@@ -28,13 +28,14 @@ test('packaged app loads the plugins its config names and carries the node they 
       css: '.probe { letter-spacing: 3px; }\n',
     });
     writeInit(home, { workspaces: ['terminal-agent'], tabs: [] });
+    installCore(home);
     assert.equal(execFileSync('plutil', ['-extract', 'CFBundleName', 'raw', join(bundle, 'Info.plist')], { encoding: 'utf8' }).trim(), '旺财');
     // The app carries no plugin at all: init.ts names what to load, and nothing the app ships is a copy
     // of one.
     assert.equal(existsSync(join(bundle, 'Resources/plugins')), false);
-    // The business the app carries is Core's build, page and all: the app has no page of its own.
-    assert.equal(existsSync(join(bundle, 'Resources/core/main.cjs')), true);
-    assert.equal(existsSync(join(bundle, 'Resources/core/ui/index.html')), true);
+    // The app carries no Core at all: what a start finds in the data directory is what runs, and a run that
+    // finds none clones the repository and builds it there.
+    assert.equal(existsSync(join(bundle, 'Resources/core')), false);
     page = await launch();
     await waitForShell(page);
     await page.locator('[data-plugin=terminal-agent] .probe').waitFor();

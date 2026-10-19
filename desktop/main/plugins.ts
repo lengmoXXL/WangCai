@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { InstallStatus, Network, PluginEntry } from '../../core/shared';
+import type { InstallStatus, Network, PluginEntry } from '@lengmoxxl/sdk/bridge';
 import type { PluginSpec } from './config';
 import { TRANSFER_LIMITS, buildEnvironment, mirroredUrl, npm, run, withProxy } from './spawn';
 

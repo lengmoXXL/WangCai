@@ -3,9 +3,9 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { contractVersion, corePageTopic, coreScheme, coreStatusTopic, fullscreenTopic, installStatusesTopic, link, pluginPageTopic, pluginScheme, previewScheme, type InstallStage } from '../../core/shared';
+import { contractVersion, corePageTopic, coreScheme, coreStatusTopic, fullscreenTopic, installStatusesTopic, link, pluginPageTopic, pluginScheme, previewScheme, type InstallStage } from '@lengmoxxl/sdk/bridge';
 import { loadConfig } from './config';
-import { coreDirectory, loadCore, rebuildCore, type CoreHost } from './core';
+import { coreDirectory, coreReady, installCore, loadCore, type CoreHost } from './core';
 import { pluginInstaller } from './plugins';
 
 // The app is a shell: it draws the window, installs the plugins init.ts lists, and is the only thing that can
@@ -56,14 +56,18 @@ else {
     // refuses to put that one in full screen at all.
     let fullscreen = false;
     let rebuilding = false;
-    // Nothing about a rebuild runs through Core: the app fetches and builds it in its own right.
+    // Nothing about installing or replacing Core runs through Core: the app fetches the repository and builds it
+    // with the Node it carries, and what it writes is read by a run that starts after it.
+    const report = (stage: InstallStage, message?: string) => send(coreStatusTopic, { stage, message });
+    const install = async (follow: boolean) => {
+      send(corePageTopic);
+      return await installCore({ storage: storageDirectory, node, network, report, follow });
+    };
     const rebuild = async () => {
       if (rebuilding) return;
       rebuilding = true;
-      const report = (stage: InstallStage, message?: string) => send(coreStatusTopic, { stage, message });
-      send(corePageTopic);
       try {
-        const changed = await rebuildCore({ storage: storageDirectory, node, network, report });
+        const changed = await install(true);
         report('ready', changed ? '已重建，正在重启' : '已是最新');
         if (changed) { app.relaunch(); app.quit(); }
       } catch (error) {
@@ -79,7 +83,17 @@ else {
       if (response === 0) await rebuild();
       app.quit();
     };
-    const directory = coreDirectory({ packaged: app.isPackaged, storage: storageDirectory, app: app.getAppPath() });
+    // A Core is not carried by the app: the run that finds none installs one before there is anything to load, and
+    // what an install reports goes nowhere — no page of Core's is drawn yet, so a failure is the app's to answer.
+    if (!coreReady(storageDirectory)) {
+      try {
+        await install(false);
+      } catch (error) {
+        await refuse('Core 安装失败', error instanceof Error ? error.message : String(error));
+        return;
+      }
+    }
+    const directory = coreDirectory(storageDirectory);
     const core = await loadCore(directory).catch(async (error: Error) => {
       await refuse('Core 加载失败', error.message);
       return undefined;

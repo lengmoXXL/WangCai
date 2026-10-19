@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { link } from '../../core/shared';
+import { link } from '@lengmoxxl/sdk/bridge';
 
 // What the window Core draws is given: one method asked for by name, and one channel for the topics it publishes.
 // Which methods exist is Core's business — this side only forwards.

@@ -206,3 +206,9 @@ connection.disconnect();
 `agentCommand(command, env)` 返回拼接后的 shell 命令：在 PATH 前加入远端 `$HOME/.local/bin`，
 再带上当前进程的 WANGCAI_HOME 与配置要求的环境；值里的 `$NAME` 留给远端 shell 展开。命令本身
 不转义，只传可信内容。
+## 壳与内核的约定
+
+`@lengmoxxl/sdk/bridge` 是壳（App）与业务内核共享的那份契约：窗口的三个 scheme、桥的两个 channel、
+壳向窗口发的 topic、界面字体、安装阶段与跨桥的类型，以及 `contractVersion` —— 内核启动时把它报给壳，
+壳据此拒绝一个面向旧契约的构建。壳与内核各取一份 SDK，所以改这份契约要发新版本，两边对不上时靠这个
+版本号发现。插件不需要它：插件用到的是上文列出的上下文。

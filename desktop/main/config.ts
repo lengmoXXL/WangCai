@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Profile, Theme } from '@lengmoxxl/sdk';
-import type { Network } from '../../core/shared';
+import type { Network } from '@lengmoxxl/sdk/bridge';
 
 const DEFAULT_PROFILE: Profile = {
   theme: {

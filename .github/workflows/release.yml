@@ -114,9 +114,6 @@ jobs:
             target: aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v4
-        with:
-          # The app packages the Core its submodule pins, so the release has to carry that commit in.
-          submodules: recursive
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -134,13 +131,22 @@ jobs:
             got=$(lipo -archs "$app/$binary")
             test "$got" = "$want" || { echo "$binary is $got, expected $want"; exit 1; }
           done
-      - name: Check the app carries the Core the submodule pins
+      - name: Check the app carries no Core
         run: |
           app=$(ls -d desktop/dist/package/mac*/旺财.app)
-          got=$(cat "$app/Contents/Resources/core/commit")
-          want=$(git -C core rev-parse HEAD)
-          test "$got" = "$want" || { echo "the app carries Core $got, the submodule pins $want"; exit 1; }
+          test ! -e "$app/Contents/Resources/core" || { echo "the app carries a Core; a start installs one instead"; exit 1; }
       # The runner is arm64, so this leg starts the app it just built; the x64 app cannot run here.
+      # The app installs Core on its first start, which a test does not do, so the checkout it would build is
+      # built here and handed to the tests; the release itself carries no Core.
+      - name: Build the Core a first start would install
+        if: matrix.arch == 'arm64'
+        env:
+          WANGCAI_CORE_SOURCE: ${{ runner.temp }}/core
+        run: |
+          git clone --depth 1 https://github.com/lengmoXXL/WangCai-Core "$WANGCAI_CORE_SOURCE"
+          npm --prefix "$WANGCAI_CORE_SOURCE" install --no-audit --no-fund --no-progress
+          npm --prefix "$WANGCAI_CORE_SOURCE" run build
+          echo "WANGCAI_CORE_SOURCE=$WANGCAI_CORE_SOURCE" >> "$GITHUB_ENV"
       - name: Check the packaged app itself
         if: matrix.arch == 'arm64'
         env:

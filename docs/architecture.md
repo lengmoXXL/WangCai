@@ -8,13 +8,15 @@
 
 ## 壳与 Core
 
-App（本仓库）只是壳：起窗口、装 preload 桥、打包，读 `init.ts` 把插件装好，以及加载和重建业务内核。业务
-内核在 [WangCai-Core](https://github.com/lengmoXXL/WangCai-Core)，作为 submodule 钉在本仓库的 `core/`：
-机器连接（含远端 agent）、工作区与标签、整个窗口的界面都是它。壳把主题、出网方式和装好的插件清单交给
-Core。凡是 Electron 独有的能力——窗口、协议、session、系统——壳都通过 `CoreHost` 借给 Core。
+App（本仓库）只是壳：起窗口、装 preload 桥、打包，读 `init.ts` 把插件装好，再确保 Core 已经装好。业务
+内核在 [WangCai-Core](https://github.com/lengmoXXL/WangCai-Core)：机器连接（含远端 agent）、工作区与标签、
+整个窗口的界面都是它。壳把主题、出网方式和装好的插件清单交给 Core；凡是 Electron 独有的能力——窗口、协议、
+session、系统——壳都通过 `CoreHost` 借给 Core。两边共享的桥接契约（scheme、topic、channel、`contractVersion`
+与跨桥的类型）在 [@lengmoxxl/sdk](https://www.npmjs.com/package/@lengmoxxl/sdk) 的 `bridge` 模块。
 
-发布时壳把 Core 构建好的 `dist/` 放进 `Resources/core`；运行时也可以从菜单「旺财 → 更新核心组件」拉取 Core
-仓库，用壳自带的 Node 重新构建到数据目录，重启后生效：换业务逻辑不需要发布 App。构建的进度与结果由
+发布时壳不再随包带 Core。启动的第一件事是确认数据目录里有没有构建好的 Core：没有就 clone 仓库、用壳自带的
+Node 构建到数据目录（`core-src` 是那份 clone），重启后生效；已经有了就用现成那份，只有菜单「旺财 → 更新核心
+组件」才会回到仓库重新拉取重建——所以换业务逻辑既不需要发布 App，也不需要每次启动都联网。构建的进度与结果由
 Core 自己的页面（窗口里的「核心组件」页）显示，触发它的按钮也在那一页上。
 
 ## 进程与通信全景

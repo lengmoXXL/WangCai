@@ -187,8 +187,9 @@ npm run build
 WANGCAI_HOME=/tmp/wangcai-plugin-demo npm start
 ```
 
-首次启动会在 `/tmp/wangcai-plugin-demo/.config/wangcai/init.ts` 生成入口；把同一条目加进去，
-再重启 App 即可看到该插件。
+首次启动会在 `/tmp/wangcai-plugin-demo/.config/wangcai/init.ts` 生成入口；它会先在数据目录里 clone 并构建
+Core（本仓库不再带 Core，这一回启动因此要走网络、也慢些；已经装好就直接用），把同一条目加进去，再重启 App
+即可看到该插件。
 
 ## 发布与扩展
 

@@ -1,4 +1,4 @@
-const { mkdirSync, mkdtempSync, writeFileSync } = require('node:fs');
+const { cpSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } = require('node:fs');
 const { Module } = require('node:module');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
@@ -6,6 +6,14 @@ const { buildSync } = require('esbuild');
 const { _electron: electron } = require('playwright');
 
 const root = join(__dirname, '..');
+
+/**
+ * Where the Core of a test run is: the app installs Core itself — it clones the repository and builds it into
+ * the data directory — so a case that found none would need a network and a build. A run reads the developer's
+ * checkout instead, and WANGCAI_CORE_SOURCE points it at another one.
+ */
+const coreSource = process.env.WANGCAI_CORE_SOURCE ?? join(process.env.HOME ?? '', '.wangcai-dev/.local/share/wangcai/core-src');
+const coreBuild = join(coreSource, 'dist');
 
 /** One module of a checkout here, compiled the way it runs: its own imports, bundled. */
 const compile = (file, resolveDir, contents, external) => {
@@ -26,13 +34,13 @@ exports.appModule = (entry) => {
  * before it starts. Core never imports electron, so a test only has to say where the run keeps its files.
  */
 exports.coreModule = (entry, paths = {}) => {
-  const file = join(root, entry);
+  const file = join(coreSource, entry);
   const contents = [
-    `import { paths } from ${JSON.stringify(join(root, 'core/main/paths.ts'))};`,
+    `import { paths } from ${JSON.stringify(join(coreSource, 'main/paths.ts'))};`,
     `Object.assign(paths, ${JSON.stringify(paths)});`,
     `export * from ${JSON.stringify(file)};`,
   ].join('\n');
-  return compile(file, root, contents, ['bufferutil', 'utf-8-validate']);
+  return compile(file, coreSource, contents, ['bufferutil', 'utf-8-validate']);
 };
 
 exports.testEnv = (home) => {
@@ -43,7 +51,22 @@ exports.testEnv = (home) => {
 
 const pluginDirectory = (home, id) => join(home, '.local/share/wangcai/plugins', id);
 
-exports.launchApp = (home, env) => electron.launch({ args: ['desktop', '--unfocused', `--user-data-dir=${join(home, 'electron')}`], env });
+/**
+ * Puts the Core the app would have installed into a case's home: the developer's build, copied the way the app
+ * copies its own, with the sources the snapshot an agent reads is taken from.
+ */
+exports.installCore = (home) => {
+  if (!existsSync(join(coreBuild, 'main.cjs'))) throw new Error(`no Core build at ${coreBuild}: build the checkout at ${coreSource}, or point WANGCAI_CORE_SOURCE at one that is built`);
+  const storage = join(home, '.local/share/wangcai');
+  mkdirSync(storage, { recursive: true });
+  cpSync(coreBuild, join(storage, 'core'), { recursive: true });
+  for (const entry of ['main', 'ui']) cpSync(join(coreSource, entry), join(storage, 'core-src', entry), { recursive: true });
+};
+
+exports.launchApp = (home, env, { installed = true } = {}) => {
+  if (installed) exports.installCore(home);
+  return electron.launch({ args: ['desktop', '--unfocused', `--user-data-dir=${join(home, 'electron')}`], env });
+};
 
 /**
  * The app installs what init.ts lists, so a test that wants plugins writes the file first. An entry

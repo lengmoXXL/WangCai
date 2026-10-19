@@ -1,6 +1,6 @@
 {
   "name": "@lengmoxxl/sdk",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Client SDK for WangCai: connect to a local or remote machine and drive its pty, files and git",
   "license": "MIT",
   "repository": {
@@ -29,6 +29,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.cjs"
     },
+    "./bridge": {
+      "types": "./dist/bridge.d.ts",
+      "default": "./dist/bridge.cjs"
+    },
     "./channel": {
       "types": "./dist/channel.d.ts"
     },
@@ -39,7 +43,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
-    "build": "esbuild index.ts --outfile=dist/index.cjs --bundle --platform=node --target=node22 --packages=external && tsc",
+    "build": "esbuild index.ts --outfile=dist/index.cjs --bundle --platform=node --target=node22 --packages=external && esbuild bridge.ts --outfile=dist/bridge.cjs --bundle --platform=node --target=node22 --packages=external && tsc",
     "prepack": "npm run build",
     "typecheck": "tsc --noEmit"
   },

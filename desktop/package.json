@@ -42,22 +42,6 @@
         "to": "src/README.md"
       },
       {
-        "from": "../core/dist",
-        "to": "core"
-      },
-      {
-        "from": "../core/main",
-        "to": "src/core/main"
-      },
-      {
-        "from": "../core/ui",
-        "to": "src/core/ui"
-      },
-      {
-        "from": "../core/shared.ts",
-        "to": "src/core/shared.ts"
-      },
-      {
         "from": "main",
         "to": "src/desktop/main"
       },

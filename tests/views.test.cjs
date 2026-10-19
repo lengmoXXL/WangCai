@@ -3,9 +3,9 @@ const assert = require('node:assert/strict');
 const { mkdtempSync, readFileSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { coreModule, drawnOrder, firstInsideLine, launchApp, launchedWithThree, lineAfter, lineBefore, lineBeforeGroup, makeGroup, mockView, mockWorkspace, newWorkspace, onLine, openWorkspaceMenu, rowId, rowIds, testEnv, waitForShell, writeInit } = require('./init.cjs');
+const { drawnOrder, firstInsideLine, launchApp, launchedWithThree, lineAfter, lineBefore, lineBeforeGroup, makeGroup, mockView, mockWorkspace, newWorkspace, onLine, openWorkspaceMenu, rowId, rowIds, testEnv, waitForShell, writeInit } = require('./init.cjs');
 
-const { corePageTopic, coreStatusTopic, link } = coreModule('core/shared.ts');
+const { corePageTopic, coreStatusTopic, link } = require('@lengmoxxl/sdk/bridge');
 
 test('full screen reclaims the window chrome space above the workspaces', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-full-screen-'));
