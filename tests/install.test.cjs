@@ -4,10 +4,10 @@ const { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 const { createServer } = require('node:net');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { coreModule, launchApp, mockWorkspace, testEnv, writeInit } = require('./init.cjs');
+const { appModule, launchApp, mockWorkspace, testEnv, writeInit } = require('./init.cjs');
 const { makePluginRepo } = require('./plugin-repo.cjs');
 
-const { mirroredUrl } = coreModule('core/main/install.ts');
+const { mirroredUrl } = appModule('main/spawn.ts');
 
 test('a GitHub URL goes out through the prefix init.ts names, and other URLs are used as they are', () => {
   const repository = 'https://github.com/lengmoXXL/WangCai-git';
@@ -85,7 +85,7 @@ test('the plugin page is styled by the app theme while a plugin is still install
   try {
     desktop = await launchApp(home, env);
     const page = await desktop.firstWindow();
-    // The shell's theme is the app's, so the page has it before any plugin has loaded.
+    // The theme is the app's, so the page has it before any plugin has loaded.
     await page.locator('.installs li[data-stage=building]').waitFor();
     assert.equal(await page.evaluate(() => getComputedStyle(document.body).backgroundColor), 'rgb(18, 19, 20)');
     assert.equal(await page.locator('.installs li').evaluate((row) => getComputedStyle(row).backgroundColor), 'rgb(25, 26, 27)');

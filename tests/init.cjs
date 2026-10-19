@@ -1,28 +1,38 @@
 const { mkdirSync, mkdtempSync, writeFileSync } = require('node:fs');
+const { Module } = require('node:module');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { _electron: electron } = require('playwright');
 const { buildSync } = require('esbuild');
-const { Module } = require('node:module');
+const { _electron: electron } = require('playwright');
 
 const root = join(__dirname, '..');
 
+/** One module of a checkout here, compiled the way it runs: its own imports, bundled. */
+const compile = (file, resolveDir, contents, external) => {
+  const compiled = new Module(file);
+  const text = buildSync({ stdin: { contents, resolveDir, loader: 'ts' }, bundle: true, platform: 'node', target: 'node22', external, write: false }).outputFiles[0].text;
+  compiled._compile(text, `${file}.cjs`);
+  return compiled.exports;
+};
+
+/** One module of the app's own, compiled the way the app runs it. */
+exports.appModule = (entry) => {
+  const file = join(root, 'desktop', entry);
+  return compile(file, join(root, 'desktop'), `export * from ${JSON.stringify(file)};`, ['electron', '@lengmoxxl/sdk']);
+};
+
 /**
- * One module of Core, compiled and loaded the way the shell loads a whole Core: the paths of the run are set
+ * One module of Core, compiled and loaded the way the app loads a whole Core: the paths of the run are set
  * before it starts. Core never imports electron, so a test only has to say where the run keeps its files.
  */
 exports.coreModule = (entry, paths = {}) => {
-  const filename = join(root, entry);
+  const file = join(root, entry);
   const contents = [
     `import { paths } from ${JSON.stringify(join(root, 'core/main/paths.ts'))};`,
     `Object.assign(paths, ${JSON.stringify(paths)});`,
-    `export * from ${JSON.stringify(filename)};`,
+    `export * from ${JSON.stringify(file)};`,
   ].join('\n');
-  // Dependencies are bundled, the way Core's own build bundles them, so the module stands on its own.
-  const compiled = new Module(filename);
-  const text = buildSync({ stdin: { contents, resolveDir: root, loader: 'ts' }, bundle: true, platform: 'node', target: 'node22', external: ['bufferutil', 'utf-8-validate'], write: false }).outputFiles[0].text;
-  compiled._compile(text, `${filename}.cjs`);
-  return compiled.exports;
+  return compile(file, root, contents, ['bufferutil', 'utf-8-validate']);
 };
 
 exports.testEnv = (home) => {
@@ -36,7 +46,7 @@ const pluginDirectory = (home, id) => join(home, '.local/share/wangcai/plugins',
 exports.launchApp = (home, env) => electron.launch({ args: ['desktop', '--unfocused', `--user-data-dir=${join(home, 'electron')}`], env });
 
 /**
- * The app loads only what init.ts lists, so a test that wants plugins writes the file first. An entry
+ * The app installs what init.ts lists, so a test that wants plugins writes the file first. An entry
  * without a source would be installed from the id's official repository, so here it names the directory
  * the mock plugins are written into instead.
  */
@@ -52,9 +62,7 @@ exports.writeInit = (home, lists) => {
   writeFileSync(join(home, '.config/wangcai/init.ts'), `export default { ${settings}workspaces: [${list(workspaces)}], tabs: [${list(tabs)}] };\n`);
 };
 
-/**
- * The app tests use mocks because the real plugins live in their own repositories.
- */
+/** These tests use mocks because the real plugins live in their own repositories. */
 exports.mockPlugin = (home, id, { main = 'exports.activate = () => {};\n', ui, css } = {}) => {
   const directory = pluginDirectory(home, id);
   mkdirSync(directory, { recursive: true });

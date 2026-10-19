@@ -1,6 +1,6 @@
 # 插件开发手册
 
-插件是一个目录：App 负责安装、加载、布局与机器连接，插件只实现自己的功能。
+插件是一个目录：App 负责安装与更新，Core 负责加载、布局与机器连接，插件只实现自己的功能。
 
 完整进程图、CLI 后台进程与通信方式见 [架构说明](architecture.md)。
 
@@ -194,6 +194,6 @@ WANGCAI_HOME=/tmp/wangcai-plugin-demo npm start
 
 发布到 Git 仓库时，提供能写出 `main.cjs` 的 `npm run build`，
 再用 `{ id, repo }` 接入。首次安装执行 clone、npm install 和 build；
-更新产生新构建时，App 会重新加载插件。
+更新产生新构建时，App 装好后由 Core 重新加载插件。
 
 也可以分发预构建目录，让用户以仅含 `directory` 的条目接入。

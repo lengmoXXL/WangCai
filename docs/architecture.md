@@ -3,27 +3,27 @@
 旺财由 Electron 界面与插件、SDK、CLI 和机器上的 Rust 后台进程组成：界面展示与交互，
 后台进程执行终端、文件与子进程，SDK 连接两者。
 
-代码里的 terminal node / Node 指 Rust 后台进程，不是 Node.js；agent 指 App 装到远端的那份
+代码里的 terminal node / Node 指 Rust 后台进程，不是 Node.js；agent 指业务内核装到远端的那份
 `wangcai`，不是编码 agent。
 
 ## 壳与 Core
 
-App（本仓库）只是壳：起窗口、装 preload 桥、打包，以及加载和重建业务内核。业务内核在
-[WangCai-Core](https://github.com/lengmoXXL/WangCai-Core)，作为 submodule 钉在本仓库的 `core/`：
-配置（init.ts）、插件管理、机器连接、工作区与插件页面都是它。凡是 Electron 独有的能力——窗口、协议、
-IPC、session、系统——壳都通过 `CoreHost` 借给 Core。
+App（本仓库）只是壳：起窗口、装 preload 桥、打包，读 `init.ts` 把插件装好，以及加载和重建业务内核。业务
+内核在 [WangCai-Core](https://github.com/lengmoXXL/WangCai-Core)，作为 submodule 钉在本仓库的 `core/`：
+机器连接（含远端 agent）、工作区与标签、整个窗口的界面都是它。壳把主题、出网方式和装好的插件清单交给
+Core。凡是 Electron 独有的能力——窗口、协议、session、系统——壳都通过 `CoreHost` 借给 Core。
 
 发布时壳把 Core 构建好的 `dist/` 放进 `Resources/core`；运行时也可以从菜单「旺财 → 更新核心组件」拉取 Core
-仓库，用 App 自带的 Node 重新构建到数据目录，重启后生效：换业务逻辑不需要发布 App。构建的进度与结果由
+仓库，用壳自带的 Node 重新构建到数据目录，重启后生效：换业务逻辑不需要发布 App。构建的进度与结果由
 Core 自己的页面（窗口里的「核心组件」页）显示，触发它的按钮也在那一页上。
 
 ## 进程与通信全景
 
 ```text
 App 所在机器
-  壳 Electron Main（窗口、preload 桥、打包、Core 加载与重建）
-        | CoreHost：协议、IPC、session、系统
-  Core Main（配置、插件 main.cjs、连接池、agent 安装）
+  壳 Electron Main（窗口、preload 桥、打包、读 init.ts、装插件、Core 加载与重建）
+        | CoreHost：协议、session、系统、配置与插件
+  Core Main（插件 main.cjs、连接池、agent 安装）
         | preload + Electron IPC：请求、结果与事件
   Core Renderer（窗口内容、工作区、插件 ui.js）
         | SDK
@@ -50,7 +50,7 @@ IPC 转发；后台只监听 loopback。
 本机：SDK 连接 Rust 后台进程的 loopback WebSocket 端口，
 后续 PTY、文件与子进程操作都走这条连接。
 
-SSH 远端：App 下载匹配远端平台的 agent 并按发布时随附的 sha256 校验，经 SSH 写入安装目录，
+SSH 远端：Core 下载匹配远端平台的 agent 并按发布时随附的 sha256 校验，经 SSH 写入安装目录，
 SDK 通过 SSH 执行远端 CLI，系统 SSH 用 `-L` 把本地 loopback 端口转发到远端 loopback 端口，
 SDK 连接本地转发端口后使用与本机相同的机器 API。
 

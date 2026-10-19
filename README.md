@@ -5,9 +5,9 @@
 旺财是一个面向本地与 SSH 远程机器的 macOS 桌面终端工作台：工作区、持久终端和文件视图
 在同一个窗口里，窗口提供布局与插件管理，具体功能由插件实现。
 
-App 只是壳：窗口、preload 桥与打包。业务逻辑在
-[WangCai-Core](https://github.com/lengmoXXL/WangCai-Core)（本仓库的 `core/` submodule）里，
-因此业务逻辑可以原地重建，不必重新发布 App。
+App 只是壳：窗口、preload 桥与打包，另外读 `init.ts` 并把插件装好。业务逻辑在
+[WangCai-Core](https://github.com/lengmoXXL/WangCai-Core)（本仓库的 `core/` submodule）里，可以随时拉取
+重建成数据目录，重启后生效，不必重新发布 App。
 
 <p align="center"><img src="docs/assets/screenshot.png" width="880" alt="旺财窗口：左侧是工作区与终端，右侧是文件视图"></p>
 
@@ -103,8 +103,9 @@ network: {
 },
 ```
 
-`proxy` 是 app 自己的请求（下载 agent）与插件 `clone`、`npm install` 走的代理，写 `http://`、`https://` 或
-`socks5://`；不写 scheme 当 `http://`，写 `socks://` 当 `socks5://`。socks5 一律走远端解析域名。
+`proxy` 由壳读出来：壳自己的 git 与 npm（插件 `clone`、`npm install`、重建 Core）走它；Core 的请求（下载
+agent 等）走壳的 session，代理在 Core 启动时设进去。写 `http://`、`https://` 或 `socks5://`；不写 scheme 当
+`http://`，写 `socks://` 当 `socks5://`。socks5 一律走远端解析域名。
 
 `mirror` 是 GitHub 加速前缀：`https://github.com/` 开头的链接都拼在它后面取，其它 URL（含
 `git@github.com:` 形式的仓库）照原样用。

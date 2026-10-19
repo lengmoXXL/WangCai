@@ -3,7 +3,9 @@ const assert = require('node:assert/strict');
 const { mkdtempSync, readFileSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { drawnOrder, firstInsideLine, launchApp, launchedWithThree, lineAfter, lineBefore, lineBeforeGroup, makeGroup, mockView, mockWorkspace, newWorkspace, onLine, openWorkspaceMenu, rowId, rowIds, testEnv, waitForShell, writeInit } = require('./init.cjs');
+const { coreModule, drawnOrder, firstInsideLine, launchApp, launchedWithThree, lineAfter, lineBefore, lineBeforeGroup, makeGroup, mockView, mockWorkspace, newWorkspace, onLine, openWorkspaceMenu, rowId, rowIds, testEnv, waitForShell, writeInit } = require('./init.cjs');
+
+const { corePageTopic, coreStatusTopic, link } = coreModule('core/shared.ts');
 
 test('full screen reclaims the window chrome space above the workspaces', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-full-screen-'));
@@ -46,9 +48,11 @@ test('a plugin update that loads the page again keeps the workspaces in the full
     const header = page.locator('.workspace-header');
     const headerTop = () => header.evaluate((element) => Math.round(element.getBoundingClientRect().top));
     await waitForShell(page);
-    await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].setFullScreen(true); });
+    // What this covers is the change the main process forwards, so this drives the event that carries it: the
+    // test window belongs to an app that never comes to the front, which the system will not put in full screen.
+    await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].emit('enter-full-screen'); });
     await page.waitForFunction(() => getComputedStyle(document.querySelector('.sidebar-left')).paddingTop === '0px');
-    await desktop.evaluate(({ Menu }) => Menu.getApplicationMenu().items[1].submenu.items[0].click());
+    await desktop.evaluate(({ Menu }) => Menu.getApplicationMenu().items.flatMap((item) => item.submenu.items).find((item) => item.label === '插件').click());
     await page.locator('.installs').waitFor();
     // An update loads the page again, and what comes back is a page that has nothing left to report.
     await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].webContents.reload(); });
@@ -409,7 +413,7 @@ test('the app menu carries the Core update, and the view menu holds the plugin p
       ];
     });
     assert.deepEqual(labels, ['旺财', '视图']);
-    // Replacing Core is the shell's own affair, so it sits with the app; the view menu holds pages.
+    // Replacing Core is the app's own affair, so its entry sits in the app menu; the view menu holds pages.
     assert.ok(appItems.includes('更新核心组件'));
     assert.deepEqual(viewItems, ['插件']);
   } finally {
@@ -418,7 +422,7 @@ test('the app menu carries the Core update, and the view menu holds the plugin p
   }
 });
 
-test('the Core page draws what the shell reports about a rebuild, and asks for the next one', { timeout: 180000 }, async () => {
+test('the Core page draws what the app reports about a rebuild, and holds the button for a finished one', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-core-page-'));
   const env = testEnv(home);
   let desktop;
@@ -429,26 +433,26 @@ test('the Core page draws what the shell reports about a rebuild, and asks for t
     await waitForShell(page);
     const core = page.locator('.core-page');
     const update = core.locator('button', { hasText: '更新' });
-    // What the shell says over the bridge is what the page draws, so the topics are sent by hand.
-    const tell = (topic, data) => desktop.evaluate(({ BrowserWindow }, [topic, data]) => {
-      BrowserWindow.getAllWindows()[0].webContents.send('wangcai:channel', topic, data);
-    }, [topic, data]);
-    assert.equal(await core.isVisible(), false, 'nothing about Core is drawn before the shell says something');
-    await tell('core-page');
+    // What the app says over the bridge is what the page draws, so the topics are sent by hand.
+    const tell = (topic, data) => desktop.evaluate(({ BrowserWindow }, [channel, topic, data]) => {
+      BrowserWindow.getAllWindows()[0].webContents.send(channel, topic, data);
+    }, [link.channel, topic, data]);
+    assert.equal(await core.isVisible(), false, 'nothing about Core is drawn before the app says something');
+    await tell(corePageTopic);
     await core.waitFor();
     assert.equal(await core.locator('h1').innerText(), '核心组件');
     assert.equal(await page.locator('.installs').isVisible(), false, 'the Core page is not the plugin page');
-    await tell('core-status', { stage: 'building', message: 'npm run build' });
+    await tell(coreStatusTopic, { stage: 'building', message: 'npm run build' });
     await page.locator('.core-page .core-stage').filter({ hasText: '构建中' }).waitFor();
     assert.equal(await core.locator('.core-message').innerText(), 'npm run build');
     assert.equal(await update.isDisabled(), true, 'a rebuild in flight is not asked for twice');
     // A report that has not finished opens the page again, so a failure is read rather than missed.
     await core.locator('button', { hasText: '关闭' }).click();
     await core.waitFor({ state: 'hidden' });
-    await tell('core-status', { stage: 'ready', message: '已是最新' });
+    await tell(coreStatusTopic, { stage: 'ready', message: '已是最新' });
     assert.equal(await core.isVisible(), false, 'a finished rebuild stays closed');
     assert.equal(await update.isDisabled(), false);
-    await tell('core-status', { stage: 'failed', message: 'git clone 失败' });
+    await tell(coreStatusTopic, { stage: 'failed', message: 'git clone 失败' });
     await core.waitFor();
     await page.locator('.core-page .core-stage[data-stage=failed]').waitFor();
     assert.equal(await core.locator('.core-message').innerText(), 'git clone 失败');

@@ -32,7 +32,7 @@ test('packaged app loads the plugins its config names and carries the node they 
     // The app carries no plugin at all: init.ts names what to load, and nothing the app ships is a copy
     // of one.
     assert.equal(existsSync(join(bundle, 'Resources/plugins')), false);
-    // The business the app carries is Core's build, page and all: the shell has no page of its own.
+    // The business the app carries is Core's build, page and all: the app has no page of its own.
     assert.equal(existsSync(join(bundle, 'Resources/core/main.cjs')), true);
     assert.equal(existsSync(join(bundle, 'Resources/core/ui/index.html')), true);
     page = await launch();
