@@ -1,21 +1,25 @@
+use crate::lock;
 use anyhow::{Context, Result, bail};
 use base64::Engine;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
-    collections::HashMap, os::unix::process::ExitStatusExt, path::PathBuf, process::Stdio,
-    sync::Arc,
+    collections::HashMap,
+    os::unix::process::ExitStatusExt,
+    path::PathBuf,
+    process::Stdio,
+    sync::{Arc, Mutex as StdMutex},
 };
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     process::{ChildStdin, Command},
-    sync::{Mutex, broadcast, mpsc},
+    sync::{Mutex, mpsc},
 };
 
 const MAX_WRITE: usize = 64 * 1024;
 const READ_CHUNK: usize = 8 * 1024;
-// A consumer this far behind has missed part of a byte stream, which cannot be repaired by a reattach.
-const BUFFER: usize = 1024;
+// How far a client may lag before the output waits for it.
+const BUFFER: usize = 4096;
 // Writes waiting for the process to read its stdin. A process that stops reading fills this queue, and
 // the client's next write waits for room in it, which is backpressure rather than a stalled process.
 const WRITE_QUEUE: usize = 32;
@@ -37,6 +41,32 @@ pub enum Event {
     Exit { seq: u64, code: u32 },
 }
 
+/// Where one process' output goes: a queue per subscriber, whose sender waits for room instead of
+/// overrunning, so a client that cannot keep up holds the process back rather than missing bytes.
+struct Subscribers(StdMutex<Vec<mpsc::Sender<Event>>>);
+
+impl Subscribers {
+    fn new() -> Self {
+        Self(StdMutex::new(Vec::new()))
+    }
+
+    fn subscribe(&self) -> mpsc::Receiver<Event> {
+        let (sender, receiver) = mpsc::channel(BUFFER);
+        lock(&self.0).push(sender);
+        receiver
+    }
+
+    /// The senders are cloned out before the first wait, so a stalled client never holds their lock.
+    async fn deliver(&self, event: Event) {
+        let senders = lock(&self.0).clone();
+        for sender in senders {
+            let _ = sender.send(event.clone()).await;
+        }
+        // A queue whose reader is gone belongs to a client that detached.
+        lock(&self.0).retain(|sender| !sender.is_closed());
+    }
+}
+
 /// A program the node holds open: its stdin stays writable and its two output streams arrive as they
 /// are produced, so a client that speaks a protocol over pipes can drive it for as long as it runs.
 pub struct Process {
@@ -44,7 +74,7 @@ pub struct Process {
     pid: u32,
     // The process' stdin belongs to its writer task rather than to this struct.
     input: mpsc::Sender<Vec<u8>>,
-    output: broadcast::Sender<Event>,
+    output: Arc<Subscribers>,
     seq: u64,
     exit_code: Option<u32>,
 }
@@ -69,7 +99,7 @@ impl Process {
         json!({"id":self.id,"pid":self.pid,"exit_code":self.exit_code})
     }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<Event> {
+    pub fn subscribe(&self) -> mpsc::Receiver<Event> {
         self.output.subscribe()
     }
 
@@ -115,14 +145,13 @@ pub fn spawn(request: Value) -> Result<(String, Arc<Mutex<Process>>)> {
     let stdin = child.stdin.take().context("Process has no stdin")?;
     let stdout = child.stdout.take().context("Process has no stdout")?;
     let stderr = child.stderr.take().context("Process has no stderr")?;
-    let (output, _) = broadcast::channel(BUFFER);
     let (input, queue) = mpsc::channel(WRITE_QUEUE);
     let id = uuid::Uuid::new_v4().to_string();
     let process = Arc::new(Mutex::new(Process {
         id: id.clone(),
         pid,
         input,
-        output,
+        output: Arc::new(Subscribers::new()),
         seq: 0,
         exit_code: None,
     }));
@@ -147,13 +176,13 @@ pub fn spawn(request: Value) -> Result<(String, Arc<Mutex<Process>>)> {
                     .unwrap_or(1)
             })
             .unwrap_or(1);
-        let mut process = exited.lock().await;
-        process.exit_code = Some(code);
-        process.seq += 1;
-        let _ = process.output.send(Event::Exit {
-            seq: process.seq,
-            code,
-        });
+        let (output, seq) = {
+            let mut process = exited.lock().await;
+            process.exit_code = Some(code);
+            process.seq += 1;
+            (process.output.clone(), process.seq)
+        };
+        output.deliver(Event::Exit { seq, code }).await;
     });
     Ok((id, process))
 }
@@ -173,6 +202,7 @@ async fn forward(
     process: Arc<Mutex<Process>>,
     build: fn(u64, Vec<u8>) -> Event,
 ) {
+    let output = process.lock().await.output.clone();
     let mut bytes = [0; READ_CHUNK];
     loop {
         let read = match reader.read(&mut bytes).await {
@@ -181,10 +211,40 @@ async fn forward(
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(_) => break,
         };
-        let mut process = process.lock().await;
-        process.seq += 1;
-        let _ = process
-            .output
-            .send(build(process.seq, bytes[..read].to_vec()));
+        let event = {
+            let mut process = process.lock().await;
+            process.seq += 1;
+            build(process.seq, bytes[..read].to_vec())
+        };
+        output.deliver(event).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_subscriber_that_reads_late_gets_every_event() {
+        let subscribers = Subscribers::new();
+        let mut receiver = subscribers.subscribe();
+        // Two events past what the queue holds: they wait for room rather than being dropped.
+        let total = BUFFER as u64 + 2;
+        let deliver = tokio::spawn(async move {
+            for seq in 1..=total {
+                subscribers
+                    .deliver(Event::Stdout { seq, data: vec![0] })
+                    .await;
+            }
+        });
+        for seq in 1..=total {
+            match receiver.recv().await {
+                Some(Event::Stdout { seq: got, .. }) => {
+                    assert_eq!(got, seq, "events arrived out of order")
+                }
+                _ => panic!("event {seq} went missing"),
+            }
+        }
+        deliver.await.unwrap();
     }
 }

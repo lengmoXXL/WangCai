@@ -258,7 +258,9 @@ pub fn create(
     let mut reader = pty.master.try_clone_reader()?;
     let writer = pty.master.take_writer()?;
     let id = uuid::Uuid::new_v4().to_string();
-    let (output, _) = broadcast::channel(256);
+    // A viewer this far behind is handed a fresh snapshot instead of the frames it missed, so the queue is
+    // long enough that an ordinary burst of output does not cost one.
+    let (output, _) = broadcast::channel(1024);
     let (input, queue) = mpsc::channel(WRITE_QUEUE);
     let terminal = Arc::new(Mutex::new(Terminal {
         id,

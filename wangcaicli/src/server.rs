@@ -271,24 +271,13 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                             let out = out.clone();
                             let session = id.to_owned();
                             let task = tokio::spawn(async move {
-                                loop {
-                                    match events.recv().await {
-                                        Ok(event) => {
-                                            let (header, data) = match event {
-                                                Event::Stdout { seq, data } => (json!({"event":"stdout","session_id":session,"seq":seq}), data),
-                                                Event::Stderr { seq, data } => (json!({"event":"stderr","session_id":session,"seq":seq}), data),
-                                                Event::Exit { seq, code } => (json!({"event":"exit","session_id":session,"seq":seq,"code":code}), Vec::new()),
-                                            };
-                                            if out.send(packet(header, &data)).await.is_err() { break; }
-                                        }
-                                        Err(broadcast::error::RecvError::Lagged(_)) => {
-                                            // A byte stream that lost a frame cannot be resumed; say so and stop.
-                                            let header = json!({"event":"lost","session_id":session});
-                                            let _ = out.send(packet(header, &[])).await;
-                                            break;
-                                        }
-                                        Err(_) => break,
-                                    }
+                                while let Some(event) = events.recv().await {
+                                    let (header, data) = match event {
+                                        Event::Stdout { seq, data } => (json!({"event":"stdout","session_id":session,"seq":seq}), data),
+                                        Event::Stderr { seq, data } => (json!({"event":"stderr","session_id":session,"seq":seq}), data),
+                                        Event::Exit { seq, code } => (json!({"event":"exit","session_id":session,"seq":seq,"code":code}), Vec::new()),
+                                    };
+                                    if out.send(packet(header, &data)).await.is_err() { break; }
                                 }
                             });
                             attachments.insert(id.into(), task);
