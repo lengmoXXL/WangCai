@@ -1,4 +1,4 @@
-const { cpSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } = require('node:fs');
+const { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } = require('node:fs');
 const { Module } = require('node:module');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
@@ -30,23 +30,22 @@ exports.appModule = (entry) => {
   return compile(file, join(root, 'desktop'), `export * from ${JSON.stringify(file)};`, ['electron', '@lengmoxxl/sdk']);
 };
 
-/**
- * One module of Core, compiled and loaded the way the app loads a whole Core: the paths of the run are set
- * before it starts. Core never imports electron, so a test only has to say where the run keeps its files.
- */
-exports.coreModule = (entry, paths = {}) => {
+/** One module of Core, compiled and loaded the way the app loads a whole Core: Core never imports electron, so a
+ * test only has to name the module it drives. */
+exports.coreModule = (entry) => {
   const file = join(coreSource, entry);
-  const contents = [
-    `import { paths } from ${JSON.stringify(join(coreSource, 'main/paths.ts'))};`,
-    `Object.assign(paths, ${JSON.stringify(paths)});`,
-    `export * from ${JSON.stringify(file)};`,
-  ].join('\n');
-  return compile(file, coreSource, contents, ['bufferutil', 'utf-8-validate']);
+  return compile(file, coreSource, `export * from ${JSON.stringify(file)};`, ['bufferutil', 'utf-8-validate']);
 };
+
+/** The agent release the Core under test drives, which its own agent.ts pins. */
+exports.agentVersion = readFileSync(join(coreSource, 'main/agent.ts'), 'utf8').match(/^const VERSION = '([^']+)';$/m)[1];
 
 exports.testEnv = (home) => {
   const env = { ...process.env, HOME: home, WANGCAI_HOME: '', SHELL: '/bin/bash', ELECTRON_RENDERER_URL: '' };
   delete env.ELECTRON_RUN_AS_NODE;
+  // The agent Core would install from a release is taken from this checkout instead, so a case needs no network.
+  const agent = join(root, 'wangcaicli/dist/debug/wangcai');
+  if (existsSync(agent)) env.WANGCAI_AGENT_SOURCE = agent;
   return env;
 };
 

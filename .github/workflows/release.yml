@@ -15,8 +15,8 @@ permissions:
 
 jobs:
   # The app goes out on every tag. The agent goes out on its own, under the tag of its own version, and only
-  # when wangcaicli changed: an app that ships the same agent keeps the running terminals on the machines it
-  # is installed on. The app's release is the one the repository calls latest; the agent's never is.
+  # when wangcaicli changed: the shell does not carry it, so a Core downloads the version it drives from that
+  # release. The app's release is the one the repository calls latest; the agent's never is.
   versions:
     runs-on: ubuntu-latest
     outputs:
@@ -50,7 +50,7 @@ jobs:
           if [ "$changed" = true ] || [ "$FORCE" = true ]; then
             echo "agent=true" >> "$GITHUB_OUTPUT"
           else
-            gh release view "agent-v$crate" >/dev/null 2>&1 || { echo "no agent-v$crate release for the agent this app ships"; exit 1; }
+            gh release view "agent-v$crate" >/dev/null 2>&1 || { echo "no agent-v$crate release for the agent this checkout builds"; exit 1; }
             echo "agent=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Open the releases this run writes into
@@ -109,9 +109,7 @@ jobs:
       matrix:
         include:
           - arch: x64
-            target: x86_64-apple-darwin
           - arch: arm64
-            target: aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -119,15 +117,13 @@ jobs:
           node-version: 22
       - name: Install the workspaces
         run: npm ci
-      - name: Add the target
-        run: rustup target add ${{ matrix.target }}
       - name: Package the ad-hoc signed app for ${{ matrix.arch }}
         run: npm run package:mac:${{ matrix.arch }}
       - name: Check the app carries the architecture it was built for
         run: |
           want=${{ matrix.arch == 'x64' && 'x86_64' || 'arm64' }}
           app=$(ls -d desktop/dist/package/mac*/旺财.app)
-          for binary in Contents/MacOS/旺财 Contents/Resources/wangcai Contents/Resources/node/bin/node; do
+          for binary in Contents/MacOS/旺财 Contents/Resources/node/bin/node; do
             got=$(lipo -archs "$app/$binary")
             test "$got" = "$want" || { echo "$binary is $got, expected $want"; exit 1; }
           done

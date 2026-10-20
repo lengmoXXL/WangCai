@@ -6,7 +6,7 @@
 // What a Core expects of the shell it is given, and reports back. The shell refuses a build that reports nothing
 // (made before the number existed) or an older number; one that reports a newer number is let through, since the
 // way back from a refusal is to rebuild Core, which fetches the newest one.
-export const contractVersion = 2;
+export const contractVersion = 3;
 
 // The shell's own font, which plugins do not inherit.
 export const uiFont = '"DejaVuSansM Nerd Font Mono", monospace';

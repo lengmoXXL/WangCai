@@ -10,7 +10,7 @@ import { TRANSFER_LIMITS, buildEnvironment, mirroredUrl, npm, run, withProxy } f
  * through their own copy of it, so `Profile` from one is not the same type as `Profile` from the other.
  */
 export interface CoreHost {
-  paths: { storage: string; resources: string };
+  paths: { storage: string };
   version: string;
   sources: string;
   config: { profile: Profile; network: Network };

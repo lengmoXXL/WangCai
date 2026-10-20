@@ -30,7 +30,8 @@
    “系统设置 → 隐私与安全性”中允许打开。
 3. 首次启动会先 clone 并构建业务内核 Core（需要系统 `git` 与网络，见
    [壳与 Core](docs/architecture.md#壳与-core)），再安装官方工作区、文件和终端插件；App 自带构建它们
-   所需的 Node 与 npm。之后的启动用已经装好的那份，不再联网。
+   所需的 Node 与 npm。本机与远端用的 `wangcai` 节点由 Core 从 release 下载，App 不带它。之后的启动
+   用已经装好的那份，不再联网。
 
 ## 配置
 
@@ -138,7 +139,8 @@ ssh -o BatchMode=yes dev-box 'uname -s -m'
 在 `terminal-agent.config.machines` 里加 `{ name, host, env }`；`host` 交给系统 `ssh`，可以用
 `~/.ssh/config` 别名。
 
-首次连接会按平台安装或更新远端 `~/.local/bin/wangcai`。
+首次连接会按平台安装或更新远端 `~/.local/bin/wangcai`；本机那份装在本机数据目录的
+`bin/wangcai` 下，同样由 Core 按版本下载。
 
 ## 开发文档
 

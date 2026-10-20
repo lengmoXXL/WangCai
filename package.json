@@ -10,7 +10,7 @@
     "build": "cargo build && npm run build:sdk && npm run typecheck:app && npm run build --workspace wangcai-desktop",
     "start": "npm run start --workspace wangcai-desktop",
     "test": "npm run build && node --test tests/*.test.cjs; status=$?; node tests/reap.cjs; exit $status",
-    "package": "cargo build --release && npm run build:sdk && npm run typecheck:app && npm run package --workspace wangcai-desktop",
+    "package": "npm run build:sdk && npm run typecheck:app && npm run package --workspace wangcai-desktop",
     "package:mac:x64": "node desktop/tools/package-mac.mjs x64",
     "package:mac:arm64": "node desktop/tools/package-mac.mjs arm64",
     "build:sdk": "npm run build --workspace @lengmoxxl/sdk",

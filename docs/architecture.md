@@ -58,6 +58,10 @@ SDK 连接本地转发端口后使用与本机相同的机器 API。
 
 ## CLI 后台与终端生命周期
 
+`wangcai` 节点由 Core 管理，App 不随包带它：Core 按自己钉的版本从 `agent-v<版本>` release 下载，本机
+装到数据目录的 `bin/wangcai`，远端经 SSH 写到 `~/.local/bin/wangcai`，两边都按同名 `.sha256` 校验。
+换节点因此不需要发 App，Core 更新即可。
+
 `wangcai server start --json` 复用可用的当前版本后台，或启动独立后台进程；`status` 与
 `stop` 用发现信息连接后台服务。发现信息含 pid、端口、实例标识与协议版本，用于定位和
 校验服务，不保存 shell 或 PTY 状态。

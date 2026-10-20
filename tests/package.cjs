@@ -34,8 +34,9 @@ test('packaged app loads the plugins its config names and carries the node they 
     // of one.
     assert.equal(existsSync(join(bundle, 'Resources/plugins')), false);
     // The app carries no Core at all: what a start finds in the data directory is what runs, and a run that
-    // finds none clones the repository and builds it there.
+    // finds none clones the repository and builds it there, as the agent is installed from its release.
     assert.equal(existsSync(join(bundle, 'Resources/core')), false);
+    assert.equal(existsSync(join(bundle, 'Resources/wangcai')), false);
     page = await launch();
     await waitForShell(page);
     await page.locator('[data-plugin=terminal-agent] .probe').waitFor();
@@ -65,7 +66,9 @@ test('packaged app loads the plugins its config names and carries the node they 
     assert.doesNotMatch(preset, /font/);
   } finally {
     await desktop?.close();
-    try { execFileSync(join(bundle, 'Resources/wangcai'), ['server', 'stop'], { env, stdio: 'ignore', timeout: 15000 }); } catch {}
+    // The agent Core installs lives under the data directory.
+    const agent = join(home, '.local/share/wangcai/bin/wangcai');
+    try { if (existsSync(agent)) execFileSync(agent, ['server', 'stop'], { env, stdio: 'ignore', timeout: 15000 }); } catch {}
     rmSync(home, { recursive: true, force: true });
   }
 });

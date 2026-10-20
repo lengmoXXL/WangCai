@@ -45,10 +45,9 @@ else {
     const unfocused = process.argv.includes('--unfocused');
     // An unfocused window belongs to an app that never comes to the front, so it holds no dock icon either.
     if (unfocused) app.dock?.hide();
-    // The node and the agent this app carries: packaged they sit among its resources, while a development run
-    // uses this checkout's node and the agent built next to it.
+    // The node a packaged run carries among its resources, and the one a development run builds next to this
+    // checkout. The agent a machine runs is Core's to install, not the app's to carry.
     const node = app.isPackaged ? join(process.resourcesPath, 'node/bin/node') : join(app.getAppPath(), 'node/bin/node');
-    const resourcesDirectory = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), '../wangcaicli/dist/debug');
     // What init.ts holds is the app's to read: the theme of the window, how a run reaches the network, and the
     // plugins that have to be built before a Core can load them.
     const { profile, network, plugins: specs } = await loadConfig({ config: configDirectory, storage: storageDirectory });
@@ -120,7 +119,7 @@ else {
       report: (rows) => { pluginRows = rows; send(installStatusesTopic, statuses()); },
     });
     const host: CoreHost = {
-      paths: { storage: storageDirectory, resources: resourcesDirectory },
+      paths: { storage: storageDirectory },
       version: app.getVersion(),
       sources: app.isPackaged ? join(process.resourcesPath, 'src') : join(app.getAppPath(), '..'),
       config: { profile, network },
