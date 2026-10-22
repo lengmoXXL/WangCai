@@ -26,6 +26,9 @@ use tokio_tungstenite::{accept_async, tungstenite::Message};
 // has come back for it: a window that reconnects attaches its processes again and keeps them running.
 const REAP: Duration = Duration::from_secs(60);
 
+// A serial no connection carries: the terminal waits for a viewer to answer for it.
+const NOBODY: u64 = u64::MAX;
+
 fn snapshot_packet(id: &str, snapshot: terminal::Snapshot) -> Message {
     packet(
         json!({"event":"snapshot","session_id":id,"seq":snapshot.seq,"rows":snapshot.rows,"cols":snapshot.cols}),
@@ -44,7 +47,9 @@ struct Node {
     info: ServerInfo,
     sessions: Mutex<HashMap<String, Arc<Mutex<Terminal>>>>,
     processes: Mutex<HashMap<String, Held>>,
-    // Names one client socket, so the node can tell which window a process was left by.
+    // The connection that answers for a terminal: the last one to show activity on it.
+    primaries: Mutex<HashMap<String, Arc<AtomicU64>>>,
+    // Names one client socket.
     serial: AtomicU64,
     changed: broadcast::Sender<()>,
     stop: Notify,
@@ -78,6 +83,24 @@ impl Node {
             .filter_map(|id| processes.remove(&id))
             .map(|held| held.process)
             .collect()
+    }
+
+    fn claim(&self, id: &str, connection: u64) -> Arc<AtomicU64> {
+        let primary = lock(&self.primaries)
+            .entry(id.to_owned())
+            .or_insert_with(|| Arc::new(AtomicU64::new(NOBODY)))
+            .clone();
+        primary.store(connection, Ordering::Relaxed);
+        primary
+    }
+
+    fn release(&self, id: &str, connection: u64) {
+        if let Some(primary) = lock(&self.primaries)
+            .get(id)
+            .filter(|primary| primary.load(Ordering::Relaxed) == connection)
+        {
+            primary.store(NOBODY, Ordering::Relaxed);
+        }
     }
 }
 
@@ -212,11 +235,19 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                             let out = out.clone();
                             let session = session.clone();
                             let session_id = id.to_owned();
+                            let primary = node.claim(id, connection);
                             let task = tokio::spawn(async move {
                                 if out.send(snapshot).await.is_err() { return; }
                                 loop {
                                     let message = match events.recv().await {
-                                        Ok(output) => packet(json!({"event":"output","session_id":session_id,"seq":output.seq}), &output.data),
+                                        Ok(output) => {
+                                            let mut data = output.data.to_vec();
+                                            if primary.load(Ordering::Relaxed) == connection {
+                                                data.extend_from_slice(&output.queries);
+                                            }
+                                            if data.is_empty() { continue; }
+                                            packet(json!({"event":"output","session_id":session_id,"seq":output.seq}), &data)
+                                        }
                                         Err(broadcast::error::RecvError::Lagged(_)) => {
                                             let terminal = lock(&session);
                                             events = terminal.subscribe();
@@ -231,12 +262,14 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                             Ok(json!(terminal.summary()))
                         }
                         "detach" => {
+                            node.release(id, connection);
                             if let Some(task) = attachments.remove(id) { task.abort(); }
                             Ok(json!({}))
                         }
                         "input" | "resize" => {
                             let session = node.session(id)?;
                             if !attachments.contains_key(id) { bail!("Attach the terminal before writing or resizing"); }
+                            node.claim(id, connection);
                             if op == "input" {
                                 let data = request["data"].as_str().context("Missing input data")?;
                                 // The lock goes before the bytes are queued: a terminal that is slow to read its
@@ -254,6 +287,7 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                             let session = node.session(id)?;
                             lock(&session).terminate();
                             lock(&node.sessions).remove(id);
+                            lock(&node.primaries).remove(id);
                             if let Some(task) = attachments.remove(id) { task.abort(); }
                             let _ = node.changed.send(());
                             Ok(json!({}))
@@ -321,6 +355,9 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
             }
         }
     }
+    for id in attachments.keys() {
+        node.release(id, connection);
+    }
     for task in attachments.into_values() {
         task.abort();
     }
@@ -344,6 +381,7 @@ pub async fn run(listener: TcpListener, info: ServerInfo) -> Result<()> {
         info,
         sessions: Mutex::new(HashMap::new()),
         processes: Mutex::new(HashMap::new()),
+        primaries: Mutex::new(HashMap::new()),
         serial: AtomicU64::new(0),
         changed,
         stop: Notify::new(),

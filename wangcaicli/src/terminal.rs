@@ -17,6 +17,8 @@ const WRITE_QUEUE: usize = 32;
 pub struct Output {
     pub seq: u64,
     pub data: Arc<[u8]>,
+    // The queries only the viewer that answers for this pane may see.
+    pub queries: Arc<[u8]>,
 }
 
 pub struct Snapshot {
@@ -35,6 +37,8 @@ pub struct Terminal {
     // The terminal's input belongs to its writer thread rather than to this struct.
     input: mpsc::Sender<Vec<u8>>,
     parser: vt100::Parser,
+    // An escape sequence a read boundary cut in two.
+    pending: Vec<u8>,
     seq: u64,
     exit_code: Option<u32>,
     output: broadcast::Sender<Output>,
@@ -263,6 +267,7 @@ pub fn create(
         master: pty.master,
         input,
         parser: vt100::Parser::new(rows, cols, 10_000),
+        pending: Vec::new(),
         seq: 0,
         exit_code: None,
         output,
@@ -276,11 +281,13 @@ pub fn create(
                 Ok(0) => break,
                 Ok(n) => {
                     let mut terminal = lock(&read_terminal);
-                    terminal.parser.process(&bytes[..n]);
+                    let (drawn, queries) = split_queries(&bytes[..n], &mut terminal.pending);
+                    terminal.parser.process(&drawn);
                     terminal.seq += 1;
                     let _ = terminal.output.send(Output {
                         seq: terminal.seq,
-                        data: Arc::from(&bytes[..n]),
+                        data: Arc::from(drawn),
+                        queries: Arc::from(queries),
                     });
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
@@ -306,5 +313,214 @@ fn write_input(mut writer: Box<dyn Write + Send>, mut queue: mpsc::Receiver<Vec<
         if writer.write_all(&bytes).is_err() {
             break;
         }
+    }
+}
+
+/// Splits what the pane wrote in two, because a query every viewer receives is answered by every
+/// viewer, into this pty.
+fn split_queries(chunk: &[u8], pending: &mut Vec<u8>) -> (Vec<u8>, Vec<u8>) {
+    let mut bytes = std::mem::take(pending);
+    bytes.extend_from_slice(chunk);
+    let mut drawn = Vec::with_capacity(bytes.len());
+    let mut queries = Vec::new();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] != 0x1b {
+            let end = bytes[index..]
+                .iter()
+                .position(|byte| *byte == 0x1b)
+                .map_or(bytes.len(), |offset| index + offset);
+            drawn.extend_from_slice(&bytes[index..end]);
+            index = end;
+            continue;
+        }
+        let rest = &bytes[index..];
+        // Waiting for the rest of it beats drawing or answering half a sequence.
+        if rest.len() == 1 {
+            break;
+        }
+        if rest[1] == b'[' {
+            // CSI parameter bytes, then intermediate bytes, then the final byte.
+            let mut end = 2;
+            while end < rest.len() && (0x30..=0x3f).contains(&rest[end]) {
+                end += 1;
+            }
+            while end < rest.len() && (0x20..=0x2f).contains(&rest[end]) {
+                end += 1;
+            }
+            if end == rest.len() {
+                break;
+            }
+            let sequence = &rest[..=end];
+            if is_device_query(&rest[2..end], rest[end]) {
+                queries.extend_from_slice(sequence);
+            } else {
+                drawn.extend_from_slice(sequence);
+            }
+            index += end + 1;
+            continue;
+        }
+        if rest[1] == b']' {
+            // An OSC runs to its BEL or ST terminator.
+            let mut end = 2;
+            while end < rest.len() && rest[end] != 0x07 && !rest[end..].starts_with(b"\x1b\\") {
+                end += 1;
+            }
+            if end == rest.len() {
+                break;
+            }
+            let length = if rest[end] == 0x07 { end + 1 } else { end + 2 };
+            let sequence = &rest[..length];
+            if is_color_query(&rest[2..end]) {
+                queries.extend_from_slice(sequence);
+            } else {
+                drawn.extend_from_slice(sequence);
+            }
+            index += length;
+            continue;
+        }
+        drawn.push(0x1b);
+        index += 1;
+    }
+    pending.extend_from_slice(&bytes[index..]);
+    (drawn, queries)
+}
+
+/// Whether a CSI asks about the terminal: its attributes (primary, secondary or tertiary), its
+/// status or its cursor.
+fn is_device_query(parameters: &[u8], final_byte: u8) -> bool {
+    match final_byte {
+        b'c' => matches!(parameters, b"" | b"0" | b">" | b">0" | b"=" | b"=0"),
+        b'n' => matches!(parameters, b"5" | b"6"),
+        _ => false,
+    }
+}
+
+/// Whether an OSC asks for a colour: 4 is a palette entry, 10 to 12 the text, background and cursor.
+fn is_color_query(parameters: &[u8]) -> bool {
+    parameters.ends_with(b";?")
+        && (parameters.starts_with(b"4;")
+            || parameters.starts_with(b"10;")
+            || parameters.starts_with(b"11;")
+            || parameters.starts_with(b"12;"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::split_queries;
+    use crate::lock;
+    use std::time::{Duration, Instant};
+    use tokio::sync::broadcast;
+
+    fn split(chunk: &[u8]) -> (Vec<u8>, Vec<u8>) {
+        split_queries(chunk, &mut Vec::new())
+    }
+
+    #[test]
+    fn device_queries_are_kept_for_one_viewer() {
+        let (drawn, queries) = split(b"\x1b[c\x1b[>c\x1b[=c\x1b[5n\x1b[6n");
+        assert_eq!(drawn.len(), 0);
+        assert_eq!(queries.as_slice(), b"\x1b[c\x1b[>c\x1b[=c\x1b[5n\x1b[6n");
+    }
+
+    #[test]
+    fn a_query_split_across_reads_waits_for_the_rest_of_itself() {
+        let mut pending = Vec::new();
+        let (drawn, queries) = split_queries(b"abc\x1b[", &mut pending);
+        assert_eq!(drawn.as_slice(), b"abc");
+        assert_eq!(queries.len(), 0);
+        assert_eq!(pending.as_slice(), b"\x1b[");
+        let (drawn, queries) = split_queries(b"c", &mut pending);
+        assert_eq!(drawn.len(), 0);
+        assert_eq!(queries.as_slice(), b"\x1b[c");
+        assert_eq!(pending.len(), 0);
+    }
+
+    #[test]
+    fn everything_else_is_drawn_as_it_is() {
+        let text = b"\x1b[31mred\x1b[0m\x1b[?25l\x1b[2;3H\x1b]11;#1e1e1e\x07\x1b]2;title\x1b\\";
+        let (drawn, queries) = split(text);
+        assert_eq!(drawn.as_slice(), text);
+        assert_eq!(queries.len(), 0);
+    }
+
+    #[test]
+    fn color_queries_are_kept_for_one_viewer() {
+        let (drawn, queries) = split(b"\x1b]11;?\x07\x1b]10;?\x1b\\\x1b]4;1;?\x07");
+        assert_eq!(drawn.len(), 0);
+        assert_eq!(
+            queries.as_slice(),
+            b"\x1b]11;?\x07\x1b]10;?\x1b\\\x1b]4;1;?\x07"
+        );
+    }
+
+    #[test]
+    fn a_color_query_split_across_reads_waits_for_its_terminator() {
+        let mut pending = Vec::new();
+        let (drawn, queries) = split_queries(b"abc\x1b]11;?", &mut pending);
+        assert_eq!(drawn.as_slice(), b"abc");
+        assert_eq!(queries.len(), 0);
+        assert_eq!(pending.as_slice(), b"\x1b]11;?");
+        let (drawn, queries) = split_queries(b"\x07", &mut pending);
+        assert_eq!(drawn.len(), 0);
+        assert_eq!(queries.as_slice(), b"\x1b]11;?\x07");
+        assert_eq!(pending.len(), 0);
+    }
+
+    fn run(command: &str) -> (Vec<u8>, Vec<u8>) {
+        let (changed, _) = broadcast::channel(8);
+        let terminal =
+            super::create(6, 40, Some("/tmp"), &Default::default(), None, changed).expect("a pane");
+        let mut output = lock(&terminal).subscribe();
+        lock(&terminal)
+            .input
+            .try_send(command.as_bytes().to_vec())
+            .expect("input");
+        let deadline = Instant::now() + Duration::from_millis(1500);
+        let mut drawn = Vec::new();
+        let mut queries = Vec::new();
+        while Instant::now() < deadline {
+            match output.try_recv() {
+                Ok(frame) => {
+                    drawn.extend_from_slice(&frame.data);
+                    queries.extend_from_slice(&frame.queries);
+                }
+                Err(broadcast::error::TryRecvError::Empty) => {
+                    std::thread::sleep(Duration::from_millis(10))
+                }
+                Err(_) => break,
+            }
+        }
+        lock(&terminal).terminate();
+        (drawn, queries)
+    }
+
+    fn drew(bytes: &[u8], needle: &[u8]) -> bool {
+        bytes.windows(needle.len()).any(|window| window == needle)
+    }
+
+    #[test]
+    fn a_query_from_the_pane_goes_to_one_viewer_only() {
+        let (drawn, queries) = run("printf '\\033[c'\r");
+        assert!(
+            drew(&queries, b"\x1b[c"),
+            "{}",
+            String::from_utf8_lossy(&queries)
+        );
+        assert!(!drew(&drawn, b"\x1b[c"), "the query reached every viewer");
+    }
+
+    #[test]
+    fn a_color_query_from_the_pane_goes_to_one_viewer_only() {
+        let (drawn, queries) = run("printf '\\033]11;?\\007'\r");
+        assert!(
+            drew(&queries, b"\x1b]11;?\x07"),
+            "{}",
+            String::from_utf8_lossy(&queries)
+        );
+        assert!(
+            !drew(&drawn, b"\x1b]11;?\x07"),
+            "the query reached every viewer"
+        );
     }
 }
