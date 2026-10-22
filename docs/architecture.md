@@ -31,7 +31,7 @@ App 所在机器
         | SDK
         +-- 本机 WebSocket ------> 本机 Rust 后台进程（PTY / 文件 / 子进程）
         +-- 本地转发端口 -- SSH --> 远端 Rust 后台进程（PTY / 文件 / 子进程）
-CLI：启动后台进程，或经 WebSocket 查询状态、停止服务
+CLI：启动后台进程，或经 WebSocket 查询状态、停止服务、列出并接管终端
 ```
 
 ## 通信
@@ -69,3 +69,6 @@ SDK 连接本地转发端口后使用与本机相同的机器 API。
 后台进程持有 shell 与 PTY，屏幕状态在内存中：关闭窗口或释放 SDK 连接不会结束会话，
 重新连接可取得屏幕快照；关闭某个 PTY 结束该会话，`server stop` 或机器重启则结束后台的
 所有会话。
+
+`wangcai terminal attach` 连的就是 SDK 连接的那个 loopback WebSocket 端口：输入与尺寸变化送到
+PTY，输出回送到本地终端。

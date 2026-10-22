@@ -125,9 +125,11 @@ provider 要保证工作区 id 在所有 provider 的行中唯一识别。
 `create` 默认使用 24 行 80 列。`size` 使用 `Size`，字段为整数：rows 2–300，cols 2–500。
 
 `options.cwd` 使用绝对目录，省略时在后台进程的 HOME 下启动；
-`options.env` 是额外给这个 shell 的环境变量，值都是字符串。
+`options.env` 是额外给这个 shell 的环境变量，值都是字符串；
+`options.label` 是调用方给这个会话起的名字。
 
-`Session` 有 `id, title`、`pid, rows, cols`、`exit_code: number | null`。
+`Session` 有 `id, title, label`、`pid, rows, cols`、`exit_code: number | null`；
+`title` 是后台按 shell 与 pid 起的默认名，显示时用 `label ?? title`。
 
 `Pty`：`id`、`onSnapshot(callback)`、`onData(callback)`、`write(data)`、`resize(size)`、
 `detach()`（停止挂载，不关闭 shell）。

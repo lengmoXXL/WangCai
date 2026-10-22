@@ -10,6 +10,8 @@ export interface WorkspaceActive {
   machine: Machine;
   sessionId: string;
   workspaceId: string;
+  /** The workspace as the sidebar names it, for a view that has to title its own tabs. */
+  name: string;
 }
 /** Where a click on a file or a directory points, as the 'onclick' topic carries it. */
 export interface FileClick {
@@ -23,9 +25,15 @@ export type ConnectionOptions =
   | { type: 'local'; binary?: string; env?: Record<string, string>; signal?: AbortSignal }
   | { type: 'ssh'; host: string; agent?: InstallAgent; env?: Record<string, string>; signal?: AbortSignal };
 export interface Size { rows: number; cols: number }
-/** What a session is created with: the directory its shell opens in, and what it is told besides the node's environment. */
-export interface PtyOptions { cwd?: string; env?: Record<string, string> }
-export interface Session extends Size { id: string; title: string; pid: number; exit_code: number | null }
+/** What a session is created with: the directory its shell opens in, what it is told besides the node's environment, and the name it is shown under. */
+export interface PtyOptions { cwd?: string; env?: Record<string, string>; label?: string }
+export interface Session extends Size {
+  id: string;
+  title: string;
+  label: string | null;
+  pid: number;
+  exit_code: number | null;
+}
 export interface MachineState {
   status: 'disconnected' | 'connecting' | 'connected';
   error?: string;

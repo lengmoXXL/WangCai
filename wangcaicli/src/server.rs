@@ -1,6 +1,7 @@
 use crate::ServerInfo;
 use crate::lock;
 use crate::process::{Event, Process};
+use crate::protocol::{DEFAULT_COLS, DEFAULT_ROWS, MAX_COLS, MAX_ROWS, MIN_COLS, MIN_ROWS, packet};
 use crate::terminal::{self, Terminal};
 use crate::watch::Batch;
 use anyhow::{Context, Result, bail};
@@ -30,15 +31,6 @@ fn snapshot_packet(id: &str, snapshot: terminal::Snapshot) -> Message {
         json!({"event":"snapshot","session_id":id,"seq":snapshot.seq,"rows":snapshot.rows,"cols":snapshot.cols}),
         &snapshot.data,
     )
-}
-
-fn packet(header: Value, data: &[u8]) -> Message {
-    let header = header.to_string();
-    let mut bytes = Vec::with_capacity(4 + header.len() + data.len());
-    bytes.extend((header.len() as u32).to_be_bytes());
-    bytes.extend(header.as_bytes());
-    bytes.extend(data);
-    Message::Binary(bytes.into())
 }
 
 /// A process the node holds, and the connection that started or last attached it: only that connection's
@@ -90,10 +82,12 @@ impl Node {
 }
 
 fn dimensions(request: &Value) -> Result<(u16, u16)> {
-    let rows = request["rows"].as_u64().unwrap_or(24);
-    let cols = request["cols"].as_u64().unwrap_or(80);
-    if !(2..=300).contains(&rows) || !(2..=500).contains(&cols) {
-        bail!("Terminal size must be 2–300 rows and 2–500 columns");
+    let rows = request["rows"].as_u64().unwrap_or(u64::from(DEFAULT_ROWS));
+    let cols = request["cols"].as_u64().unwrap_or(u64::from(DEFAULT_COLS));
+    let rows_fit = (u64::from(MIN_ROWS)..=u64::from(MAX_ROWS)).contains(&rows);
+    let cols_fit = (u64::from(MIN_COLS)..=u64::from(MAX_COLS)).contains(&cols);
+    if !rows_fit || !cols_fit {
+        bail!("Terminal size must be {MIN_ROWS}-{MAX_ROWS} rows and {MIN_COLS}-{MAX_COLS} columns");
     }
     Ok((rows as u16, cols as u16))
 }
@@ -195,7 +189,14 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                             let env: HashMap<String, String> = request["env"].as_object().map(|env| {
                                 env.iter().filter_map(|(name, value)| Some((name.clone(), value.as_str()?.to_owned()))).collect()
                             }).unwrap_or_default();
-                            let session = terminal::create(rows, cols, request["cwd"].as_str(), &env, node.changed.clone())?;
+                            let session = terminal::create(
+                                rows,
+                                cols,
+                                request["cwd"].as_str(),
+                                &env,
+                                request["label"].as_str(),
+                                node.changed.clone(),
+                            )?;
                             let summary = lock(&session).summary();
                             lock(&node.sessions).insert(summary.id.clone(), session);
                             let _ = node.changed.send(());

@@ -1,5 +1,7 @@
+mod client;
 mod files;
 mod process;
+mod protocol;
 mod server;
 mod subprocess;
 mod terminal;
@@ -13,14 +15,14 @@ use serde_json::{Value, json};
 use std::{
     fs,
     io::Write,
-    net::{SocketAddr, TcpStream},
+    net::TcpStream,
     os::unix::process::CommandExt,
     path::PathBuf,
     process::{Command, Stdio},
     sync::{Mutex, MutexGuard, PoisonError},
     time::Duration,
 };
-use tokio_tungstenite::tungstenite::{self, Message};
+use tokio_tungstenite::tungstenite;
 
 /// A lock whose holder panicked is not a reason to end the node: what the panic did not touch is still what
 /// a window expects to find, and only the request that panicked is gone.
@@ -41,21 +43,47 @@ enum RootCommand {
         #[command(subcommand)]
         command: ServerCommand,
     },
+    Terminal {
+        #[command(subcommand)]
+        command: TerminalCommand,
+    },
 }
 
+/// The node the app runs.
 #[derive(Subcommand)]
 enum ServerCommand {
+    /// Start a node, or reuse the one this version already runs
     Start {
         #[arg(long, hide = true)]
         foreground: bool,
+        /// Print what the node reports, rather than a line about it
         #[arg(long)]
         json: bool,
     },
+    /// Report where the running node is
     Status {
+        /// Print what the node reports, rather than a line about it
         #[arg(long)]
         json: bool,
     },
+    /// Stop the running node
     Stop,
+}
+
+/// The terminals the node holds, for use from a terminal or ssh session outside the app.
+#[derive(Subcommand)]
+enum TerminalCommand {
+    /// List the terminals
+    List {
+        /// Print what the node reports, rather than a table of it
+        #[arg(long)]
+        json: bool,
+    },
+    /// Attach to a terminal as tmux does: its screen now, then its output. Ctrl-] detaches, the shell runs on
+    Attach {
+        /// The terminal's id, or the beginning of it that names only one
+        id: String,
+    },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -77,14 +105,14 @@ fn data_dir() -> Result<PathBuf> {
     Ok(PathBuf::from(home).join(".local/share/wangcai"))
 }
 
-fn rpc(info: &ServerInfo, op: &str) -> Result<Value> {
-    let addr = SocketAddr::from(([127, 0, 0, 1], info.port));
-    let stream = TcpStream::connect_timeout(&addr, Duration::from_secs(2))?;
+pub(crate) fn rpc(info: &ServerInfo, op: &str) -> Result<Value> {
+    let stream = TcpStream::connect_timeout(&protocol::address(info), Duration::from_secs(2))?;
     stream.set_read_timeout(Some(Duration::from_secs(2)))?;
     stream.set_write_timeout(Some(Duration::from_secs(2)))?;
-    let (mut ws, _) = tungstenite::client(format!("ws://{addr}"), stream)?;
-    ws.send(Message::text(
-        json!({"id":"cli", "op":op, "instance_id":info.instance_id}).to_string(),
+    let (mut ws, _) = tungstenite::client(protocol::endpoint(info), stream)?;
+    ws.send(protocol::request(
+        op,
+        [("instance_id", json!(info.instance_id))],
     ))?;
     let value: Value = serde_json::from_str(ws.read()?.to_text()?)?;
     if value["error"].is_string() {
@@ -120,9 +148,13 @@ fn stop_node(info: &ServerInfo) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    let Cli {
-        command: RootCommand::Server { command },
-    } = Cli::parse();
+    match Cli::parse().command {
+        RootCommand::Server { command } => server_command(command),
+        RootCommand::Terminal { command } => terminal_command(command),
+    }
+}
+
+fn server_command(command: ServerCommand) -> Result<()> {
     match command {
         ServerCommand::Status { json: as_json } => {
             let info = running_info()?;
@@ -244,4 +276,12 @@ fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn terminal_command(command: TerminalCommand) -> Result<()> {
+    let info = running_info()?;
+    match command {
+        TerminalCommand::List { json: as_json } => client::list(&info, as_json),
+        TerminalCommand::Attach { id } => client::attach(&info, &id),
+    }
 }

@@ -1,7 +1,7 @@
 use crate::lock;
+use crate::protocol::Summary;
 use anyhow::{Context, Result, bail};
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
-use serde::Serialize;
 use std::{
     collections::HashMap,
     io::{Read, Write},
@@ -12,16 +12,6 @@ use tokio::sync::{broadcast, mpsc};
 // Writes waiting for the pty to take them. A terminal that stops reading its input fills this queue, and the
 // next write waits for room in it, which is backpressure rather than a stalled node.
 const WRITE_QUEUE: usize = 32;
-
-#[derive(Serialize)]
-pub struct Summary {
-    pub id: String,
-    title: String,
-    pub pid: u32,
-    rows: u16,
-    cols: u16,
-    exit_code: Option<u32>,
-}
 
 #[derive(Clone)]
 pub struct Output {
@@ -39,6 +29,7 @@ pub struct Snapshot {
 pub struct Terminal {
     id: String,
     title: String,
+    label: Option<String>,
     pid: u32,
     master: Box<dyn MasterPty + Send>,
     // The terminal's input belongs to its writer thread rather than to this struct.
@@ -70,6 +61,7 @@ impl Terminal {
         Summary {
             id: self.id.clone(),
             title: self.title.clone(),
+            label: self.label.clone(),
             pid: self.pid,
             rows,
             cols,
@@ -225,6 +217,7 @@ pub fn create(
     cols: u16,
     cwd: Option<&str>,
     env: &HashMap<String, String>,
+    label: Option<&str>,
     changed: broadcast::Sender<()>,
 ) -> Result<Arc<Mutex<Terminal>>> {
     let pty = native_pty_system().openpty(PtySize {
@@ -265,6 +258,7 @@ pub fn create(
     let terminal = Arc::new(Mutex::new(Terminal {
         id,
         title: format!("{} · {}", shell.rsplit('/').next().unwrap(), pid),
+        label: label.map(str::to_owned),
         pid,
         master: pty.master,
         input,
