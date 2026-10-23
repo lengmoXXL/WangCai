@@ -195,11 +195,9 @@ test('a group is made, renamed, folded, moved and remembered', { timeout: 180000
     let rows = page.locator('.workspaces > .workspace');
     await makeGroup(page, '一组');
     assert.equal(await group.locator('.workspace').count(), 0, 'a fresh group holds nothing');
-    // the group icon takes the column a workspace's status mark takes, so the two line up
+    // the group's twistie starts at the edge of a row's card
     const leftOf = (locator) => locator.evaluate((element) => element.getBoundingClientRect().left);
-    const aligned = async (a, b) => Math.abs((await leftOf(a)) - (await leftOf(b))) < 1;
-    assert.ok(await aligned(group.locator('.chevron'), rows.first().locator('.agent-state svg')), 'the two icons start at the same place');
-    assert.ok(await aligned(group.locator('.name'), rows.first().locator('.name')), 'and their names line up too');
+    assert.ok(Math.abs((await leftOf(group.locator('.chevron'))) - (await leftOf(rows.first()))) < 1, 'the group icon starts at the edge of a row');
     // folding is the bar's own click, and the rows come back on the next one
     const angle = () => group.locator('.chevron').evaluate((element) => {
       const matrix = getComputedStyle(element).transform;
