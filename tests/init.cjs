@@ -125,7 +125,7 @@ exports.mockWorkspace = (home) => exports.mockPlugin(home, 'terminal-agent', {
     const row = rows.find((item) => item.id === id);
     if (row) row.label = name || '~';
   });
-  // The plugin reads a workspace's state from a file it watches; the test sets it through this instead.
+  // A row's state comes from its provider; the test sets it through this instead.
   ui.handle('agent-state', ({ id, status }) => {
     const row = rows.find((item) => item.id === id);
     if (row) row.status = status;
