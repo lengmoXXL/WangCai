@@ -29,8 +29,8 @@
 
 后端插件是可信代码，拥有 Node.js 权限，不是隔离沙箱。
 
-`activate` 与 `mount` 可返回清理函数，也可异步返回；返回时应取消 handler / 订阅、
-清理计时器与 UI，并归还自己取得的机器连接。不要用关闭 App 代替这些资源清理。
+`activate` 与 `mount` 可以返回清理函数，也可以异步返回清理函数。清理函数在插件卸载时由宿主调用，
+负责注销 handler、取消订阅、清理计时器与 UI，并归还自己取得的机器连接。不要用关闭 App 代替清理这些资源。
 
 ## Tutorial：目录浏览插件
 
@@ -60,7 +60,7 @@ npm run build
 
 `handle<{ path: string }>` 描述传入参数，handler 的返回值成为
 `context.ui.request` 的结果。泛型只提供 TypeScript 检查，
-不会对运行时数据做校验；面向不受信任输入时需要插件自己验证。
+不会对运行时数据做校验；输入不可信时需要插件自己验证。
 
 ### 3. 前端：请求、事件与标签页
 
@@ -74,7 +74,7 @@ npm run build
 宿主按 CommonJS 加载 `main.cjs`，按 ES module 加载 `ui.js`。[build.mjs](../examples/directory-plugin/build.mjs)
 用 esbuild 分别产出这两份：`platform` 一个取 `node`、一个取 `browser`。
 
-浏览器依赖、worker、字体等资源必须留在插件目录中，并能被相对引用。
+浏览器依赖、worker、字体等资源必须留在插件目录中，并能用相对路径引用。
 
 ### 5. 接入 App
 
@@ -104,14 +104,14 @@ npm run build
 WANGCAI_HOME=/tmp/wangcai-plugin-demo npm start
 ```
 
-首次启动会在 `/tmp/wangcai-plugin-demo/.config/wangcai/init.ts` 生成入口；这一回启动要先装好 Core
-（见 [壳与 Core](architecture.md#壳与-core)，因此要走网络、也慢些），把同一条目加进去，再重启 App
-即可看到该插件。
+首次启动会在 `/tmp/wangcai-plugin-demo/.config/wangcai/init.ts` 生成入口。这次启动还要安装 Core
+（见 [壳与 Core](architecture.md#壳与-core)），需要联网，也会慢一些。把同一条目加进去并重启 App
+后，就能看到该插件。
 
 ## 发布与扩展
 
 发布到 Git 仓库时，提供能写出 `main.cjs` 的 `npm run build`，
 再用 `{ id, repo }` 接入。首次安装执行 clone、npm install 和 build；
-更新产生新构建时，App 装好后由 Core 重新加载插件。
+更新产生新构建时，App 把插件装好后，由 Core 重新加载它。
 
 也可以分发预构建目录，让用户以仅含 `directory` 的条目接入。

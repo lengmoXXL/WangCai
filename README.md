@@ -76,7 +76,7 @@ export default {
 | 条目参数 | 说明 |
 | --- | --- |
 | `id` | 必填；插件标识，默认也用作插件目录名 |
-| `repo` | Git 仓库 URL；省略来源时用官方 `WangCai-<id>` 仓库；`https://github.com/` 开头的链接按「出网（network）」出去 |
+| `repo` | Git 仓库 URL；不写 `repo`、也没有 `directory` 时用官方 `WangCai-<id>` 仓库；`https://github.com/` 开头的链接按「出网（network）」出去 |
 | `commit` | 交给 Git checkout 的提交或引用，推荐完整 commit SHA |
 | `directory` | 插件目录；相对路径从 init.ts 所在目录解析 |
 | `config` | 插件自己的配置 |
@@ -85,7 +85,7 @@ export default {
 - 同时填 `repo`、`directory`：把仓库安装到指定目录。
 - 默认安装到 `~/.local/share/wangcai/plugins/<id>`。
 - 未固定 `commit` 时，启动复用已有构建，点击插件更新才拉取默认分支；
-  固定提交时按指定引用 checkout，分支名不是“始终跟随远端”的承诺。
+  固定 `commit` 时按指定引用 checkout，写分支名并不表示始终跟随远端。
 - 同一 `id` 重复出现时先出现的生效（先读 `workspaces` 再读 `tabs`）；
   已安装的 `id` 不能换成另一个仓库。
 
