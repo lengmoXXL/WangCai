@@ -1,0 +1,30 @@
+{
+  "name": "@lengmoxxl/wangcai-testkit",
+  "version": "0.1.1",
+  "description": "Launch the WangCai app around a plugin under test: a home of its own, init.ts, a prepared Core, and Playwright",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lengmoXXL/WangCai.git",
+    "directory": "testkit"
+  },
+  "keywords": [
+    "wangcai",
+    "plugin",
+    "e2e",
+    "playwright"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "harness.cjs",
+  "peerDependencies": {
+    "playwright-core": "^1.63.0"
+  },
+  "files": [
+    "harness.cjs"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "desktop",
-    "sdk"
+    "sdk",
+    "testkit"
   ],
   "scripts": {
     "dev": "cargo build && npm run build:sdk && npm run dev --workspace wangcai-desktop",
