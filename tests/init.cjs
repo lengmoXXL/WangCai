@@ -13,7 +13,7 @@ const root = join(__dirname, '..');
  * the data directory — so a case that found none would need a network and a build. A run reads the developer's
  * checkout instead, and WANGCAI_CORE_SOURCE points it at another one.
  */
-const coreSource = process.env.WANGCAI_CORE_SOURCE ?? join(process.env.HOME ?? '', '.wangcai-dev/.local/share/wangcai/core-src');
+const coreSource = process.env.WANGCAI_CORE_SOURCE ?? join(process.env.HOME ?? '', '.wangcai-dev/.local/share/wangcai/plugins/core');
 const coreBuild = join(coreSource, 'dist');
 
 /** One module of a checkout here, compiled the way it runs: its own imports, bundled. */
@@ -59,8 +59,10 @@ exports.installCore = (home) => {
   if (!existsSync(join(coreBuild, 'main.cjs'))) throw new Error(`no Core build at ${coreBuild}: build the checkout at ${coreSource}, or point WANGCAI_CORE_SOURCE at one that is built`);
   const storage = join(home, '.local/share/wangcai');
   mkdirSync(storage, { recursive: true });
-  cpSync(coreBuild, join(storage, 'core'), { recursive: true });
-  for (const entry of ['main', 'ui']) cpSync(join(coreSource, entry), join(storage, 'core-src', entry), { recursive: true });
+  const core = join(storage, 'plugins/core');
+  mkdirSync(join(core, 'dist'), { recursive: true });
+  cpSync(coreBuild, join(core, 'dist'), { recursive: true });
+  for (const entry of ['main', 'ui']) cpSync(join(coreSource, entry), join(core, entry), { recursive: true });
 };
 
 exports.launchApp = (home, env, { installed = true } = {}) => {

@@ -28,9 +28,9 @@ test('a start that finds no Core says what it is doing, and the start after it u
     const page = await coreWindow(desktop);
     await page.locator('#core-marker').waitFor();
     assert.equal(installs.isClosed(), true, 'the window that reported the install is gone');
-    assert.equal(existsSync(join(storage, 'core-src/.git')), true);
-    assert.equal(existsSync(join(storage, 'core/main.cjs')), true);
-    assert.equal(existsSync(join(storage, 'core/ui/index.html')), true);
+    assert.equal(existsSync(join(storage, 'plugins/core/.git')), true);
+    assert.equal(existsSync(join(storage, 'plugins/core/dist/main.cjs')), true);
+    assert.equal(existsSync(join(storage, 'plugins/core/dist/ui/index.html')), true);
     await desktop.close(); desktop = undefined;
     // A Core that is already built is what runs: the start that follows does not go back to the repository,
     // which is what a path that is not there would fail on.

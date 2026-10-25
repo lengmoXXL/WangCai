@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Profile } from '@lengmoxxl/sdk';
@@ -37,8 +37,8 @@ interface Core {
  * that has to install a Core can be driven without a network. */
 const repository = process.env.WANGCAI_CORE_REPOSITORY ?? 'https://github.com/lengmoXXL/WangCai-Core';
 
-/** Where this run reads the Core the app installed: a data directory of its own, replaced as a whole. */
-export const coreDirectory = (storage: string) => join(storage, 'core');
+/** Where this run reads the Core the app installed: the build beside the clone it keeps under `plugins`. */
+export const coreDirectory = (storage: string) => join(storage, 'plugins/core/dist');
 
 /** Whether that build is one a run can load: the bundle, and the page the window draws. */
 export const coreReady = (storage: string) => {
@@ -56,9 +56,9 @@ export async function loadCore(directory: string) {
 interface CoreInstall { storage: string; node: string; network: Network; report: (stage: InstallStage, message?: string) => void; follow?: boolean }
 
 /**
- * Puts a Core where a run reads it: the repository is cloned into the data directory, built with the Node the
- * app carries, and copied out of its build. A build that is already there is left as it stands — `follow` is
- * the app menu's update, which goes back to the branch and rebuilds what moved.
+ * Puts a Core where a run reads it: the repository is cloned under `plugins`, built with the Node the app
+ * carries, and left beside its clone in `dist`. A build that is already there is left as it stands — `follow`
+ * is the app menu's update, which goes back to the branch and rebuilds what moved.
  *
  * Reports whether anything was built anew.
  */
@@ -68,7 +68,8 @@ export async function installCore({ storage, node, network, report, follow = fal
   if (ready && !follow) return false;
   // A fresh install has no data directory yet, and this step is exactly what runs before a Core ever did.
   mkdirSync(storage, { recursive: true });
-  const source = join(storage, 'core-src');
+  mkdirSync(join(storage, 'plugins'), { recursive: true });
+  const source = join(storage, 'plugins/core');
   const environment = withProxy(network.proxy);
   const url = mirroredUrl(repository, network.mirror);
   const git = (args: string[], cwd = source) => run('git', [...TRANSFER_LIMITS, ...args], cwd, environment);
@@ -94,8 +95,6 @@ export async function installCore({ storage, node, network, report, follow = fal
   await npm(node, ['install', '--no-audit', '--no-fund', '--no-progress'], source, build);
   report('building', 'npm run build');
   await npm(node, ['run', 'build'], source, build);
-  if (!existsSync(join(source, 'dist/main.cjs'))) throw new Error(`${repository} 的构建没有写出 dist/main.cjs`);
-  rmSync(built, { recursive: true, force: true });
-  cpSync(join(source, 'dist'), built, { recursive: true });
+  if (!existsSync(join(built, 'main.cjs'))) throw new Error(`${repository} 的构建没有写出 dist/main.cjs`);
   return true;
 }

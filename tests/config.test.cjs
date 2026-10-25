@@ -49,7 +49,7 @@ test('the trees an agent reads are copied into the data directory, and only a ne
     syncSources(process.cwd(), storage, '1.0.0');
     assert.equal(readFileSync(manual, 'utf8'), 'edited\n');
     // A Core that was rebuilt replaces it as well: those files move without the shell's version changing.
-    writeFileSync(join(storage, 'core/commit'), 'a newer core\n');
+    writeFileSync(join(storage, 'plugins/core/dist/commit'), 'a newer core\n');
     syncSources(process.cwd(), storage, '1.0.0');
     assert.notEqual(readFileSync(manual, 'utf8'), 'edited\n');
     writeFileSync(manual, 'edited\n');

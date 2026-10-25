@@ -15,7 +15,7 @@ session、系统——壳都通过 `CoreHost` 借给 Core。两边共享的桥�
 与跨桥的类型）在 [@lengmoxxl/sdk](https://www.npmjs.com/package/@lengmoxxl/sdk) 的 `bridge` 模块。
 
 发布时壳不再随包带 Core。读完 `init.ts` 后，先确认数据目录里有没有构建好的 Core：没有就 clone 仓库、用壳自带的
-Node 构建到数据目录（`core-src` 是那份 clone），本次启动直接加载；已经有了就用现成那份，插件页里 Core
+Node 构建到数据目录的 `plugins/core`，源码和构建结果（`dist`）放在同一目录，本次启动直接加载；已经有了就用现成那份，插件页里 Core
 那一行的「更新」会回到仓库重新拉取，有更新就重建并重启——所以换业务逻辑既不需要发布 App，也不需要每次启动
 都联网。Core 页面起来后，插件安装与 Core 重建的进度、结果都画在插件页里对应的行上，更新/重试按钮也在那里；
 首次安装 Core 时还没有 Core 页面，进度显示在壳自己的启动窗口里。
