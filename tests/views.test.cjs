@@ -180,7 +180,7 @@ test('a workspace is renamed in a dialog, and an empty name is left to the provi
 test('a group is made, renamed, folded, moved and remembered', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-workspace-groups-'));
   const env = testEnv(home);
-  const stored = () => JSON.parse(readFileSync(join(home, '.local/share/wangcai/groups.json'), 'utf8'));
+  const stored = () => JSON.parse(readFileSync(join(home, '.local/share/wangcai/data/core/groups.json'), 'utf8'));
   let desktop;
   try {
     mockWorkspace(home);
@@ -286,7 +286,7 @@ test('a group is made, renamed, folded, moved and remembered', { timeout: 180000
 
 test('a group dropped on the line that closes the list comes last', { timeout: 180000 }, async () => {
   const { home, desktop, page } = await launchedWithThree();
-  const stored = () => JSON.parse(readFileSync(join(home, '.local/share/wangcai/groups.json'), 'utf8')).map((group) => group.name);
+  const stored = () => JSON.parse(readFileSync(join(home, '.local/share/wangcai/data/core/groups.json'), 'utf8')).map((group) => group.name);
   try {
     await makeGroup(page, '甲');
     await makeGroup(page, '乙');
@@ -303,7 +303,7 @@ test('a group dropped on the line that closes the list comes last', { timeout: 1
 
 test('a group dropped on the line above a row stands after the groups at that place', { timeout: 180000 }, async () => {
   const { home, desktop, page, rows } = await launchedWithThree();
-  const stored = () => JSON.parse(readFileSync(join(home, '.local/share/wangcai/groups.json'), 'utf8')).map((group) => group.name);
+  const stored = () => JSON.parse(readFileSync(join(home, '.local/share/wangcai/data/core/groups.json'), 'utf8')).map((group) => group.name);
   try {
     await makeGroup(page, '甲');
     await makeGroup(page, '乙');
