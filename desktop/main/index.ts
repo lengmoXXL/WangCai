@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell } from 'electron';
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -134,9 +134,8 @@ else {
         return changed;
       },
       protocol: { handle: (scheme, handler) => protocol.handle(scheme, handler) },
-      fetch: (url, options) => net.fetch(url, options),
+      fetch: (url) => net.fetch(url),
       send,
-      setProxy: (rules) => session.defaultSession.setProxy({ proxyRules: rules }).then(() => undefined),
       openExternal: async (url) => {
         // A plugin hands the app a link, not a program.
         const address = new URL(String(url));

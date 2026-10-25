@@ -59,7 +59,7 @@ function mergeNetwork(input: ProfileInput): Network {
   const proxy = trimmed(input.network?.proxy);
   const mirror = trimmed(input.network?.mirror);
   return {
-    // Chromium and curl both read a bare `socks://` as SOCKS4, and npm needs a scheme to read a proxy at all.
+    // curl reads a bare `socks://` as SOCKS4, and npm needs a scheme to read a proxy at all.
     proxy: proxy && (/^\w+:\/\//.test(proxy) ? proxy : `http://${proxy}`).replace(/^socks:\/\//, 'socks5://'),
     // A prefix is joined to a URL, so it ends in one whether init.ts wrote it or not.
     mirror: mirror ? (mirror.endsWith('/') ? mirror : `${mirror}/`) : undefined,

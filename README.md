@@ -104,9 +104,9 @@ network: {
 },
 ```
 
-`proxy` 由壳读出来：壳自己的 git 与 npm（插件 `clone`、`npm install`、重建 Core）走它；Core 的请求（下载
-agent 等）走壳的 session，代理在 Core 启动时设进去。写 `http://`、`https://` 或 `socks5://`；不写 scheme 当
-`http://`，写 `socks://` 当 `socks5://`。socks5 一律走远端解析域名。
+`proxy` 由壳读出来：壳自己的 git 与 npm（插件 `clone`、`npm install`、重建 Core）从环境变量拿到它，Core
+下载 agent 时把同一份交给 curl。写 `http://`、`https://` 或 `socks5://`；不写 scheme 当 `http://`，写
+`socks://` 当 `socks5://`。socks5 一律走远端解析域名。
 
 `mirror` 是 GitHub 加速前缀：`https://github.com/` 开头的链接都拼在它后面取，其它 URL（含
 `git@github.com:` 形式的仓库）照原样用。

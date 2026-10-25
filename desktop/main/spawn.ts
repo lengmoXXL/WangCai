@@ -23,8 +23,8 @@ export function run(command: string, args: string[], cwd: string, environment: N
   });
 }
 
-// A proxy reaches the children too: git and npm read it from the environment, not from the app session. A
-// socks proxy goes out in its remote-DNS form, since a name resolved here is one a proxy cannot correct.
+// git and npm read the proxy from the environment. A socks proxy goes out in its remote-DNS form, since a name
+// resolved here is one a proxy cannot correct.
 export const withProxy = (proxy: string | undefined, environment = process.env) => {
   if (!proxy) return environment;
   const address = proxy.replace(/^socks5:\/\//, 'socks5h://');

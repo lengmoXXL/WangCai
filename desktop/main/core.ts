@@ -18,9 +18,8 @@ export interface CoreHost {
   statuses(): InstallStatus[];
   install(ids: string[]): Promise<boolean>;
   protocol: { handle(scheme: string, handler: (request: Request) => Response | Promise<Response>): void };
-  fetch(url: string, options?: { signal?: AbortSignal }): Promise<Response>;
+  fetch(url: string): Promise<Response>;
   send(topic: string, data: unknown): void;
-  setProxy(rules: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   reload(): void;
   fullscreen(): boolean;
