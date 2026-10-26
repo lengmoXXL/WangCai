@@ -1,7 +1,9 @@
+const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const { cpSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
+const { pathToFileURL } = require('node:url');
 const { _electron: electron } = require('playwright-core');
 
 // Where the app keeps the agent it would download, relative to its own checkout.
@@ -45,13 +47,13 @@ const installCore = (home) => {
 
 /**
  * The app loads only what init.ts lists, so a case names the plugins and where to read them from: a sibling checkout
- * for an id alone, or whatever `directory` says. `repo` is left as written, for what installs from git.
+ * for an id alone, or whatever `directory` says.
  */
 const writeInit = (home, lists) => {
   const { workspaces = [], tabs = [] } = lists ?? {};
   const entry = (item) => {
     const spec = typeof item === 'string' ? { id: item } : { ...item };
-    if (!spec.directory && !spec.repo) {
+    if (!spec.directory) {
       spec.directory = resolve(process.cwd(), `../WangCai-${spec.id}`);
       if (!existsSync(join(spec.directory, 'main.cjs'))) throw new Error(`build the WangCai-${spec.id} checkout at ${spec.directory}`);
     }
@@ -101,8 +103,34 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
   process.once(signal, () => { stopAll(); process.exit(signal === 'SIGINT' ? 130 : 143); });
 }
 
-/** The terminal of the workspace in front. */
-const activeTerminal = (page) => page.locator('.terminal-pane.active');
+/**
+ * A window that died under the case leaves its close waiting on a connection nothing answers, so a run gives it a
+ * moment and then leaves the window to the teardown that stops it by hand.
+ */
+const closeWindow = async (desktop) => {
+  await Promise.race([desktop.close().catch(() => {}), new Promise((resolve) => setTimeout(resolve, 10000))]);
+};
+
+/**
+ * A wait is given time rather than attempts, since a loaded machine makes one attempt cost seconds. The answer that
+ * ends the wait is the one it is judged by: asking again would read a state that moved on since.
+ */
+const until = async (holds, { act, timeout = 60000, interval = 250 } = {}) => {
+  const deadline = Date.now() + timeout;
+  let held = false;
+  while (!(held = await holds()) && Date.now() < deadline) {
+    if (act) await act();
+    await new Promise((resolve) => setTimeout(resolve, interval));
+  }
+  assert.ok(held, 'the app did not react');
+};
+
+/** The terminal of the workspace in front: the app's own pane, not a plugin's panel. */
+const ACTIVE_TERMINAL = '.terminal-pane.active';
+const activeTerminal = (page) => page.locator(ACTIVE_TERMINAL);
+
+/** Opens the menu a workspace row offers, which is where a workspace is made or closed. */
+const openWorkspaceMenu = (page) => page.locator('.workspace-header').click({ button: 'right' });
 
 /** Types a line into the pane in front and runs it, the way a person does. */
 const run = async (page, line) => {
@@ -116,7 +144,7 @@ const terminalShows = (page, text) => activeTerminal(page).locator('.xterm-scree
 
 /** Opens a local workspace, and waits for the shell its pane draws a moment after the workspace appears. */
 const createWorkspace = async (page) => {
-  await page.locator('.workspace-header').click({ button: 'right' });
+  await openWorkspaceMenu(page);
   await page.locator('#workspace-row-menu').getByRole('menuitem', { name: '新建 本机', exact: true }).click();
   await terminalShows(page, /\S/);
 };
@@ -136,26 +164,53 @@ const viewTabs = (page) => page.locator('.sidebar-tab:visible');
 const closeView = async (page) => page.locator('.sidebar-tab:has([aria-selected=true]) .close-tab').click();
 
 /**
- * One case: a home of its own, the Core and the plugins it lists, the window on them, and the teardown that follows
- * whatever the body did.
+ * Runs the checkout's renderer from a dev server instead of the built bundle, so a window opened on this env shows the
+ * app's renderer code as it is now. Returns what stops the server.
  */
-const withWindow = async (prefix, lists, body) => {
+const serveRenderer = async (env) => {
+  const checkout = wangcaiApp();
+  const { resolveConfig } = await import(pathToFileURL(require.resolve('electron-vite', { paths: [checkout] })).href);
+  const { createServer } = await import(pathToFileURL(require.resolve('vite', { paths: [checkout] })).href);
+  const { config } = await resolveConfig({ root: join(checkout, 'desktop') }, 'serve');
+  const server = await createServer({ ...config.renderer, configFile: false, server: { port: 0, host: '127.0.0.1' } });
+  await server.listen();
+  env.ELECTRON_RENDERER_URL = `http://127.0.0.1:${server.httpServer.address().port}`;
+  return () => server.close();
+};
+
+/**
+ * One case on a home of its own: the Core and the plugins it lists, the windows opened on it, and the teardown that
+ * follows whatever the body did. `open` may be called again, for what a case learns by launching a second window.
+ * Only the windows see this home: the test process keeps its own, so cases may run beside each other.
+ */
+const withHome = async (prefix, lists, body) => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), `${prefix}-`)));
   const env = testEnv(home);
   installCore(home);
   writeInit(home, lists);
-  let desktop;
+  const windows = new Set();
   try {
-    desktop = await launchApp(home, env);
-    const page = await desktop.firstWindow();
-    const errors = [];
-    page.on('pageerror', (error) => errors.push(error.message));
-    page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
-    return await body({ home, env, page, errors });
+    const open = async () => {
+      const desktop = await launchApp(home, env);
+      windows.add(desktop);
+      const page = await desktop.firstWindow();
+      const close = async () => { windows.delete(desktop); await closeWindow(desktop); };
+      return { desktop, page, close };
+    };
+    return await body({ home, env, open });
   } finally {
-    await desktop?.close();
+    for (const desktop of windows) await closeWindow(desktop);
     cleanup(home);
   }
 };
 
-module.exports = { withWindow, openView, viewTabs, closeView, createWorkspace, terminalShows, run };
+/** One case with a single window on it, which hands the body the page and whatever the page reported as errors. */
+const withWindow = async (prefix, lists, body) => withHome(prefix, lists, async ({ home, env, open }) => {
+  const { page } = await open();
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+  return body({ home, env, page, errors });
+});
+
+module.exports = { wangcaiApp, activeTerminal, ACTIVE_TERMINAL, until, openWorkspaceMenu, serveRenderer, withHome, withWindow, openView, viewTabs, closeView, createWorkspace, terminalShows, run };

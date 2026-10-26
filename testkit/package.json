@@ -1,6 +1,6 @@
 {
   "name": "@lengmoxxl/wangcai-testkit",
-  "version": "0.1.1",
+  "version": "0.1.7",
   "description": "Launch the WangCai app around a plugin under test: a home of its own, init.ts, a prepared Core, and Playwright",
   "license": "MIT",
   "repository": {
