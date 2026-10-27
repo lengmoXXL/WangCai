@@ -78,6 +78,16 @@ test('SDK process: streaming pipes, binary writes, exit codes, cleanup and recon
     await assert.rejects(exited.write(Buffer.from('late')), /Process has exited/);
     await machine.subprocess.close(ending.id);
 
+    // The pipes outlive the process, since a helper it leaves behind can still write to them: that output is delivered
+    // although the exit event has already gone past.
+    const shell = await machine.subprocess.spawn('/bin/sh', ['-c', 'read x; (sleep 0.3; printf tail) & exit 0'], { cwd: home });
+    const attached = await machine.subprocess.attach(shell.id);
+    const tail = [];
+    attached.onData((event) => { if (event.stream === 'stdout') tail.push(Buffer.from(event.data)); });
+    await attached.write(Buffer.from('go\n'));
+    await until(() => Buffer.concat(tail).toString() === 'tail');
+    await machine.subprocess.close(shell.id);
+
     // Closing a process kills the helpers it started, which its own process group holds.
     const pidFile = join(home, 'pids');
     const group = await machine.subprocess.spawn('/bin/sh', ['-c', 'sleep 60 & echo "$$ $!" > "$1"; wait', 'sh', pidFile], { cwd: home });

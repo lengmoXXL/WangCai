@@ -13,7 +13,7 @@ use std::{
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     process::{ChildStdin, Command},
-    sync::{Mutex, mpsc},
+    sync::{Mutex, Semaphore, mpsc},
 };
 
 const MAX_WRITE: usize = 64 * 1024;
@@ -65,6 +65,14 @@ impl Subscribers {
         // A queue whose reader is gone belongs to a client that detached.
         lock(&self.0).retain(|sender| !sender.is_closed());
     }
+}
+
+/// Where a producer queues what it read, and how much of it may wait: the room it needs is taken
+/// before the process' lock, so waiting for a slow client never runs under that lock.
+#[derive(Clone)]
+struct Queue {
+    room: Arc<Semaphore>,
+    events: mpsc::UnboundedSender<Event>,
 }
 
 /// A program the node holds open: its stdin stays writable and its two output streams arrive as they
@@ -145,23 +153,37 @@ pub fn spawn(request: Value) -> Result<(String, Arc<Mutex<Process>>)> {
     let stdin = child.stdin.take().context("Process has no stdin")?;
     let stdout = child.stdout.take().context("Process has no stdout")?;
     let stderr = child.stderr.take().context("Process has no stderr")?;
-    let (input, queue) = mpsc::channel(WRITE_QUEUE);
+    let (input, writes) = mpsc::channel(WRITE_QUEUE);
+    let (events, queued) = mpsc::unbounded_channel();
+    let room = Arc::new(Semaphore::new(BUFFER));
+    let subscribers = Arc::new(Subscribers::new());
     let id = uuid::Uuid::new_v4().to_string();
+    let queue = Queue {
+        room: room.clone(),
+        events,
+    };
     let process = Arc::new(Mutex::new(Process {
         id: id.clone(),
         pid,
         input,
-        output: Arc::new(Subscribers::new()),
+        output: subscribers.clone(),
         seq: 0,
         exit_code: None,
     }));
-    tokio::spawn(write_stdin(stdin, queue));
-    tokio::spawn(forward(stdout, process.clone(), |seq, data| {
-        Event::Stdout { seq, data }
-    }));
-    tokio::spawn(forward(stderr, process.clone(), |seq, data| {
-        Event::Stderr { seq, data }
-    }));
+    tokio::spawn(write_stdin(stdin, writes));
+    tokio::spawn(deliver(subscribers, room, queued));
+    tokio::spawn(forward(
+        stdout,
+        process.clone(),
+        queue.clone(),
+        |seq, data| Event::Stdout { seq, data },
+    ));
+    tokio::spawn(forward(
+        stderr,
+        process.clone(),
+        queue.clone(),
+        |seq, data| Event::Stderr { seq, data },
+    ));
     let exited = process.clone();
     tokio::spawn(async move {
         // A signaled process reports what a shell reports for it, so every ending carries a code.
@@ -176,19 +198,14 @@ pub fn spawn(request: Value) -> Result<(String, Arc<Mutex<Process>>)> {
                     .unwrap_or(1)
             })
             .unwrap_or(1);
-        let (output, seq) = {
-            let mut process = exited.lock().await;
-            process.exit_code = Some(code);
-            process.seq += 1;
-            (process.output.clone(), process.seq)
-        };
-        output.deliver(Event::Exit { seq, code }).await;
+        exited.lock().await.exit_code = Some(code);
+        enqueue(&exited, &queue, |seq| Event::Exit { seq, code }).await;
     });
     Ok((id, process))
 }
 
-async fn write_stdin(mut stdin: ChildStdin, mut queue: mpsc::Receiver<Vec<u8>>) {
-    while let Some(bytes) = queue.recv().await {
+async fn write_stdin(mut stdin: ChildStdin, mut writes: mpsc::Receiver<Vec<u8>>) {
+    while let Some(bytes) = writes.recv().await {
         // A pipe that refuses the bytes belongs to a process that closed its stdin, whose ending the
         // wait task reports; the queued writes that follow fail against the closed queue.
         if stdin.write_all(&bytes).await.is_err() {
@@ -197,12 +214,38 @@ async fn write_stdin(mut stdin: ChildStdin, mut queue: mpsc::Receiver<Vec<u8>>) 
     }
 }
 
+/// Numbers one event and queues it: the number and the place in the queue are taken under one guard,
+/// so a subscriber sees the order the events were numbered in.
+async fn enqueue(process: &Mutex<Process>, queue: &Queue, build: impl FnOnce(u64) -> Event) {
+    let Ok(room) = queue.room.acquire().await else {
+        return;
+    };
+    let mut process = process.lock().await;
+    process.seq += 1;
+    let _ = queue.events.send(build(process.seq));
+    // The permit goes with the event: the delivery task returns it once the event has gone out.
+    room.forget();
+}
+
+/// Serves what was queued to the subscribers one event at a time, in the order it was numbered, until
+/// every producer has ended.
+async fn deliver(
+    subscribers: Arc<Subscribers>,
+    room: Arc<Semaphore>,
+    mut queued: mpsc::UnboundedReceiver<Event>,
+) {
+    while let Some(event) = queued.recv().await {
+        subscribers.deliver(event).await;
+        room.add_permits(1);
+    }
+}
+
 async fn forward(
     mut reader: impl AsyncRead + Unpin,
     process: Arc<Mutex<Process>>,
+    queue: Queue,
     build: fn(u64, Vec<u8>) -> Event,
 ) {
-    let output = process.lock().await.output.clone();
     let mut bytes = [0; READ_CHUNK];
     loop {
         let read = match reader.read(&mut bytes).await {
@@ -211,12 +254,7 @@ async fn forward(
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(_) => break,
         };
-        let event = {
-            let mut process = process.lock().await;
-            process.seq += 1;
-            build(process.seq, bytes[..read].to_vec())
-        };
-        output.deliver(event).await;
+        enqueue(&process, &queue, |seq| build(seq, bytes[..read].to_vec())).await;
     }
 }
 
