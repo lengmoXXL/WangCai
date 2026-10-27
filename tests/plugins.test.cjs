@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { launchApp, mockPlugin, openWorkspaceMenu, testEnv, writeInit } = require('./init.cjs');
+const { openWorkspaceMenu, until } = require('@lengmoxxl/wangcai-testkit');
+const { launchApp, mockPlugin, testEnv, writeInit } = require('./init.cjs');
 
 test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-plugins-'));
@@ -71,31 +72,32 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
     });
     desktop = await launchApp(home, env);
     let page = await desktop.firstWindow();
+    // A plugin sets what its element carries a round trip after the case asks it to, so the case waits for the value.
+    const untilAttribute = (id, name, want) => until(async () => (await page.locator(`[data-plugin=${id}]`).getAttribute(name)) === want);
     assert.deepEqual(await page.evaluate(async () => (await window.wangcai.call('plugins')).map((plugin) => plugin.id)),
       ['absent', 'alpha', 'beta', 'broken', 'failed-ui', 'missing', 'syntax']);
-    assert.equal(await page.evaluate(() => window.wangcai.call('request', 'alpha', 'sharedConnect')), true);
-    assert.equal(await page.evaluate(() => window.wangcai.call('request', 'beta', 'sharedConnect')), true);
-    await page.waitForFunction(() => document.querySelector('[data-plugin=alpha]')?.dataset.font);
-    assert.equal(await page.locator('[data-plugin=alpha]').getAttribute('data-font'), '{"family":"alpha Font","size":30}');
-    assert.equal(await page.locator('[data-plugin=beta]').getAttribute('data-font'), '{"family":"beta Font","size":10}');
+    assert.ok(await page.evaluate(() => window.wangcai.call('request', 'alpha', 'sharedConnect')));
+    assert.ok(await page.evaluate(() => window.wangcai.call('request', 'beta', 'sharedConnect')));
+    await untilAttribute('alpha', 'data-font', '{"family":"alpha Font","size":30}');
+    await untilAttribute('beta', 'data-font', '{"family":"beta Font","size":10}');
     assert.equal(await page.getByText('alpha v1', { exact: true }).evaluate((element) => getComputedStyle(element).color), 'rgb(1, 2, 3)');
     await page.getByText('alpha v1', { exact: true }).click();
-    await page.waitForFunction(() => document.querySelector('[data-plugin=alpha]')?.getAttribute('data-reply') === 'alpha:hello');
+    await untilAttribute('alpha', 'data-reply', 'alpha:hello');
     assert.equal(await page.locator('[data-plugin=beta]').getAttribute('data-event'), null);
     await page.getByText('beta v1', { exact: true }).click();
-    await page.waitForFunction(() => document.querySelector('[data-plugin=beta]')?.getAttribute('data-reply') === 'beta:hello');
-    await page.waitForFunction(() => document.querySelector('[data-plugin=alpha]')?.getAttribute('data-channel') === 'beta');
+    await untilAttribute('beta', 'data-reply', 'beta:hello');
+    await untilAttribute('alpha', 'data-channel', 'beta');
     assert.deepEqual(await page.evaluate(() => window.wangcai.call('request', 'beta', 'received')), ['alpha', 'beta']);
     await page.evaluate(() => window.wangcai.call('request', 'alpha', 'unsubscribe'));
     await page.evaluate(() => window.wangcai.call('request', 'beta', 'publish', 'main-event'));
-    await page.waitForFunction(() => document.querySelector('[data-plugin=beta]')?.getAttribute('data-channel') === 'main-event');
+    await untilAttribute('beta', 'data-channel', 'main-event');
     assert.deepEqual(await page.evaluate(() => window.wangcai.call('request', 'alpha', 'received')), ['alpha', 'beta']);
     assert.deepEqual(await page.evaluate(() => window.wangcai.call('request', 'beta', 'received')), ['alpha', 'beta', 'main-event']);
     await page.evaluate(() => window.wangcai.call('request', 'alpha', 'stop'));
     await page.evaluate(() => window.wangcai.call('publish', 'onclick', 'after-unsubscribe'));
-    await page.waitForFunction(() => document.querySelector('[data-plugin=beta]')?.getAttribute('data-channel') === 'after-unsubscribe');
+    await untilAttribute('beta', 'data-channel', 'after-unsubscribe');
     assert.equal(await page.locator('[data-plugin=alpha]').getAttribute('data-channel'), 'main-event');
-    assert.equal(existsSync(join(readFileSync(join(home, 'broken-data-directory'), 'utf8'), 'leaked')), false);
+    assert.ok(!existsSync(join(readFileSync(join(home, 'broken-data-directory'), 'utf8'), 'leaked')));
     assert.equal(await page.evaluate(() => document.body.dataset.leaked), undefined);
     await page.getByText('broken: intentional failure', { exact: true }).waitFor();
     await page.getByText('failed-ui: UI failure', { exact: true }).waitFor();
@@ -139,7 +141,7 @@ test('a plugin opens a web link in the browser, and nothing else reaches it', { 
   try {
     desktop = await launchApp(home, env);
     const page = await desktop.firstWindow();
-    await page.waitForFunction(() => globalThis.links);
+    await until(() => page.evaluate(() => Boolean(globalThis.links)));
     await desktop.evaluate(({ shell }) => {
       globalThis.opened = [];
       shell.openExternal = async (url) => { globalThis.opened.push(url); };

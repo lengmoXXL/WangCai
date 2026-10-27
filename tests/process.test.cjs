@@ -53,8 +53,8 @@ test('SDK process: streaming pipes, binary writes, exit codes, cleanup and recon
     const stderr = [];
     handle.onData((event) => (event.stream === 'stdout' ? stdout : stderr).push(Buffer.from(event.data)));
     await handle.write(Buffer.from('ping'));
-    await until(() => Buffer.concat(stdout).toString() === 'READYping');
-    assert.equal(Buffer.concat(stderr).toString(), 'ping');
+    // Both pipes are separate, so the marks are taken once each of them has the answer it was given.
+    await until(() => Buffer.concat(stdout).toString() === 'READYping' && Buffer.concat(stderr).toString() === 'ping');
     const stdoutMark = Buffer.concat(stdout).length;
     const stderrMark = Buffer.concat(stderr).length;
     const pattern = Buffer.alloc(256 * 1024, 0);
