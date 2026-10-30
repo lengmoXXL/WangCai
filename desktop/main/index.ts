@@ -48,9 +48,9 @@ else {
     // The node a packaged run carries among its resources, and the one a development run builds next to this
     // checkout. The agent a machine runs is Core's to install, not the app's to carry.
     const node = app.isPackaged ? join(process.resourcesPath, 'node/bin/node') : join(app.getAppPath(), 'node/bin/node');
-    // What init.ts holds is the app's to read: the theme of the window, how a run reaches the network, and the
-    // plugins that have to be built before a Core can load them.
-    const { profile, network, plugins: specs } = await loadConfig({ config: configDirectory, storage: storageDirectory });
+    // What init.ts holds is the app's to read: the window's theme, the network a run needs, the plugins to build
+    // before a Core can load them, and the keymap Core runs for the window.
+    const { profile, network, plugins: specs, keymap } = await loadConfig({ config: configDirectory, storage: storageDirectory });
     // What the window tells the page about its chrome, and what it is asked when a page loads again. Remembered
     // rather than read back from the window: the window a test runs never comes to the front, and the system
     // refuses to put that one in full screen at all.
@@ -122,7 +122,7 @@ else {
       paths: { storage: storageDirectory },
       version: app.getVersion(),
       sources: app.isPackaged ? join(process.resourcesPath, 'src') : join(app.getAppPath(), '..'),
-      config: { profile, network },
+      config: { profile, network, keymap },
       plugins: installer.plugins,
       statuses,
       install: async (ids: string[]) => {

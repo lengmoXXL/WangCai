@@ -67,7 +67,7 @@ export default {
 };
 ```
 
-顶层有 `theme`、`network`、`workspaces`、`tabs`；省略 `network` 表示直连，省略后两者表示列表为空，不会补回官方插件。
+顶层有 `theme`、`network`、`workspaces`、`tabs`；省略 `network` 表示直连，省略 `workspaces` 与 `tabs` 表示列表为空，不会补回官方插件。
 
 ### 插件配置
 

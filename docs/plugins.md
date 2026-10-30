@@ -10,6 +10,7 @@
 | --- | --- | --- |
 | `main.cjs` 的 `activate(context)` | 必须 | 接收 MainContext，注册后端功能 |
 | `main.cjs` 的 `config` | 可选 | 声明插件配置 schema |
+| `main.cjs` 的 `keys` | 可选 | 插件自带的快捷键，见 [Core 的说明](https://github.com/lengmoXXL/WangCai-Core#快捷键) |
 | `ui.js` 的 `mount(container, context)` | 有 UI 时必须 | 接收 UiContext，挂载主视图或初始化侧栏插件 |
 | `ui.js` 的 `open(context, record?)` | 可选 | 侧栏菜单或恢复标签页时调用 |
 | `ui.js` 的 `title` | 可选 | 侧栏菜单名称，缺省使用插件 id |

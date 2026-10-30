@@ -42,7 +42,14 @@ type ProfileInput = {
   network?: { proxy?: unknown; mirror?: unknown };
   workspaces?: unknown;
   tabs?: unknown;
+  leader?: unknown;
+  timeout?: unknown;
+  keys?: unknown;
+  commands?: unknown;
 };
+
+/** init.ts's key fields, carried to Core as they are written — functions and all. */
+export type KeymapInput = Pick<ProfileInput, 'leader' | 'timeout' | 'keys' | 'commands'>;
 
 const trimmed = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : undefined;
 
@@ -103,7 +110,7 @@ const DEFAULT_PLUGINS: PluginSpec[] = [
 
 // Written once, when init.ts is missing; from then on the file belongs to the user.
 const preset = (storage: string) => `// 旺财的启动入口：启动时由 app 直接加载，只放配置与插件注册。
-// 顶层有 theme、network、workspaces、tabs；插件条目的字段是 id、repo、commit、directory、config。
+// 顶层有 theme、network、workspaces、tabs、leader、timeout、keys、commands；插件条目的字段是 id、repo、commit、directory、config。
 // 配置字段的完整说明：${join(storage, 'src/README.md')}
 // 删掉本文件会重新生成这份默认配置。
 export default {
@@ -120,7 +127,7 @@ ${DEFAULT_PLUGINS.filter((spec) => !spec.workspaces).map(({ id, repo }) => `    
 interface ConfigPaths { config: string; storage: string }
 
 // init.ts is loaded as it stands: this process strips its types, so a config change needs no build step.
-export async function loadConfig(paths: ConfigPaths): Promise<{ profile: Profile; plugins: PluginSpec[]; network: Network }> {
+export async function loadConfig(paths: ConfigPaths): Promise<{ profile: Profile; plugins: PluginSpec[]; network: Network; keymap: KeymapInput }> {
   const source = join(paths.config, 'init.ts');
   if (!existsSync(source)) {
     try {
@@ -128,14 +135,21 @@ export async function loadConfig(paths: ConfigPaths): Promise<{ profile: Profile
       writeFileSync(source, preset(paths.storage));
     } catch (error) {
       console.error('User config:', error);
-      return { profile: DEFAULT_PROFILE, plugins: DEFAULT_PLUGINS, network: {} };
+      return { profile: DEFAULT_PROFILE, plugins: DEFAULT_PLUGINS, network: {}, keymap: {} };
     }
   }
   try {
     const { default: input } = await import(pathToFileURL(source).href) as { default?: ProfileInput };
-    return { profile: mergeProfile(input ?? {}), plugins: pluginsFrom(paths.config, input ?? {}), network: mergeNetwork(input ?? {}) };
+    const given = input ?? {};
+    const { leader, timeout, keys, commands } = given;
+    return {
+      profile: mergeProfile(given),
+      plugins: pluginsFrom(paths.config, given),
+      network: mergeNetwork(given),
+      keymap: { leader, timeout, keys, commands },
+    };
   } catch (error) {
     console.error('User config:', error);
-    return { profile: DEFAULT_PROFILE, plugins: [], network: {} };
+    return { profile: DEFAULT_PROFILE, plugins: [], network: {}, keymap: {} };
   }
 }

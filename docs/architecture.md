@@ -10,7 +10,7 @@
 
 App（本仓库）只是壳：起窗口、装 preload 桥、打包，读 `init.ts` 拿到插件清单，先确保 Core 装好并加载，再安装插件。业务
 内核在 [WangCai-Core](https://github.com/lengmoXXL/WangCai-Core)：机器连接（含远端 agent）、工作区与标签、
-整个窗口的界面都是它。壳把主题、出网方式和装好的插件清单交给 Core；凡是 Electron 独有的能力——窗口、协议、
+整个窗口的界面都是它。壳把主题、出网方式、键位和装好的插件清单交给 Core；凡是 Electron 独有的能力——窗口、协议、
 session、系统——壳都通过 `CoreHost` 借给 Core。两边共享的桥接契约（scheme、topic、channel、`contractVersion`
 与跨桥的类型）在 [@lengmoxxl/sdk](https://www.npmjs.com/package/@lengmoxxl/sdk) 的 `bridge` 模块。
 

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Profile } from '@lengmoxxl/sdk';
 import type { InstallStage, InstallStatus, Network, PluginEntry } from '@lengmoxxl/sdk/bridge';
+import type { KeymapInput } from './config';
 import { TRANSFER_LIMITS, buildEnvironment, mirroredUrl, npm, run, withProxy } from './spawn';
 
 /**
@@ -13,7 +14,9 @@ export interface CoreHost {
   paths: { storage: string };
   version: string;
   sources: string;
-  config: { profile: Profile; network: Network };
+  /** init.ts's own fields: this process imports the file and hands them over, and the scripts in `keymap` run here
+   * too, so Core can call them. */
+  config: { profile: Profile; network: Network; keymap: KeymapInput };
   plugins(): Promise<PluginEntry[]>;
   statuses(): InstallStatus[];
   install(ids: string[]): Promise<boolean>;
