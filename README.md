@@ -146,4 +146,5 @@ ssh -o BatchMode=yes dev-box 'uname -s -m'
 
 - [插件开发手册与 Tutorial](docs/plugins.md)
 - [App 架构与通信](docs/architecture.md)
+- [发布流程](docs/release.md)
 - [SDK 接口参考](sdk/README.md)
