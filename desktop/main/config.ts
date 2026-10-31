@@ -111,7 +111,8 @@ const DEFAULT_PLUGINS: PluginSpec[] = [
 // Written once, when init.ts is missing; from then on the file belongs to the user.
 const preset = (storage: string) => `// 旺财的启动入口：启动时由 app 直接加载，只放配置与插件注册。
 // 顶层有 theme、network、workspaces、tabs、leader、timeout、keys、commands；插件条目的字段是 id、repo、commit、directory、config。
-// 配置字段的完整说明：${join(storage, 'src/README.md')}
+// 键位的说明见 https://github.com/lengmoXXL/WangCai-Core#快捷键
+// 其余配置字段的说明：${join(storage, 'src/README.md')}
 // 删掉本文件会重新生成这份默认配置。
 export default {
   workspaces: [

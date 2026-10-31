@@ -67,7 +67,7 @@ export default {
 };
 ```
 
-顶层有 `theme`、`network`、`workspaces`、`tabs`；省略 `network` 表示直连，省略 `workspaces` 与 `tabs` 表示列表为空，不会补回官方插件。
+顶层有 `theme`、`network`、`workspaces`、`tabs`、`leader`、`timeout`、`keys`、`commands`；省略 `network` 表示直连，省略 `workspaces` 与 `tabs` 表示列表为空，不会补回官方插件。键位那四项（`leader`、`timeout`、`keys`、`commands`）的写法见 [Core README 的「快捷键」](https://github.com/lengmoXXL/WangCai-Core#快捷键)。
 
 ### 插件配置
 
