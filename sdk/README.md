@@ -80,7 +80,7 @@ provider 要保证工作区 id 在来自所有 provider 的行中唯一。
 `error` 由 provider 给出并在重试成功后清除，宿主不禁用带 `error` 的菜单项。
 
 `WorkspaceRow.status` 是工作区里 agent 的状态，取 `'idle'`、`'working'` 或 `'finished'`，
-缺省为 `'idle'`，宿主在行末显示状态图标。
+缺省为 `'idle'`，宿主在行的左端（名字前的图标）显示状态，行的右端在有内容时显示仓库摘要。
 
 点击已完成的工作区行或它的状态图标，只会把窗口里的状态清成 `'idle'`，不修改 provider 的状态。
 该工作区报出其他状态后，再报 `'finished'` 才会重新显示完成状态。
@@ -92,7 +92,11 @@ provider 要保证工作区 id 在来自所有 provider 的行中唯一。
 | `workspaces` | 行变化时发布，App 重新请求列表 |
 | `workspace:active` | provider 发布 `WorkspaceActive \| null` |
 | `workspace:query` | 视图请求 provider 再发布当前工作区 |
+| `workspace-status` | provider 发布 `{ id, status }`，`status` 与 `WorkspaceRow.status` 同义，宿主就地更新那一行 |
+| `workspace-git` | provider 发布 `{ id, git }`，`git` 是 `{ branch, ahead, behind, dirty }`：分支名、待推送与待拉取的提交数、工作区有没有改动；`null` 表示这个工作区不是仓库 |
 | `onclick` | `FileClick` |
+
+表中按 `{ id, … }` 直接写出形状的载荷是主题自己的，不由 SDK 导出类型描述。
 
 字段类型见 SDK 导出的 `WorkspaceRow`、`WorkspaceStatus`、`WorkspaceMenuItem`、`Machine`、
 `WorkspaceActive` 与 `FileClick`，定义在 `sdk/types.ts`。
