@@ -35,9 +35,28 @@ test('the Git tab follows the terminal', { timeout: 180000 }, () => withWindow('
 
 body 收到 `{ home, env, page, errors }`：这一例的临时 home 与它的环境变量、窗口页面，以及页面自己报的错（`pageerror` 与 `console.error`，插件抛错就会让它非空）。
 
-用例的窗口不抢焦点，跑完或中断都不会留下 Electron 与 agent 进程。
-
 `node --test` 每个文件一个进程、文件内的用例依次跑，所以并发度就是文件数，跑的是机器默认的并发；每个用例自己起窗口。用例之间只有一件事是全局的：系统剪贴板。
+
+一次运行跑完、或按 Ctrl-C 结束，都不会留下它起的 Electron 与 agent 进程。
+
+### 自己看
+
+手动试用另写一个脚本、用 `node` 跑，什么都不判定，最后用 `holdOpen()`。
+
+`holdOpen()` 不返回，所以别把这个脚本放进 `test/*.test.cjs`：那个文件会一直不结束。
+
+```js
+const { holdOpen, withHome } = require('@lengmoxxl/wangcai-testkit');
+
+withHome('wangcai-play', {
+  workspaces: ['terminal-agent'],
+  tabs: ['files', 'terminal-agent'],
+}, async ({ home, open }) => {
+  const { page } = await open();
+  console.log(`${await page.title()} is up on ${home}; Ctrl-C ends it`);
+  await holdOpen();
+}, true);   // 窗口到前台
+```
 
 ## 导出
 
@@ -49,8 +68,9 @@ body 收到 `{ home, env, page, errors }`：这一例的临时 home 与它的环
 | `until(holds, { act, timeout = 60000, interval = 250 })` | 等到条件成立：给了 `act` 就每轮做一次再等，按时间给预算，判定用结束等待时那次读数 |
 | `openWorkspaceMenu(page)` | 右键工作区那一行打开它自己的菜单（新建、关闭等都在里面） |
 | `serveRenderer(env)` | 让之后开在这个 env 上的窗口从 checkout 的 renderer dev server 加载（看 App 自己的界面代码，而不是构建产物）；返回停掉它的函数 |
-| `withHome(prefix, lists, body)` | 一个用例：临时 home、Core、按 `lists` 写的插件表、收尾；body 拿到 `{ home, env, open }`，`open()` 返回 `{ desktop, page, close }`，可反复调用来重开窗口。测试进程的 `HOME` 不变；要在测试进程里连这个 home 的 agent（如 `openMachine`），自己传 `env: { HOME: home }` |
+| `withHome(prefix, lists, body, focused = false)` | 一次运行：临时 home、Core、按 `lists` 写的插件表、收尾；`focused` 为 `true` 时窗口到前台；body 拿到 `{ home, env, open }`，`open()` 返回 `{ desktop, page, close }`，可反复调用来重开窗口。测试进程的 `HOME` 不变；要在测试进程里连这个 home 的 agent（如 `openMachine`），自己传 `env: { HOME: home }` |
 | `withWindow(prefix, lists, body)` | 一个用例的单个窗口：临时 home、Core、按 `lists` 写的插件表、收尾；body 拿到 `{ home, env, page, errors }` |
+| `holdOpen()` | 把脚本停在那里，直到 Ctrl-C 结束这次运行 |
 | `openView(page, name)` | 在右侧栏里新开一个插件视图，需要时先把侧栏显示出来 |
 | `viewTabs(page)` | 侧栏上显示着的那些标签页，可用来计数 |
 | `closeView(page)` | 关掉当前选中的那个侧栏标签页 |

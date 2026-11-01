@@ -67,15 +67,11 @@ const writeInit = (home, lists) => {
 /** The homes a case has launched and not yet cleaned up. */
 const running = new Set();
 
-/**
- * The app the tests drive: the checkout's own Electron. The window never comes to the front, so a run does not take
- * the focus of whoever works at the machine.
- */
-const launchApp = async (home, env) => {
+const launchApp = async (home, env, focused) => {
   const app = wangcaiApp();
   const desktop = await electron.launch({
     executablePath: require(join(app, 'node_modules/electron')),
-    args: [join(app, 'desktop'), '--unfocused', `--user-data-dir=${join(home, 'electron')}`],
+    args: [join(app, 'desktop'), ...(focused ? [] : ['--unfocused']), `--user-data-dir=${join(home, 'electron')}`],
     cwd: app,
     env,
   });
@@ -182,8 +178,10 @@ const serveRenderer = async (env) => {
  * One case on a home of its own: the Core and the plugins it lists, the windows opened on it, and the teardown that
  * follows whatever the body did. `open` may be called again, for what a case learns by launching a second window.
  * Only the windows see this home: the test process keeps its own, so cases may run beside each other.
+ * `focused` puts the window in front for a case someone is watching; by default it stays away, so a case does not take
+ * the focus of whoever is at the machine.
  */
-const withHome = async (prefix, lists, body) => {
+const withHome = async (prefix, lists, body, focused = false) => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), `${prefix}-`)));
   const env = testEnv(home);
   installCore(home);
@@ -191,7 +189,7 @@ const withHome = async (prefix, lists, body) => {
   const windows = new Set();
   try {
     const open = async () => {
-      const desktop = await launchApp(home, env);
+      const desktop = await launchApp(home, env, focused);
       windows.add(desktop);
       const page = await desktop.firstWindow();
       const close = async () => { windows.delete(desktop); await closeWindow(desktop); };
@@ -213,4 +211,9 @@ const withWindow = async (prefix, lists, body) => withHome(prefix, lists, async 
   return body({ home, env, page, errors });
 });
 
-module.exports = { wangcaiApp, activeTerminal, ACTIVE_TERMINAL, until, openWorkspaceMenu, serveRenderer, withHome, withWindow, openView, viewTabs, closeView, createWorkspace, terminalShows, run };
+/**
+ * Parks a script for a person to look at: it never returns.
+ */
+const holdOpen = () => new Promise(() => {});
+
+module.exports = { wangcaiApp, activeTerminal, ACTIVE_TERMINAL, until, openWorkspaceMenu, serveRenderer, withHome, withWindow, holdOpen, openView, viewTabs, closeView, createWorkspace, terminalShows, run };
