@@ -102,6 +102,9 @@ export class MachineConnection {
       const result = await this.request('read_file', { path }) as { data: string };
       return Buffer.from(result.data, 'base64');
     },
+    writeFile: async (path: string, data: Uint8Array): Promise<void> => {
+      await this.request('write_file', { path, data: Buffer.from(data).toString('base64') });
+    },
     watch: async (path: string, options: WatchOptions, callback: (changes: FileChanges) => void): Promise<() => void> => {
       const watchId = `watch-${++this.serial}`;
       const recursive = options.recursive ?? false;

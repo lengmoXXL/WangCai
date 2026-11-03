@@ -189,6 +189,7 @@ async fn connection(stream: TcpStream, node: Arc<Node>) -> Result<()> {
                             Ok(json!({}))
                         }
                         "read_file" | "read_directory" | "stat" => Ok(crate::files::read(op, request["path"].as_str().unwrap_or("")).await?),
+                        "write_file" => Ok(crate::files::write(request["path"].as_str().unwrap_or(""), request["data"].as_str().unwrap_or("")).await?),
                         "info" => Ok(serde_json::to_value(&node.info)?),
                         "stop" => {
                             if request["instance_id"].as_str() != Some(&node.info.instance_id) { bail!("Node instance changed"); }

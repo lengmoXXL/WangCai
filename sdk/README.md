@@ -147,9 +147,10 @@ provider 要保证工作区 id 在来自所有 provider 的行中唯一。
 ### 文件
 
 `connection.fs`：`stat(path)` 返回 `{ isDirectory: boolean } | null`、`readDirectory(path)` 返回
-`DirectoryEntry[]`（`{ name, isDirectory }`）、`readFile(path)` 返回原始字节。
+`DirectoryEntry[]`（`{ name, isDirectory }`）、`readFile(path)` 返回原始字节、`writeFile(path, bytes)`
+把整份内容写进去（落在同目录的临时文件再换上，读到的是旧内容或新内容）。
 
-路径为绝对路径，`readFile` 上限 16 MiB；SDK 不提供写入、删除或上传接口。
+路径为绝对路径，`readFile` 与 `writeFile` 上限 16 MiB；SDK 不提供删除或上传接口。
 
 `connection.fs.watch(path, options, callback)` 订阅该路径的变化，`options.recursive` 决定是否含子目录。
 返回的 `() => void` 关闭订阅；连接彻底关闭（最后一个持有者 `disconnect()`）时，订阅也随之结束。

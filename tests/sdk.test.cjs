@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { mkdtempSync, writeFileSync, mkdirSync, symlinkSync, rmSync, realpathSync } = require('node:fs');
+const { mkdtempSync, writeFileSync, readFileSync, mkdirSync, symlinkSync, rmSync, realpathSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
@@ -47,6 +47,13 @@ test('Node SDK: local PTYs, binary files, file watches, detach and reconnect', {
     await assert.rejects(machine.fs.stat('relative'), /absolute/);
     await assert.rejects(machine.fs.readFile(join(home, 'missing')), /No such file/);
     await assert.rejects(machine.fs.readFile('relative'), /absolute/);
+    const written = join(home, 'written');
+    await machine.fs.writeFile(written, Buffer.from([1, 2, 250]));
+    assert.deepEqual(readFileSync(written), Buffer.from([1, 2, 250]));
+    await machine.fs.writeFile(written, Buffer.from('replaced'));
+    assert.equal(readFileSync(written, 'utf8'), 'replaced');
+    await assert.rejects(machine.fs.writeFile('relative', bytes), /absolute/);
+    await assert.rejects(machine.fs.writeFile(join(home, 'absent/file'), bytes), /No such file/);
     mkdirSync(join(home, 'folder'));
     writeFileSync(join(home, '.hidden'), 'hidden');
     symlinkSync(join(home, 'folder'), join(home, 'linked-folder'));
