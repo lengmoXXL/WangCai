@@ -59,13 +59,20 @@ pub async fn write(path: &str, data: &str) -> Result<Value> {
             .map(|elapsed| elapsed.as_nanos())
             .unwrap_or_default();
         let staging = format!("{path}.wangcai-{}-{stamp}", std::process::id());
-        std::fs::write(&staging, &bytes)?;
-        // A file made here would come out with the mode a new file gets, which takes the executable bit off a script; the
-        // file keeps the mode it had.
-        if let Ok(metadata) = std::fs::metadata(&path) {
-            std::fs::set_permissions(&staging, metadata.permissions())?;
+        let staged = (|| -> std::io::Result<()> {
+            std::fs::write(&staging, &bytes)?;
+            // A file made here would come out with the mode a new file gets, which takes the executable bit off a script;
+            // the file keeps the mode it had.
+            if let Ok(metadata) = std::fs::metadata(&path) {
+                std::fs::set_permissions(&staging, metadata.permissions())?;
+            }
+            std::fs::rename(&staging, &path)
+        })();
+        // A write that cannot take the file's place leaves nothing of its own behind.
+        if let Err(error) = staged {
+            let _ = std::fs::remove_file(&staging);
+            return Err(error.into());
         }
-        std::fs::rename(&staging, &path)?;
         Ok(json!({}))
     })
     .await?
