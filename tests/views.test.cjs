@@ -4,7 +4,7 @@ const { mkdtempSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { openWorkspaceMenu, until } = require('@lengmoxxl/wangcai-testkit');
-const { headerTop, launchApp, mockWorkspace, newWorkspace, setFullScreen, testEnv, waitForShell, writeInit } = require('./init.cjs');
+const { workspacesTop, launchApp, mockWorkspace, newWorkspace, setFullScreen, testEnv, waitForShell, writeInit } = require('./init.cjs');
 
 const { coreId, installStatusesTopic, link, pluginPageTopic } = require('@lengmoxxl/sdk/bridge');
 
@@ -21,12 +21,12 @@ test('full screen reclaims the window chrome space above the workspaces', { time
     await waitForShell(page);
     assert.equal(await left.evaluate((element) => getComputedStyle(element).paddingTop), '36px');
     // 36px chrome + 1px card border + 3px window inset.
-    assert.equal(await headerTop(page), 40);
+    assert.equal(await workspacesTop(page), 40);
     // What this covers is the change the main process forwards, so this drives the event that carries it.
     await setFullScreen(desktop, page, true);
-    assert.equal(await headerTop(page), 4);
+    assert.equal(await workspacesTop(page), 4);
     await setFullScreen(desktop, page, false);
-    assert.equal(await headerTop(page), 40);
+    assert.equal(await workspacesTop(page), 40);
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });
@@ -51,14 +51,14 @@ test('a plugin update that loads the page again keeps the workspaces in the full
     await waitForShell(page);
     await page.locator('.installs').waitFor({ state: 'hidden' });
     // The full screen keeps the workspaces at the 3px window inset and the 1px card border.
-    assert.equal(await headerTop(page), 4);
+    assert.equal(await workspacesTop(page), 4);
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('the workspaces header names what it can open and what it can group, and a row menu closes or renames it', { timeout: 180000 }, async () => {
+test('the space under the rows names what it can open and what it can group, and a row menu closes or renames it', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-workspace-menu-'));
   const env = testEnv(home);
   let desktop;

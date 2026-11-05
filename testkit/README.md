@@ -66,7 +66,7 @@ withHome('wangcai-play', {
 | `activeTerminal(page)` | App 自己的那个前台终端面板的 locator |
 | `ACTIVE_TERMINAL` | 同一块面板的选择器，传给页面内的 `evaluate` 时用 |
 | `until(holds, { act, timeout = 60000, interval = 250 })` | 等到条件成立：给了 `act` 就每轮做一次再等，按时间给预算，判定用结束等待时那次读数 |
-| `openWorkspaceMenu(page)` | 右键工作区那一行打开它自己的菜单（新建、关闭等都在里面） |
+| `openWorkspaceMenu(page)` | 右键行下面的空白处，打开新建工作区、新建分组的菜单 |
 | `serveRenderer(env)` | 让之后开在这个 env 上的窗口从 checkout 的 renderer dev server 加载（看 App 自己的界面代码，而不是构建产物）；返回停掉它的函数 |
 | `withHome(prefix, lists, body, focused = false)` | 一次运行：临时 home、Core、按 `lists` 写的插件表、收尾；`focused` 为 `true` 时窗口到前台；body 拿到 `{ home, env, open }`，`open()` 返回 `{ desktop, page, close }`，可反复调用来重开窗口。测试进程的 `HOME` 不变；要在测试进程里连这个 home 的 agent（如 `openMachine`），自己传 `env: { HOME: home }` |
 | `withWindow(prefix, lists, body)` | 一个用例的单个窗口：临时 home、Core、按 `lists` 写的插件表、收尾；body 拿到 `{ home, env, page, errors }` |

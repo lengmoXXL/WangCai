@@ -127,8 +127,8 @@ exports.newWorkspace = async (page) => {
   await page.getByRole('tablist', { name: '工作区' }).getByRole('tab').last().waitFor();
 };
 
-// The workspace header's distance from the window's top: what the chrome above it takes.
-exports.headerTop = (page) => page.locator('.workspace-header').evaluate((element) => Math.round(element.getBoundingClientRect().top));
+// The workspace list's distance from the window's top: what the chrome above it takes.
+exports.workspacesTop = (page) => page.locator('.workspaces').evaluate((element) => Math.round(element.getBoundingClientRect().top));
 
 // A test window belongs to an app that never comes to the front, which the system will not put in full screen, so
 // the event the main process forwards is emitted instead, and what it leaves behind is waited for.

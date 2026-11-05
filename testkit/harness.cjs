@@ -125,8 +125,13 @@ const until = async (holds, { act, timeout = 60000, interval = 250 } = {}) => {
 const ACTIVE_TERMINAL = '.terminal-pane.active';
 const activeTerminal = (page) => page.locator(ACTIVE_TERMINAL);
 
-/** Opens the menu a workspace row offers, which is where a workspace is made or closed. */
-const openWorkspaceMenu = (page) => page.locator('.workspace-header').click({ button: 'right' });
+/** Opens the menu the space under the rows offers, which is where a workspace or a group is made. */
+const openWorkspaceMenu = async (page) => {
+  const list = page.locator('.workspaces');
+  const box = await list.boundingBox();
+  // The rows have to end above the list's bottom edge, where the click lands on the list rather than on a row.
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height - 4, { button: 'right' });
+};
 
 /** Types a line into the pane in front and runs it, the way a person does. */
 const run = async (page, line) => {
