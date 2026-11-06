@@ -21,14 +21,13 @@
 ```js
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { withWindow, openView } = require('@lengmoxxl/wangcai-testkit');
+const { withWindow } = require('@lengmoxxl/wangcai-testkit');
 
 test('the Git tab follows the terminal', { timeout: 180000 }, () => withWindow('wangcai-git', {
   workspaces: ['terminal-agent'],
   tabs: ['files', { id: 'git', directory: __dirname + '/..' }],
 }, async ({ page, errors }) => {
-  await openView(page, 'Git');
-  // …驱动面板…
+  // …在侧栏里开 Git 视图，驱动面板…
   assert.deepEqual(errors, []);
 }));
 ```
@@ -63,17 +62,8 @@ withHome('wangcai-play', {
 | 成员 | 作用 |
 | --- | --- |
 | `wangcaiApp()` | 被测 App 的 checkout 路径（`WANGCAI_CHECKOUT` 可换），用来取 `wangcaicli/dist/debug/wangcai` 这类二进制 |
-| `activeTerminal(page)` | App 自己的那个前台终端面板的 locator |
-| `ACTIVE_TERMINAL` | 同一块面板的选择器，传给页面内的 `evaluate` 时用 |
 | `until(holds, { act, timeout = 60000, interval = 250 })` | 等到条件成立：给了 `act` 就每轮做一次再等，按时间给预算，判定用结束等待时那次读数 |
-| `openWorkspaceMenu(page)` | 右键行下面的空白处，打开新建工作区、新建分组的菜单 |
 | `serveRenderer(env)` | 让之后开在这个 env 上的窗口从 checkout 的 renderer dev server 加载（看 App 自己的界面代码，而不是构建产物）；返回停掉它的函数 |
 | `withHome(prefix, lists, body, focused = false)` | 一次运行：临时 home、Core、按 `lists` 写的插件表、收尾；`focused` 为 `true` 时窗口到前台；body 拿到 `{ home, env, open }`，`open()` 返回 `{ desktop, page, close }`，可反复调用来重开窗口。测试进程的 `HOME` 不变；要在测试进程里连这个 home 的 agent（如 `openMachine`），自己传 `env: { HOME: home }` |
 | `withWindow(prefix, lists, body)` | 一个用例的单个窗口：临时 home、Core、按 `lists` 写的插件表、收尾；body 拿到 `{ home, env, page, errors }` |
 | `holdOpen()` | 把脚本停在那里，直到 Ctrl-C 结束这次运行 |
-| `openView(page, name)` | 在右侧栏里新开一个插件视图，需要时先把侧栏显示出来 |
-| `viewTabs(page)` | 侧栏上显示着的那些标签页，可用来计数 |
-| `closeView(page)` | 关掉当前选中的那个侧栏标签页 |
-| `createWorkspace(page)` | 开一个本机工作区；返回时它的终端已经画出 shell |
-| `terminalShows(page, text)` | 等当前终端把那段文字画出来 |
-| `run(page, line)` | 往当前终端敲一行并回车 |

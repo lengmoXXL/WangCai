@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 const { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { openWorkspaceMenu, until } = require('@lengmoxxl/wangcai-testkit');
-const { launchApp, mockPlugin, testEnv, writeInit } = require('./init.cjs');
+const { until } = require('@lengmoxxl/wangcai-testkit');
+const { launchApp, mockPlugin, openWorkspaceMenu, testEnv, writeInit } = require('./init.cjs');
 
 test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-plugins-'));

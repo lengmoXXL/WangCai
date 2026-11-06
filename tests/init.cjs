@@ -3,7 +3,7 @@ const { Module } = require('node:module');
 const { join } = require('node:path');
 const { buildSync } = require('esbuild');
 const { _electron: electron } = require('playwright');
-const { openWorkspaceMenu, until } = require('@lengmoxxl/wangcai-testkit');
+const { until } = require('@lengmoxxl/wangcai-testkit');
 const { coreScheme } = require('@lengmoxxl/sdk/bridge');
 
 const root = join(__dirname, '..');
@@ -120,6 +120,15 @@ exports.coreWindow = async (desktop) => {
   while (!drawn()) await desktop.waitForEvent('window');
   return drawn();
 };
+
+// The menu the space under the rows draws: the rows have to end above the list's bottom edge, so the click lands on
+// the list rather than on a row.
+const openWorkspaceMenu = async (page) => {
+  const list = page.locator('.workspaces');
+  const box = await list.boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height - 4, { button: 'right' });
+};
+exports.openWorkspaceMenu = openWorkspaceMenu;
 
 exports.newWorkspace = async (page) => {
   await openWorkspaceMenu(page);

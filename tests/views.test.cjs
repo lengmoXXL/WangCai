@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 const { mkdtempSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { openWorkspaceMenu, until } = require('@lengmoxxl/wangcai-testkit');
-const { workspacesTop, launchApp, mockWorkspace, newWorkspace, setFullScreen, testEnv, waitForShell, writeInit } = require('./init.cjs');
+const { until } = require('@lengmoxxl/wangcai-testkit');
+const { workspacesTop, launchApp, mockWorkspace, newWorkspace, openWorkspaceMenu, setFullScreen, testEnv, waitForShell, writeInit } = require('./init.cjs');
 
 const { coreId, installStatusesTopic, link, pluginPageTopic } = require('@lengmoxxl/sdk/bridge');
 

@@ -121,49 +121,6 @@ const until = async (holds, { act, timeout = 60000, interval = 250 } = {}) => {
   assert.ok(held, 'the app did not react');
 };
 
-/** The terminal of the workspace in front: the app's own pane, not a plugin's panel. */
-const ACTIVE_TERMINAL = '.terminal-pane.active';
-const activeTerminal = (page) => page.locator(ACTIVE_TERMINAL);
-
-/** Opens the menu the space under the rows offers, which is where a workspace or a group is made. */
-const openWorkspaceMenu = async (page) => {
-  const list = page.locator('.workspaces');
-  const box = await list.boundingBox();
-  // The rows have to end above the list's bottom edge, where the click lands on the list rather than on a row.
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height - 4, { button: 'right' });
-};
-
-/** Types a line into the pane in front and runs it, the way a person does. */
-const run = async (page, line) => {
-  await activeTerminal(page).locator('.xterm-helper-textarea').click();
-  await page.keyboard.type(line);
-  await page.keyboard.press('Enter');
-};
-
-/** Waits until the terminal in front draws that text, which it does once the shell has written it. */
-const terminalShows = (page, text) => activeTerminal(page).locator('.xterm-screen').filter({ hasText: text }).waitFor();
-
-/** Opens a local workspace, and waits for the shell its pane draws a moment after the workspace appears. */
-const createWorkspace = async (page) => {
-  await openWorkspaceMenu(page);
-  await page.locator('#workspace-row-menu').getByRole('menuitem', { name: '新建 本机', exact: true }).click();
-  await terminalShows(page, /\S/);
-};
-
-/** Opens a view in the sidebar, showing the sidebar first when it is off screen. */
-const openView = async (page, name) => {
-  const newTab = page.getByRole('button', { name: '新建侧栏标签页' });
-  if (!(await newTab.isVisible())) await page.getByRole('button', { name: '切换右侧栏' }).click();
-  await newTab.click();
-  await page.locator('#view-menu').getByRole('button', { name, exact: true }).click();
-};
-
-/** The sidebar's tabs as the window draws them. */
-const viewTabs = (page) => page.locator('.sidebar-tab:visible');
-
-/** Closes the sidebar tab that is selected. */
-const closeView = async (page) => page.locator('.sidebar-tab:has([aria-selected=true]) .close-tab').click();
-
 /**
  * Runs the checkout's renderer from a dev server instead of the built bundle, so a window opened on this env shows the
  * app's renderer code as it is now. Returns what stops the server.
@@ -221,4 +178,4 @@ const withWindow = async (prefix, lists, body) => withHome(prefix, lists, async 
  */
 const holdOpen = () => new Promise(() => {});
 
-module.exports = { wangcaiApp, activeTerminal, ACTIVE_TERMINAL, until, openWorkspaceMenu, serveRenderer, withHome, withWindow, holdOpen, openView, viewTabs, closeView, createWorkspace, terminalShows, run };
+module.exports = { wangcaiApp, until, serveRenderer, withHome, withWindow, holdOpen };
