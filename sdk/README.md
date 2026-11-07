@@ -53,6 +53,30 @@ SDK 连接本机或 SSH 机器上的旺财后台进程，提供终端、文件�
 `allow-same-origin`；收到来源为该 frame、`event.data === host.preview.message` 的消息后
 `postMessage(html, '*')`。预览会执行其中脚本。
 
+## 快捷键
+
+`@lengmoxxl/sdk/keys` 做前端的键：写序列、对按键，插件只声明“哪个序列做什么”，窗口级键位把 trie 交进来复用同一套匹配。
+
+```ts
+import { bindKeys } from '@lengmoxxl/sdk/keys';
+
+bindKeys(panel, [
+  { keys: 'j', run: () => move(1) },
+  { keys: 'gg', run: () => move(-Infinity) },
+  { keys: '<C-l>', run: open },
+]);
+```
+
+- 序列按 Neovim 记法写：`gg`、`<C-l>`、`<Enter>`、`<Down>`；字母区分大小写，字母上的 Shift 就是大写（`<S-x>` 与 `X` 同一个键），只有具名键（如 `<S-Tab>`）才把 Shift 当修饰键。
+- 绑定只在焦点位于 `element` 内时生效；按下没有对应动作的键不拦截，页面照常收到。
+- 一个既能结束又能继续的前缀（`g` 与 `gg`）等 800ms（`timeout` 可改）再执行，等的时候再按一下就接着匹配，按别的键则结束等待并把这一按从头匹配（该按的绑定照常执行）；点击页面也作废。
+- 元素里有输入框时，默认只有写了 `insert: true` 的绑定在框内生效（框里的字母归框）；整页就是编辑器时用 `{ fields: 'all' }`。
+- `ignore(event)` 直接放行某些按键。
+- 返回值是解绑函数，React 里 `useEffect(() => bindKeys(...))` 直接返回即可；序列的中间状态按元素保存，重新绑定不会打断按了一半的 `gg`。
+
+窗口级键位（`init.ts` 的 `keys`、插件的 `keys` 导出、leader、which-key 提示）与插件页用的是同一套匹配：内核用
+`bindTries` 交上自己按页面挑好的 trie 和画提示、离框的回调，绑定本身仍由主进程执行。
+
 ## 插件配置
 
 `host.config` 是浅合并，避免把自定义字段命名为 `theme`，配色键见
