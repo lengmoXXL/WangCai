@@ -127,8 +127,11 @@ impl Terminal {
         let mut bytes = b"\x1bc".to_vec();
         for offset in (1..=history).rev() {
             normal.set_scrollback(offset);
-            if let Some(line) = normal.rows(0, cols).next() {
-                bytes.extend(line.as_bytes());
+            // Each row is replayed with the attributes it was drawn with; a row's codes are measured from the default
+            // attributes, so the row before it does not leave its own behind.
+            bytes.extend(b"\x1b[0m");
+            if let Some(line) = normal.rows_formatted(0, cols).next() {
+                bytes.extend(line);
             }
             bytes.extend(b"\r\n");
         }
