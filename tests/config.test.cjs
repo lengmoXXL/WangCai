@@ -77,6 +77,28 @@ test('a fresh init.ts points at a document the sources copy carries', async () =
   }
 });
 
+test('a fresh init.ts is typed against the API the sources copy carries', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'wangcai-api-'));
+  try {
+    const pathsForHome = paths(home);
+    await loadConfig(pathsForHome);
+    const init = readFileSync(join(pathsForHome.config, 'init.ts'), 'utf8');
+    // The two lines an editor reads the config's own API from, which loading the file strips.
+    assert.match(init, /import type \{ Config \} from 'wangcai\.api';/);
+    assert.match(init, /\} satisfies Config;/);
+    const { compilerOptions } = JSON.parse(readFileSync(join(pathsForHome.config, 'tsconfig.json'), 'utf8'));
+    const [api] = compilerOptions.paths['wangcai.api'];
+    assert.equal(api, join(pathsForHome.storage, 'src/core/main/wangcai.api.ts'));
+    // Nothing ambient is taken: init.ts calls the API it is given and nothing else.
+    assert.deepEqual(compilerOptions.types, []);
+    installCore(home);
+    syncSources(process.cwd(), pathsForHome.storage, '1.0.0');
+    assert.equal(existsSync(api), true);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('a launch leaves the file a fresh init.ts points at in the data directory', { timeout: 180000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-shipped-'));
   let desktop;

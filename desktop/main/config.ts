@@ -108,12 +108,16 @@ const DEFAULT_PLUGINS: PluginSpec[] = [
   { id: 'terminal', workspaces: false, repo: 'https://github.com/lengmoXXL/WangCai-terminal' },
 ];
 
-// Written once, when init.ts is missing; from then on the file belongs to the user.
+// Written once, when init.ts is missing; from then on the file belongs to the user. The type import is stripped when
+// the file is loaded, and is what an editor reads the config's own API from.
 const preset = (storage: string) => `// 旺财的启动入口：启动时由 app 直接加载，只放配置与插件注册。
 // 顶层有 theme、network、workspaces、tabs、leader、timeout、keys、commands；插件条目的字段是 id、repo、commit、directory、config。
 // 键位的说明见 https://github.com/lengmoXXL/WangCai-Core#快捷键
 // 其余配置字段的说明：${join(storage, 'src/README.md')}
 // 删掉本文件会重新生成这份默认配置。
+// 编辑器里的补全与跳转来自 wangcai.api（同目录的 tsconfig.json 指向数据目录里的源码快照，由 app 每次启动写好）。
+import type { Config } from 'wangcai.api';
+
 export default {
   workspaces: [
 ${DEFAULT_PLUGINS.filter((spec) => spec.workspaces).map(({ id, repo }) => `    { id: '${id}', repo: '${repo}' }`).join(',\n')},
@@ -121,7 +125,7 @@ ${DEFAULT_PLUGINS.filter((spec) => spec.workspaces).map(({ id, repo }) => `    {
   tabs: [
 ${DEFAULT_PLUGINS.filter((spec) => !spec.workspaces).map(({ id, repo }) => `    { id: '${id}', repo: '${repo}' }`).join(',\n')},
   ],
-};
+} satisfies Config;
 `;
 
 /** The two directories init.ts is read from and the plugin builds land in. */
@@ -138,6 +142,26 @@ export async function loadConfig(paths: ConfigPaths): Promise<{ profile: Profile
       console.error('User config:', error);
       return { profile: DEFAULT_PROFILE, plugins: DEFAULT_PLUGINS, network: {}, keymap: {} };
     }
+  }
+  // What an editor's TypeScript service reads: init.ts is typed against the API in the sources copy, so its symbols
+  // resolve to files the editor can open. That API is all init.ts is meant to call — no ambient types are taken, and the
+  // SDK is pointed at its types alone, since the package itself cannot be imported here at runtime. Written every run,
+  // since it names the directories this run uses.
+  try {
+    const sdk = join(paths.storage, 'src/sdk');
+    writeFileSync(join(paths.config, 'tsconfig.json'), `${JSON.stringify({
+      compilerOptions: {
+        target: 'esnext', module: 'esnext', moduleResolution: 'bundler', strict: true, noEmit: true, skipLibCheck: true, types: [],
+        paths: {
+          'wangcai.api': [join(paths.storage, 'src/core/main/wangcai.api.ts')],
+          '@lengmoxxl/sdk': [join(sdk, 'types.ts')],
+          '@lengmoxxl/sdk/bridge': [join(sdk, 'bridge.ts')],
+        },
+      },
+      include: ['init.ts'],
+    }, null, 2)}\n`);
+  } catch (error) {
+    console.error('User config:', error);
   }
   try {
     const { default: input } = await import(pathToFileURL(source).href) as { default?: ProfileInput };
