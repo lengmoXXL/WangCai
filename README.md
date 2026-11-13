@@ -8,7 +8,7 @@
 业务逻辑在 [WangCai-Core](https://github.com/lengmoXXL/WangCai-Core) 里；壳与 Core 的职责划分、Core 的
 来源见 [App 架构与通信](docs/architecture.md#壳与-core)。
 
-<p align="center"><img src="docs/assets/screenshot.png" width="880" alt="旺财窗口：左侧是工作区与终端，右侧是文件视图"></p>
+<p align="center"><img src="docs/assets/screenshot.png" width="880" alt="旺财窗口：左侧是工作区与终端里的 agent 会话，右侧是 Markdown 预览"></p>
 
 ## 为什么写旺财
 
@@ -20,7 +20,7 @@
 
 [![点击播放演示视频](docs/assets/demo.gif)](docs/assets/demo.webm)
 
-演示里的 Git 视图来自官方 `git` 插件，在 [配置](#配置) 的 `tabs` 里加 `{ id: 'git' }` 后出现。
+演示里右侧的文件、编辑器与预览视图来自官方插件，在 [配置](#配置) 的 `tabs` 里列出后出现。
 
 ## 安装
 
