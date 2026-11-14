@@ -6,6 +6,11 @@ const { join, resolve } = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { _electron: electron } = require('playwright-core');
 
+// The waits a case is given, which a caller on a slow or loaded machine raises once for all its cases; a single wait may
+// still name its own. `timeout` budgets an `until`, `actionTimeout` budgets one Playwright step on a window.
+const waits = { timeout: 60000, actionTimeout: 15000 };
+const configure = (opts = {}) => { Object.assign(waits, opts); };
+
 // Where the app keeps the agent it would download, relative to its own checkout.
 const AGENT = 'wangcaicli/dist/debug/wangcai';
 
@@ -75,8 +80,8 @@ const launchApp = async (home, env, focused) => {
     cwd: app,
     env,
   });
-  // Steps here take seconds; a shorter default keeps a stuck run from holding the window on screen.
-  desktop.context().setDefaultTimeout(15000);
+  // A step is given a short default so a stuck run does not hold the window on screen; configure raises it for a loaded machine.
+  desktop.context().setDefaultTimeout(waits.actionTimeout);
   running.add(home);
   return desktop;
 };
@@ -111,7 +116,7 @@ const closeWindow = async (desktop) => {
  * A wait is given time rather than attempts, since a loaded machine makes one attempt cost seconds. The answer that
  * ends the wait is the one it is judged by: asking again would read a state that moved on since.
  */
-const until = async (holds, { act, timeout = 60000, interval = 250 } = {}) => {
+const until = async (holds, { act, timeout = waits.timeout, interval = 250 } = {}) => {
   const deadline = Date.now() + timeout;
   let held = false;
   while (!(held = await holds()) && Date.now() < deadline) {
@@ -178,4 +183,4 @@ const withWindow = async (prefix, lists, body) => withHome(prefix, lists, async 
  */
 const holdOpen = () => new Promise(() => {});
 
-module.exports = { wangcaiApp, until, serveRenderer, withHome, withWindow, holdOpen };
+module.exports = { wangcaiApp, configure, until, serveRenderer, withHome, withWindow, holdOpen };

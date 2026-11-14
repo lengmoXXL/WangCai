@@ -36,6 +36,8 @@ body 收到 `{ home, env, page, errors }`：这一例的临时 home 与它的环
 
 `node --test` 每个文件一个进程、文件内的用例依次跑，所以并发度就是文件数，跑的是机器默认的并发；每个用例自己起窗口。用例之间只有一件事是全局的：系统剪贴板。
 
+机器慢或并发高时，窗口启动和渲染会拖长，默认时限可能不够：用 `configure({ timeout, actionTimeout })` 把预算调大一次，对本进程所有用例生效。
+
 一次运行跑完、或按 Ctrl-C 结束，都不会留下它起的 Electron 与 agent 进程。
 
 ### 自己看
@@ -62,6 +64,7 @@ withHome('wangcai-play', {
 | 成员 | 作用 |
 | --- | --- |
 | `wangcaiApp()` | 被测 App 的 checkout 路径（`WANGCAI_CHECKOUT` 可换），用来取 `wangcaicli/dist/debug/wangcai` 这类二进制 |
+| `configure({ timeout, actionTimeout })` | 改本进程等待的默认预算：`timeout` 是 `until` 的默认时限（60000），`actionTimeout` 是窗口上一步 Playwright 操作的默认时限（15000）。机器慢或并发高时调大一次即可，单个 `until` 仍可自带 `timeout` |
 | `until(holds, { act, timeout = 60000, interval = 250 })` | 等到条件成立：给了 `act` 就每轮做一次再等，按时间给预算，判定用结束等待时那次读数 |
 | `serveRenderer(env)` | 让之后开在这个 env 上的窗口从 checkout 的 renderer dev server 加载（看 App 自己的界面代码，而不是构建产物）；返回停掉它的函数 |
 | `withHome(prefix, lists, body, focused = false)` | 一次运行：临时 home、Core、按 `lists` 写的插件表、收尾；`focused` 为 `true` 时窗口到前台；body 拿到 `{ home, env, open }`，`open()` 返回 `{ desktop, page, close }`，可反复调用来重开窗口。测试进程的 `HOME` 不变；要在测试进程里连这个 home 的 agent（如 `openMachine`），自己传 `env: { HOME: home }` |
