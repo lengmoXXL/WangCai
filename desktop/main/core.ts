@@ -65,19 +65,21 @@ interface CoreInstall { storage: string; node: string; network: Network; report:
  */
 export async function installCore({ storage, node, network, report, follow = false }: CoreInstall) {
   const built = coreDirectory(storage);
+  const source = join(storage, 'plugins/core');
   const ready = coreReady(storage);
-  if (ready && !follow) return false;
+  // A copied checkout has no repository to follow, so an update has nothing to pull and a built one nothing to redo.
+  if (ready && (!follow || !existsSync(join(source, '.git')))) return false;
   // A fresh install has no data directory yet, and this step is exactly what runs before a Core ever did.
   mkdirSync(storage, { recursive: true });
   mkdirSync(join(storage, 'plugins'), { recursive: true });
-  const source = join(storage, 'plugins/core');
   const environment = withProxy(network.proxy);
   const url = mirroredUrl(repository, network.mirror);
   const git = (args: string[], cwd = source) => run('git', [...TRANSFER_LIMITS, ...args], cwd, environment);
-  if (!existsSync(join(source, '.git'))) {
+  // A checkout copied in without a .git (a test home) is built where it stands; only an absent one is cloned.
+  if (!existsSync(source)) {
     report('cloning', `git clone ${url}`);
     await git(['clone', url, source], storage);
-  } else if (follow) {
+  } else if (follow && existsSync(join(source, '.git'))) {
     // Only an update reaches the repository: a start builds what the clone already holds, without a network.
     report('updating', `git pull ${url}`);
     await git(['remote', 'set-url', 'origin', url]);
@@ -86,9 +88,9 @@ export async function installCore({ storage, node, network, report, follow = fal
     await git(['checkout', '--force', branch]);
     await git(['pull', '--ff-only']);
   }
-  const commit = (await git(['rev-parse', 'HEAD'])).trim();
+  const commit = existsSync(join(source, '.git')) ? (await git(['rev-parse', 'HEAD'])).trim() : '';
   const stamp = join(built, 'commit');
-  if (existsSync(stamp) && readFileSync(stamp, 'utf8').trim() === commit) return false;
+  if (commit && existsSync(stamp) && readFileSync(stamp, 'utf8').trim() === commit) return false;
   // npm and its own directory come first on PATH, so the build script and the tools it runs resolve to the
   // runtime the app carries rather than whatever the user happens to have installed.
   const build = buildEnvironment(node, environment);

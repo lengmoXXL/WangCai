@@ -99,16 +99,22 @@ else {
     // A Core is not carried by the app: a run that finds none installs one before there is a page to report it in, so
     // a window of the shell's own says what the install is doing until Core's page takes the window over. A failure
     // is still the app's to answer, since a run that cannot install a Core has nothing to draw.
-    if (!coreReady(storageDirectory)) {
+    // A cached Core is not refreshed on start, but an app upgrade can change the contract a Core must answer: pull
+    // the Core this app version ships against before loading it, so a new app never drives an old Core.
+    const versionStamp = join(storageDirectory, 'app-version');
+    const upgraded = !existsSync(versionStamp) || readFileSync(versionStamp, 'utf8').trim() !== app.getVersion();
+    const missing = !coreReady(storageDirectory);
+    if (missing || upgraded) {
       bootstrapWindow = bootstrap();
       try {
-        await install(false);
+        await install(!missing);
         report('ready');
       } catch (error) {
         await refuse('Core 安装失败', error instanceof Error ? error.message : String(error));
         return;
       }
     }
+    writeFileSync(versionStamp, app.getVersion());
     const directory = coreDirectory(storageDirectory);
     const core = await loadCore(directory).catch(async (error: Error) => {
       await refuse('Core 加载失败', error.message);
