@@ -1,14 +1,13 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { Profile } from '@lengmoxxl/sdk';
 import type { InstallStage, InstallStatus, Network, PluginEntry } from '@lengmoxxl/sdk/bridge';
 import type { KeymapInput } from './config';
 import { TRANSFER_LIMITS, buildEnvironment, mirroredUrl, npm, run, withProxy } from './spawn';
 
 /**
  * The host this app lends, written here rather than imported from Core's own host.ts: both sides reach the SDK
- * through their own copy of it, so `Profile` from one is not the same type as `Profile` from the other.
+ * through their own copy of it, so `Network` from one is not the same type as `Network` from the other.
  */
 export interface CoreHost {
   paths: { storage: string };
@@ -16,7 +15,7 @@ export interface CoreHost {
   sources: string;
   /** init.ts's own fields: this process imports the file and hands them over, and the scripts in `keymap` run here
    * too, so Core can call them. */
-  config: { profile: Profile; network: Network; keymap: KeymapInput };
+  config: { theme?: Record<string, unknown>; network: Network; keymap: KeymapInput };
   plugins(): Promise<PluginEntry[]>;
   statuses(): InstallStatus[];
   install(ids: string[]): Promise<boolean>;

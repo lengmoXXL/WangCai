@@ -3,6 +3,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import type { Profile } from '@lengmoxxl/sdk';
 import { contractVersion, coreId, coreScheme, fullscreenTopic, installStatusesTopic, link, pluginPageTopic, pluginScheme, previewScheme, type InstallStage, type InstallStatus } from '@lengmoxxl/sdk/bridge';
 import { loadConfig } from './config';
 import { coreDirectory, coreReady, installCore, loadCore, type CoreHost } from './core';
@@ -48,9 +49,9 @@ else {
     // The node a packaged run carries among its resources, and the one a development run builds next to this
     // checkout. The agent a machine runs is Core's to install, not the app's to carry.
     const node = app.isPackaged ? join(process.resourcesPath, 'node/bin/node') : join(app.getAppPath(), 'node/bin/node');
-    // What init.ts holds is the app's to read: the window's theme, the network a run needs, the plugins to build
+    // What init.ts holds is the app's to read: the theme data to hand Core, the network a run needs, the plugins to build
     // before a Core can load them, and the keymap Core runs for the window.
-    const { profile, network, plugins: specs, keymap } = await loadConfig({ config: configDirectory, storage: storageDirectory });
+    const { theme, network, plugins: specs, keymap } = await loadConfig({ config: configDirectory, storage: storageDirectory });
     // What the window tells the page about its chrome, and what it is asked when a page loads again. Remembered
     // rather than read back from the window: the window a test runs never comes to the front, and the system
     // refuses to put that one in full screen at all.
@@ -99,7 +100,7 @@ else {
     // a window of the shell's own says what the install is doing until Core's page takes the window over. A failure
     // is still the app's to answer, since a run that cannot install a Core has nothing to draw.
     if (!coreReady(storageDirectory)) {
-      bootstrapWindow = bootstrap(profile.theme);
+      bootstrapWindow = bootstrap();
       try {
         await install(false);
         report('ready');
@@ -122,7 +123,7 @@ else {
       paths: { storage: storageDirectory },
       version: app.getVersion(),
       sources: app.isPackaged ? join(process.resourcesPath, 'src') : join(app.getAppPath(), '..'),
-      config: { profile, network, keymap },
+      config: { theme, network, keymap },
       plugins: installer.plugins,
       statuses,
       install: async (ids: string[]) => {
@@ -163,10 +164,12 @@ else {
       if (!local || local.startsWith(`..${sep}`) || isAbsolute(local)) return new Response('Not found', { status: 404 });
       return net.fetch(pathToFileURL(path).toString());
     });
+    // The window's own ground comes from the theme Core merged, now that a Core is running to answer for it.
+    const { theme: mergedTheme } = await running.dispatch('config') as Profile;
     const { maximized, ...bounds } = existsSync(windowStatePath) ? JSON.parse(readFileSync(windowStatePath, 'utf8')) : { width: 1180, height: 780 };
     const win = new BrowserWindow({
       ...bounds, minWidth: 740, minHeight: 460,
-      backgroundColor: profile.theme.background, title: '旺财', titleBarStyle: 'hiddenInset',
+      backgroundColor: mergedTheme.background, title: '旺财', titleBarStyle: 'hiddenInset',
       show: !unfocused, focusable: !unfocused,
       webPreferences: { preload: join(__dirname, '../preload/preload.js') },
     });

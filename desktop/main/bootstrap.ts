@@ -1,19 +1,22 @@
 import { BrowserWindow } from 'electron';
 import { join } from 'node:path';
-import type { Theme } from '@lengmoxxl/sdk';
 import { link, uiFont, type InstallStage } from '@lengmoxxl/sdk/bridge';
 
 // The topic the page in this window follows. It is the shell's own window, so the SDK does not name it.
 const topic = 'bootstrap';
 
+// The install window is the shell's own chrome, drawn before any Core — and so any theme — exists: it keeps colours of
+// its own instead of borrowing the theme a Core will later supply.
+const chrome = { background: '#1a1b1e', foreground: '#e8e8e8', muted: '#9a9a9a', border: '#3a3b3e', accent: '#7aa2f7' };
+
 /**
  * The window a run that finds no Core says what it is doing in: what the install is on, how far its three steps
  * are, and the command behind it. The window carries a page of its own only until Core's page can take over.
  */
-export function bootstrap(theme: Theme) {
+export function bootstrap() {
   const window = new BrowserWindow({
     width: 360, height: 104, frame: false, resizable: false, maximizable: false, fullscreenable: false,
-    center: true, backgroundColor: theme.background, show: false,
+    center: true, backgroundColor: chrome.background, show: false,
     webPreferences: { preload: join(__dirname, '../preload/preload.js') },
   });
   let state: { stage: InstallStage; message?: string } = { stage: 'cloning' };
@@ -21,7 +24,7 @@ export function bootstrap(theme: Theme) {
   // The first reports come before the page can be drawn, so what is remembered here goes out when it can be.
   window.webContents.on('did-finish-load', push);
   window.once('ready-to-show', () => window.show());
-  void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(page(theme))}`);
+  void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(page())}`);
   return {
     report(stage: InstallStage, message?: string) {
       state = { stage, message };
@@ -34,17 +37,17 @@ export function bootstrap(theme: Theme) {
 
 /** The page is written here rather than built: the shell carries no renderer of its own, and this one is thrown
  * away once Core draws the window. */
-const page = (theme: Theme) => `<!doctype html>
+const page = () => `<!doctype html>
 <meta charset="utf-8">
 <style>
-  body { margin: 0; padding: 14px 16px 16px; background: ${theme.background}; color: ${theme.foreground}; font-family: ${uiFont}; font-size: 12px; -webkit-user-select: none; -webkit-app-region: drag; }
+  body { margin: 0; padding: 14px 16px 16px; background: ${chrome.background}; color: ${chrome.foreground}; font-family: ${uiFont}; font-size: 12px; -webkit-user-select: none; -webkit-app-region: drag; }
   p { margin: 0; }
   .doing { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
   .doing b { font-weight: 600; }
-  .doing span { color: ${theme.muted}; font-size: 11px; }
-  .bar { height: 3px; border-radius: 2px; background: ${theme.border}; overflow: hidden; }
-  .bar i { display: block; width: 12%; height: 100%; background: ${theme.accent}; transition: width 320ms ease; }
-  .detail { margin-top: 8px; color: ${theme.muted}; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .doing span { color: ${chrome.muted}; font-size: 11px; }
+  .bar { height: 3px; border-radius: 2px; background: ${chrome.border}; overflow: hidden; }
+  .bar i { display: block; width: 12%; height: 100%; background: ${chrome.accent}; transition: width 320ms ease; }
+  .detail { margin-top: 8px; color: ${chrome.muted}; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>
 <p class="doing"><b id="doing">正在准备</b><span id="count"></span></p>
 <div class="bar"><i id="fill"></i></div>

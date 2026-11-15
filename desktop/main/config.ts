@@ -1,38 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { Profile, Theme } from '@lengmoxxl/sdk';
 import type { Network } from '@lengmoxxl/sdk/bridge';
-
-const DEFAULT_PROFILE: Profile = {
-  theme: {
-    background: '#121314',
-    foreground: '#dce3eb',
-    cursor: '#9bc7bc',
-    selection: '#35534e',
-    surface: '#191a1b',
-    overlay: '#2c2d2e',
-    border: '#333536',
-    muted: '#8b98a6',
-    accent: '#3994bc',
-    black: '#26303a',
-    red: '#e68c8c',
-    green: '#9bc7bc',
-    yellow: '#e4c590',
-    blue: '#86a9de',
-    magenta: '#c8a2d8',
-    cyan: '#8fc7c7',
-    white: '#d9e0e9',
-    brightBlack: '#3b4650',
-    brightRed: '#f0a8a8',
-    brightGreen: '#b8ddd3',
-    brightYellow: '#f0d5a6',
-    brightBlue: '#a6c3ea',
-    brightMagenta: '#dbb8e8',
-    brightCyan: '#a9dbe0',
-    brightWhite: '#eef3f8',
-  },
-};
 
 /** One plugin as init.ts names it: where it comes from, and how it is configured. */
 export type PluginSpec = { id: string; workspaces: boolean; repo?: string; commit?: string; directory?: string; config?: Record<string, unknown> };
@@ -52,15 +21,6 @@ type ProfileInput = {
 export type KeymapInput = Pick<ProfileInput, 'leader' | 'timeout' | 'keys' | 'commands'>;
 
 const trimmed = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : undefined;
-
-function mergeProfile(input: ProfileInput): Profile {
-  const theme = { ...DEFAULT_PROFILE.theme };
-  for (const token of Object.keys(theme) as (keyof Theme)[]) {
-    const given = input.theme?.[token];
-    if (typeof given === 'string' && given.trim()) theme[token] = given;
-  }
-  return { theme };
-}
 
 function mergeNetwork(input: ProfileInput): Network {
   const proxy = trimmed(input.network?.proxy);
@@ -132,7 +92,7 @@ ${DEFAULT_PLUGINS.filter((spec) => !spec.workspaces).map(({ id, repo }) => `    
 interface ConfigPaths { config: string; storage: string }
 
 // init.ts is loaded as it stands: this process strips its types, so a config change needs no build step.
-export async function loadConfig(paths: ConfigPaths): Promise<{ profile: Profile; plugins: PluginSpec[]; network: Network; keymap: KeymapInput }> {
+export async function loadConfig(paths: ConfigPaths): Promise<{ theme: Record<string, unknown>; plugins: PluginSpec[]; network: Network; keymap: KeymapInput }> {
   const source = join(paths.config, 'init.ts');
   if (!existsSync(source)) {
     try {
@@ -140,7 +100,7 @@ export async function loadConfig(paths: ConfigPaths): Promise<{ profile: Profile
       writeFileSync(source, preset(paths.storage));
     } catch (error) {
       console.error('User config:', error);
-      return { profile: DEFAULT_PROFILE, plugins: DEFAULT_PLUGINS, network: {}, keymap: {} };
+      return { theme: {}, plugins: DEFAULT_PLUGINS, network: {}, keymap: {} };
     }
   }
   // What an editor's TypeScript service reads: init.ts is typed against the API in the sources copy, so its symbols
@@ -168,13 +128,13 @@ export async function loadConfig(paths: ConfigPaths): Promise<{ profile: Profile
     const given = input ?? {};
     const { leader, timeout, keys, commands } = given;
     return {
-      profile: mergeProfile(given),
+      theme: given.theme ?? {},
       plugins: pluginsFrom(paths.config, given),
       network: mergeNetwork(given),
       keymap: { leader, timeout, keys, commands },
     };
   } catch (error) {
     console.error('User config:', error);
-    return { profile: DEFAULT_PROFILE, plugins: [], network: {}, keymap: {} };
+    return { theme: {}, plugins: [], network: {}, keymap: {} };
   }
 }
