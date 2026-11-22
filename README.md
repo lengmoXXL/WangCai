@@ -44,9 +44,8 @@
 ```ts
 export default {
   theme: {
-    background: '#121314',
-    foreground: '#dce3eb',
-    accent: '#3994bc',
+    WangCai: { background: '#121314', accent: '#3994bc' },
+    Midnight: { background: '#0d1117', surface: '#161b22', border: '#30363d' },
   },
   workspaces: [
     {
@@ -91,9 +90,16 @@ export default {
 
 ### 主题参数
 
-`theme` 覆盖部分配色，值写 `'#rrggbb'`：`background`、`foreground`、`cursor`、
-`selection`、`surface`、`overlay`、`border`、`muted`、`accent`，
+`theme` 按名字给出主题，值是配色 patch，颜色写 `'#rrggbb'`：`background`、`foreground`、
+`cursor`、`selection`、`surface`、`overlay`、`border`、`muted`、`accent`，
 以及 `black` 到 `brightWhite` 的 ANSI 调色板。
+
+内置 `WangCai`（深色）与 `GitHub`（浅色，取自 GitHub 自己的 Primer 色板）。
+写内置的名字就是改它，写新名字就是加一个主题。没写到的 token 保留基底的值，
+而新主题以 `WangCai` 为基底，所以浅色的自定义主题要把每个 token 都写上。
+
+`<leader>ut` 列出所有主题供切换，选中的那个记在 `data/core/theme.json`，下次启动仍是它。
+切换当场生效：终端、编辑器、预览与浮层都跟着换色，跑着的程序不受影响。
 
 ### 出网（network）
 
