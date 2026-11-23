@@ -9,7 +9,7 @@
 export const contractVersion = 3;
 
 // The shell's own font, which plugins do not inherit.
-export const uiFont = '"DejaVuSansM Nerd Font Mono", monospace';
+export const uiFont = 'Menlo, monospace';
 
 // The shell draws the window out of Core's own bundle, which it serves under this scheme; the other two are
 // what Core answers for itself. The shell declares all three privileged before it is ready.
