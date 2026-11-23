@@ -4,7 +4,14 @@
 /** One press: the modifiers held and the key they were held for, named as `event.key` names it. */
 interface Stroke { ctrl: boolean; alt: boolean; shift: boolean; meta: boolean; key: string }
 
-interface KeyBinding { keys: string; run(): void; insert?: boolean }
+interface KeyBinding {
+  keys: string;
+  run(): void;
+  /** Runs inside a field too, where the field would keep the letters for itself. */
+  insert?: boolean;
+  /** Runs again on every press the system sends for a key held down, which is how a held `j` walks on. */
+  repeat?: boolean;
+}
 
 // What a `<...>` name stands for: the key Nvim writes as CR, Esc or Space is what `event.key` calls
 // Enter, Escape or a space.
@@ -198,8 +205,9 @@ export function bindTries<B extends KeyBinding>(element: HTMLElement, triesFor: 
     event.preventDefault();
     event.stopPropagation();
   };
+  const completes = (node: TrieNode<B>) => node.binding !== undefined && !node.children.size;
   const onKeyDown = (event: KeyboardEvent) => {
-    if (event.isComposing || event.repeat) return;
+    if (event.isComposing) return;
     const started = prefixes.get(element);
     if (options.before?.(event, started !== undefined)) {
       takeEvent(event);
@@ -209,9 +217,22 @@ export function bindTries<B extends KeyBinding>(element: HTMLElement, triesFor: 
     if (options.ignore?.(event)) return;
     const { outside, field } = triesFor(event);
     const trie = isEditable(event) ? field : outside;
+    const strokes = strokesOf(event);
+    if (event.repeat) {
+      if (started) return;
+      for (const stroke of strokes) {
+        const next = nodeAt(trie, [stroke]);
+        if (next && completes(next) && next.binding?.repeat) {
+          takeEvent(event);
+          next.binding.run();
+          return;
+        }
+      }
+      return;
+    }
     const takePress = (next: TrieNode<B>, path: Stroke[]) => {
       takeEvent(event);
-      if (next.binding && !next.children.size) {
+      if (completes(next)) {
         runAfterWait(next.binding);
         return;
       }
@@ -221,7 +242,6 @@ export function bindTries<B extends KeyBinding>(element: HTMLElement, triesFor: 
       prefixes.set(element, { path, timer });
       options.prefix?.(next, path.map(labelOf));
     };
-    const strokes = strokesOf(event);
     const tryStrokes = (base: Stroke[]) => {
       for (const stroke of strokes) {
         const path = [...base, stroke];
