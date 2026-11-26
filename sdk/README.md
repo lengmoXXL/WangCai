@@ -13,6 +13,7 @@ SDK 连接本机或 SSH 机器上的旺财后台进程，提供终端、文件�
 | `ui.subscribe<T>(topic, callback)` | 前端订阅本插件后端事件，返回取消订阅的函数 |
 | `ui.request<T>(method, params?)` | 前端调用本插件后端方法，返回 `Promise<T>` |
 | `connect(machine, signal?)` | 后端借用机器连接：`{ host?, env? }`，可带 `AbortSignal` |
+| `request<T>(pluginId, method, params?)` | 后端跨插件调用方法，返回 `Promise<T>`；保留 id `workspaceAlias` 路由到当前工作区的 provider |
 | `host.dataDirectory` / `host.config` | 插件私有数据目录 / 本插件设置 |
 | `host.tabs(options)` / `host.open(url)` | 前端开侧栏标签页 / 用系统浏览器打开 http、https |
 | `host.preview` | `{ url, message }`，HTML 预览 frame 的地址与握手消息 |
@@ -21,6 +22,9 @@ SDK 连接本机或 SSH 机器上的旺财后台进程，提供终端、文件�
 
 `ui.handle` 注册的方法名不能含 `:`；`ui.publish` 与 `ui.subscribe` 的主题由宿主加插件 id 前缀，
 `global` 用原始主题，自定义主题要自己加命名空间（如 `directory-demo:opened`）。
+
+`workspaceAlias` 是导出常量，值 `@workspace`；没有当前工作区时 `request` 抛错。workspace provider 约定实现
+`cwd({ workspaceId })` 返回该工作区目录，消费方用它取 cwd，不必关心工作区由哪个插件、哪种终端实现承载。
 
 `Bus`：`publish(topic, data): Promise<void>`、`subscribe<T>(topic, callback): () => void`。
 

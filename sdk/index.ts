@@ -6,6 +6,9 @@ export type { MachineConnection } from './connection';
 export type { Process } from './process';
 export type { Pty } from './pty';
 
+/** The reserved plugin id that reaches the provider of the workspace in front, for `MainContext.request`. */
+export const workspaceAlias = '@workspace';
+
 /** Opens one connection to a machine and waits for it to be ready. */
 export async function openMachine(options: ConnectionOptions) {
   options.signal?.throwIfAborted();

@@ -23,6 +23,9 @@ export interface MainContext {
     // Reaches this plugin's own ui as '<id>:<topic>'.
     publish(topic: string, data: unknown): void;
   };
+  // Calls another plugin's method by its plugin id. The reserved `workspaceAlias` id reaches whichever
+  // provider owns the workspace in front, so a caller need not know which plugin that is.
+  request<T = unknown>(pluginId: string, method: string, params?: unknown): Promise<T>;
   // A machine is what the plugin knows of it: `host` names an SSH one, nothing means the app's own, and
   // `env` is the environment its node starts with. Which way one is reached, and the connection kept for it
   // belongs to the app.
