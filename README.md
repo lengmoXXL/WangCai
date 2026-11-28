@@ -28,12 +28,6 @@ https://github.com/user-attachments/assets/5468408d-af88-4fd7-a990-9cb33ba7e869
 
 [快捷键提示](docs/assets/editor-refine/shortcuts.png) · [Git 中的新增依赖](docs/assets/editor-refine/git.png) · [双栏差异](docs/assets/editor-refine/comparison.png) · [LSP 引用](docs/assets/editor-refine/references.png)
 
-### 工作区、文件与预览
-
-[![点击播放演示视频](docs/assets/demo.gif)](docs/assets/demo.webm)
-
-演示里右侧的文件、编辑器与预览视图来自官方插件，在 [配置](#配置) 的 `tabs` 里列出后出现。[查看 Markdown 预览截图](docs/assets/screenshot.png)
-
 ## 安装
 
 1. 从 [Releases](https://github.com/lengmoXXL/WangCai/releases) 下载 macOS 包：
