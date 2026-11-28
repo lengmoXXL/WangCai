@@ -54,7 +54,7 @@ test('packaged app loads the plugins its config names and carries the node they 
     assert.equal(await spacing(), '7px');
     assert.equal(existsSync(join(home, '.cache/wangcai')), false);
     await desktop.close(); desktop = undefined;
-    // A fresh install has no init.ts: the app writes the default one, which names each plugin's repository
+    // A fresh install has no init.ts: Core writes the default one, which names each plugin's repository
     // and no commit, so it follows the branch. GitHub is pointed at a path that is not there, so what runs
     // here is the config file alone rather than three clones.
     rmSync(join(home, '.config/wangcai/init.ts'));
@@ -62,8 +62,8 @@ test('packaged app loads the plugins its config names and carries the node they 
     page = await launch({ ...env, GIT_CONFIG_GLOBAL: join(home, 'gitconfig') });
     const preset = readFileSync(join(home, '.config/wangcai/init.ts'), 'utf8');
     assert.match(preset, /workspaces: \[\n    \{ id: 'terminal-agent', repo: 'https:\/\/github\.com\/lengmoXXL\/WangCai-terminal-agent' \},\n  \],\n  tabs: \[\n    \{ id: 'files', repo: 'https:\/\/github\.com\/lengmoXXL\/WangCai-files' \},\n    \{ id: 'terminal', repo: 'https:\/\/github\.com\/lengmoXXL\/WangCai-terminal' \},\n  \],/);
-    // The preset never mentions a font: a plugin's schema and its entry's config decide those alone.
-    assert.doesNotMatch(preset, /font/);
+    // Global font settings are opt-in.
+    assert.doesNotMatch(preset, /^\s*font\s*:/m);
   } finally {
     await desktop?.close();
     // The agent Core installs lives under the data directory.

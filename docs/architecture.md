@@ -8,14 +8,12 @@
 
 ## 壳与 Core
 
-App（本仓库）只是壳：起窗口、装 preload 桥、打包，读 `init.ts` 拿到插件清单，先确保 Core 装好并加载，再安装插件。业务
-内核在 [WangCai-Core](https://github.com/lengmoXXL/WangCai-Core)：机器连接（含远端 agent）、工作区与标签、
-整个窗口的界面都是它。壳把主题、出网方式、键位和装好的插件清单交给 Core；凡是 Electron 独有的能力——窗口、协议、
-session、系统——壳都通过 `CoreHost` 借给 Core。两边共享的桥接契约（scheme、topic、channel、`contractVersion`
+App（本仓库）负责窗口、preload 桥、打包和安装。Core 加载 `init.ts` 后把安装清单和启动入口交给壳，并负责机器连接（含远端 agent）、
+工作区、标签和窗口界面。壳通过 `CoreHost` 提供装好的插件和 Electron 能力。两边共享的桥接契约（scheme、topic、channel、`contractVersion`
 与跨桥的类型）在 [@lengmoxxl/sdk](https://www.npmjs.com/package/@lengmoxxl/sdk) 的 `bridge` 模块。
 
-发布时壳不再随包带 Core。读完 `init.ts` 后，先确认数据目录里有没有构建好的 Core：没有就 clone 仓库、用壳自带的
-Node 构建到数据目录的 `plugins/core`，源码和构建结果（`dist`）放在同一目录，本次启动直接加载；已经有了就用现成那份，插件页里 Core
+壳先确认数据目录里有没有构建好的 Core。首次安装时，壳读取 `init.ts` 的代理和镜像设置，再 clone 仓库并用自带的
+Node 构建到 `plugins/core`。源码和构建结果（`dist`）放在同一目录，启动时直接加载。插件页里 Core
 那一行的「更新」会回到仓库重新拉取，有更新就重建并重启——所以换业务逻辑既不需要发布 App，也不需要每次启动
 都联网。Core 页面起来后，插件安装与 Core 重建的进度、结果都画在插件页里对应的行上，更新/重试按钮也在那里；
 首次安装 Core 时还没有 Core 页面，进度显示在壳自己的启动窗口里。
@@ -24,9 +22,9 @@ Node 构建到数据目录的 `plugins/core`，源码和构建结果（`dist`）
 
 ```text
 App 所在机器
-  壳 Electron Main（窗口、preload 桥、打包、读 init.ts、装插件、Core 加载与重建）
-        | CoreHost：协议、session、系统、配置与插件
-  Core Main（插件 main.cjs、连接池、agent 安装）
+  壳 Electron Main（窗口、preload 桥、打包、装插件、Core 加载与重建）
+        | CoreHost：协议、session、系统、已装插件目录
+  Core Main（读取 init.ts、插件 main.cjs、连接池、agent 安装）
         | preload + Electron IPC：请求、结果与事件
   Core Renderer（窗口内容、工作区、插件 ui.js）
         | SDK

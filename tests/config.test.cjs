@@ -3,29 +3,31 @@ const assert = require('node:assert/strict');
 const { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { appModule, coreModule, installCore, launchApp, mockWorkspace, testEnv, waitForShell, writeInit } = require('./init.cjs');
+const { appModule, coreModule, coreWindow, installCore, launchApp, mockWorkspace, testEnv, waitForShell, writeInit } = require('./init.cjs');
 
 const { syncSources } = coreModule('main/resources.ts');
-const { loadConfig } = appModule('main/config.ts');
+const { loadConfig } = coreModule('main/config.ts');
+const { prepare } = coreModule('main/index.ts');
+const { bootstrapNetwork, networkOf } = appModule('main/network.ts');
 
 /** Where a run under this home reads and writes what these cases touch. */
 const paths = (home) => ({ config: join(home, '.config/wangcai'), storage: join(home, '.local/share/wangcai') });
 
-/** init.ts is written for this home and then read back, as a start does. */
-function readConfig(home, source) {
+function writeConfig(home, source) {
   const pathsForHome = paths(home);
   mkdirSync(pathsForHome.config, { recursive: true });
   writeFileSync(join(pathsForHome.config, 'init.ts'), source);
-  return loadConfig(pathsForHome);
+  return pathsForHome;
 }
 
-test('an entry that names no source is read from the official repository of its id', async () => {
+test('Core plans installs from plugin sources and keeps plugin settings private', async () => {
   const home = mkdtempSync(join(tmpdir(), 'wangcai-defaults-'));
   try {
-    const { plugins } = await readConfig(home, "export default { tabs: [{ id: 'files' }, { id: 'here', directory: '/tmp/here' }] };\n");
-    assert.deepEqual(plugins.map(({ id, repo, directory }) => [id, repo, directory]), [
-      ['files', 'https://github.com/lengmoXXL/WangCai-files', undefined],
-      ['here', undefined, '/tmp/here'],
+    const config = writeConfig(home, "export default { tabs: [{ id: 'files', config: { hidden: true } }, { id: 'here', directory: '/tmp/here' }] };\n");
+    const { plugins } = await prepare(config, networkOf);
+    assert.deepEqual(plugins, [
+      { id: 'files', repo: 'https://github.com/lengmoXXL/WangCai-files', commit: undefined, directory: undefined },
+      { id: 'here', repo: undefined, commit: undefined, directory: '/tmp/here' },
     ]);
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
@@ -65,7 +67,7 @@ test('a fresh init.ts points at a document the sources copy carries', async () =
   const home = mkdtempSync(join(tmpdir(), 'wangcai-guide-'));
   try {
     const pathsForHome = paths(home);
-    await loadConfig(pathsForHome);
+    await loadConfig(pathsForHome, networkOf);
     const init = readFileSync(join(pathsForHome.config, 'init.ts'), 'utf8');
     const named = init.match(/完整说明：(\S+)/)[1];
     assert.equal(named, join(pathsForHome.storage, 'src/README.md'));
@@ -81,7 +83,7 @@ test('a fresh init.ts is typed against the API the sources copy carries', async 
   const home = mkdtempSync(join(tmpdir(), 'wangcai-api-'));
   try {
     const pathsForHome = paths(home);
-    await loadConfig(pathsForHome);
+    await loadConfig(pathsForHome, networkOf);
     const init = readFileSync(join(pathsForHome.config, 'init.ts'), 'utf8');
     // The two lines an editor reads the config's own API from, which loading the file strips.
     assert.match(init, /import type \{ Config \} from 'wangcai\.api';/);
@@ -106,7 +108,7 @@ test('a launch leaves the file a fresh init.ts points at in the data directory',
     mockWorkspace(home);
     writeInit(home, { workspaces: ['terminal-agent'], tabs: [] });
     desktop = await launchApp(home, testEnv(home));
-    await waitForShell(await desktop.firstWindow());
+    await waitForShell(await coreWindow(desktop));
     assert.equal(existsSync(join(paths(home).storage, 'src/README.md')), true);
   } finally {
     await desktop?.close();
@@ -118,8 +120,11 @@ test('the network init.ts names is read for the spellings the app and the tools 
   // init.ts is imported by path, so a second config needs a home of its own.
   const read = async (name, source) => {
     const home = mkdtempSync(join(tmpdir(), `wangcai-network-${name}-`));
-    try { return (await readConfig(home, source)).network; }
-    finally { rmSync(home, { recursive: true, force: true }); }
+    try {
+      const { config: { network } } = await loadConfig(writeConfig(home, source), networkOf);
+      assert.deepEqual(await bootstrapNetwork(paths(home).config), network);
+      return network;
+    } finally { rmSync(home, { recursive: true, force: true }); }
   };
   assert.deepEqual(await read('socks', "export default { network: { proxy: 'socks://127.0.0.1:1080', mirror: 'https://ghfast.top' } };\n"),
     { proxy: 'socks5://127.0.0.1:1080', mirror: 'https://ghfast.top/' });
@@ -135,7 +140,7 @@ test('an existing init.ts is never rewritten', { timeout: 180000 }, async () => 
   let desktop;
   const launch = async () => {
     desktop = await launchApp(home, env);
-    return desktop.firstWindow();
+    return coreWindow(desktop);
   };
   try {
     mockWorkspace(home);

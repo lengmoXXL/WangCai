@@ -20,13 +20,13 @@ test('full screen reclaims the window chrome space above the workspaces', { time
     const left = page.locator('.sidebar-left');
     await waitForShell(page);
     assert.equal(await left.evaluate((element) => getComputedStyle(element).paddingTop), '36px');
-    // 36px chrome + 1px card border + 3px window inset.
-    assert.equal(await workspacesTop(page), 40);
+    // 36px chrome and a 3px window inset.
+    assert.equal(await workspacesTop(page), 39);
     // What this covers is the change the main process forwards, so this drives the event that carries it.
     await setFullScreen(desktop, page, true);
-    assert.equal(await workspacesTop(page), 4);
+    assert.equal(await workspacesTop(page), 3);
     await setFullScreen(desktop, page, false);
-    assert.equal(await workspacesTop(page), 40);
+    assert.equal(await workspacesTop(page), 39);
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });
@@ -50,8 +50,7 @@ test('a plugin update that loads the page again keeps the workspaces in the full
     await desktop.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].webContents.reload(); });
     await waitForShell(page);
     await page.locator('.installs').waitFor({ state: 'hidden' });
-    // The full screen keeps the workspaces at the 3px window inset and the 1px card border.
-    assert.equal(await workspacesTop(page), 4);
+    assert.equal(await workspacesTop(page), 3);
   } finally {
     await desktop?.close();
     rmSync(home, { recursive: true, force: true });

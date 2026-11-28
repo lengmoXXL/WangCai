@@ -1,9 +1,9 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { existsSync, mkdtempSync, rmSync } = require('node:fs');
+const { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { coreWindow, launchApp, testEnv, writeInit } = require('./init.cjs');
+const { coreWindow, launchApp, testEnv } = require('./init.cjs');
 const { makeCoreRepo } = require('./core-repo.cjs');
 
 test('a start that finds no Core says what it is doing, and the start after it uses what is already there', { timeout: 180000 }, async () => {
@@ -16,7 +16,9 @@ test('a start that finds no Core says what it is doing, and the start after it u
   // is put in this home first: installing one is exactly what is being watched.
   const launch = (url) => launchApp(home, { ...testEnv(home), WANGCAI_CORE_REPOSITORY: url }, { installed: false });
   try {
-    writeInit(home, { workspaces: [], tabs: [] });
+    const config = join(home, '.config/wangcai');
+    mkdirSync(config, { recursive: true });
+    writeFileSync(join(config, 'init.ts'), 'export default ["a config of its own", 42];\n');
     desktop = await launch(repository.directory);
     // A run with no page to draw yet says what the install is doing in a window of its own.
     const installs = await desktop.firstWindow();
@@ -27,6 +29,7 @@ test('a start that finds no Core says what it is doing, and the start after it u
     // …and hands over to Core's own page once there is a build.
     const page = await coreWindow(desktop);
     await page.locator('#core-marker').waitFor();
+    assert.deepEqual(await page.evaluate(() => window.wangcai.call('test-config')), ['a config of its own', 42]);
     assert.equal(installs.isClosed(), true, 'the window that reported the install is gone');
     assert.equal(existsSync(join(storage, 'plugins/core/.git')), true);
     assert.equal(existsSync(join(storage, 'plugins/core/dist/main.cjs')), true);

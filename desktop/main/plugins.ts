@@ -1,8 +1,10 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { InstallStatus, Network, PluginEntry } from '@lengmoxxl/sdk/bridge';
-import type { PluginSpec } from './config';
 import { TRANSFER_LIMITS, buildEnvironment, mirroredUrl, npm, run, withProxy } from './spawn';
+
+export type PluginSpec = { id: string; repo?: string; commit?: string; directory?: string };
+export type InstalledPlugin = Pick<PluginEntry, 'id' | 'directory'>;
 
 type Installs = Record<string, { repo: string; commit: string }>;
 
@@ -124,11 +126,11 @@ export function pluginInstaller(specs: PluginSpec[], options: InstallOptions) {
     statuses: () => statuses,
     install,
     /** The plugins that ended up ready, and where their builds are. */
-    async plugins(): Promise<PluginEntry[]> {
+    async plugins(): Promise<InstalledPlugin[]> {
       await startup;
       return specs
         .filter(({ id }) => statuses.find((status) => status.id === id)?.stage === 'ready')
-        .map((spec) => ({ id: spec.id, workspaces: spec.workspaces, config: spec.config, directory: directories.get(spec.id)! }));
+        .map(({ id }) => ({ id, directory: directories.get(id)! }));
     },
   };
 }

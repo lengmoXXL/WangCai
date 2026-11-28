@@ -43,6 +43,7 @@
 
 ```ts
 export default {
+  font: { family: 'Menlo, monospace', size: 13 },
   theme: {
     WangCai: { background: '#121314', accent: '#3994bc' },
     Midnight: { background: '#0d1117', surface: '#161b22', border: '#30363d' },
@@ -61,12 +62,14 @@ export default {
   ],
   tabs: [
     { id: 'files' },
-    { id: 'terminal' },
+    { id: 'terminal', config: { font: { size: 15 } } },
   ],
 };
 ```
 
-顶层有 `theme`、`network`、`workspaces`、`tabs`、`leader`、`timeout`、`keys`、`commands`；省略 `network` 表示直连，省略 `workspaces` 与 `tabs` 表示列表为空，不会补回官方插件。键位那四项（`leader`、`timeout`、`keys`、`commands`）的写法见 [Core README 的「快捷键」](https://github.com/lengmoXXL/WangCai-Core#快捷键)。
+顶层有 `theme`、`font`、`network`、`workspaces`、`tabs`、`leader`、`timeout`、`keys`、`commands`。省略 `network` 表示直连，省略 `workspaces` 与 `tabs` 表示列表为空。键位那四项（`leader`、`timeout`、`keys`、`commands`）的写法见 [Core README 的「快捷键」](https://github.com/lengmoXXL/WangCai-Core#快捷键)。
+
+`font` 为窗口和插件声明的字体字段提供默认值。`family` 是 CSS 字体列表，`size` 用像素，`lineHeight` 是字号的倍数。插件的 `config.font` 逐项覆盖全局值，两处都省略的字段使用插件默认值。
 
 ### 插件配置
 
@@ -110,9 +113,8 @@ network: {
 },
 ```
 
-`proxy` 由壳读出来：壳自己的 git 与 npm（插件 `clone`、`npm install`、重建 Core）从环境变量拿到它，Core
-下载 agent 时把同一份交给 curl。写 `http://`、`https://` 或 `socks5://`；不写 scheme 当 `http://`，写
-`socks://` 当 `socks5://`。socks5 一律走远端解析域名。
+壳安装或重建 Core 前可以先读 `network`。正常启动时 Core 加载配置，壳的 git 和 npm 从环境变量拿到代理，Core 下载 agent 时把同一份代理交给 curl。
+`proxy` 写 `http://`、`https://` 或 `socks5://`。省略 scheme 时使用 `http://`，写 `socks://` 时使用 `socks5://`。socks5 走远端域名解析。
 
 `mirror` 是 GitHub 加速前缀：`https://github.com/` 开头的链接都拼在它后面取，其它 URL（含
 `git@github.com:` 形式的仓库）照原样用。
@@ -122,8 +124,7 @@ network: {
 [terminal-agent](https://github.com/lengmoXXL/WangCai-terminal-agent)、
 [terminal](https://github.com/lengmoXXL/WangCai-terminal)、
 [files](https://github.com/lengmoXXL/WangCai-files)、
-[git](https://github.com/lengmoXXL/WangCai-git) 支持 `font.family / size / lineHeight`，
-terminal-agent 还有 `machines` 与 `images.maxCount`；更多选项以各自仓库的 schema 为准。
+[git](https://github.com/lengmoXXL/WangCai-git) 支持 `config.font`。terminal-agent 还有 `machines` 与 `images.maxCount`，具体字段见各自仓库的 schema。
 
 `env` 是节点启动时带上的环境，节点的子进程（终端、agent、语言服务）都继承；
 值里的 `$NAME` 在那台机器上展开，名字只能是 shell 标识符。

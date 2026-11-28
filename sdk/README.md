@@ -88,8 +88,9 @@ bindKeys(panel, [
 `host.config` 是浅合并，避免把自定义字段命名为 `theme`，配色键见
 [README 主题参数](../README.md#主题参数)。
 
-插件 `config` 是嵌套对象，叶子声明 `type` 与可选 `default`；宿主只保留 schema 声明的键，
-缺失或类型不符时取 default，`array` 内部条目由插件自己验证。
+插件 `config` 是嵌套对象，叶子声明 `type` 与可选的 `default`。宿主只保留 schema 声明的键。
+插件配置缺失或类型不符时，字体字段先尝试继承 `init.ts` 顶层的 `font`，再取 schema 默认值。其他字段直接取 schema 默认值。
+`array` 内部条目由插件自己验证。
 
 ## 工作区协议
 

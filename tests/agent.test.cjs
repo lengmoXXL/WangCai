@@ -78,18 +78,19 @@ const withMachine = async (spec, body) => {
 };
 
 test('this machine gets the agent it runs from its release, once', () => withMachine({ platform: 'Darwin arm64' }, async ({ storage, withEnvironment, asked, publish }) => {
+  const install = () => withEnvironment(() => agentInstaller(storage, {}, () => {}).local());
   publish({ [`/wangcai-${target}`]: released });
-  assert.equal(await withEnvironment(() => agentInstaller(storage, {}).local()), join(storage, 'bin/wangcai'));
+  assert.equal(await install(), join(storage, 'bin/wangcai'));
   assert.equal(readFileSync(join(storage, 'bin/wangcai'), 'utf8'), released);
   assert.equal(statSync(join(storage, 'bin/wangcai')).mode & 0o777, 0o755);
   assert.deepEqual(readdirSync(join(storage, 'bin')), ['wangcai']);
   assert.deepEqual(asked(), [`${release(target)}.sha256`, release(target)]);
   // The agent is already there, so a second run does not download it again.
-  await withEnvironment(() => agentInstaller(storage, {}).local());
+  await install();
   assert.equal(asked().length, 2);
   // One that is a version behind is replaced, and the new one is the agent a run drives.
   writeFileSync(join(storage, 'bin/wangcai'), older, { mode: 0o755 });
-  await withEnvironment(() => agentInstaller(storage, {}).local());
+  await install();
   assert.equal(readFileSync(join(storage, 'bin/wangcai'), 'utf8'), released);
   assert.equal(asked().length, 4);
   assert.deepEqual(readdirSync(join(storage, 'bin')), ['wangcai']);

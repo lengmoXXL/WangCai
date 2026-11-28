@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { InstallStage, InstallStatus, Network, PluginEntry } from '@lengmoxxl/sdk/bridge';
-import type { KeymapInput } from './config';
+import type { InstallStage, InstallStatus, Network } from '@lengmoxxl/sdk/bridge';
+import type { InstalledPlugin, PluginSpec } from './plugins';
 import { TRANSFER_LIMITS, buildEnvironment, mirroredUrl, npm, run, withProxy } from './spawn';
 
 /**
@@ -13,10 +13,7 @@ export interface CoreHost {
   paths: { storage: string };
   version: string;
   sources: string;
-  /** init.ts's own fields: this process imports the file and hands them over, and the scripts in `keymap` run here
-   * too, so Core can call them. */
-  config: { theme?: Record<string, unknown>; network: Network; keymap: KeymapInput };
-  plugins(): Promise<PluginEntry[]>;
+  plugins(): Promise<InstalledPlugin[]>;
   statuses(): InstallStatus[];
   install(ids: string[]): Promise<boolean>;
   protocol: { handle(scheme: string, handler: (request: Request) => Response | Promise<Response>): void };
@@ -47,8 +44,12 @@ export const coreReady = (storage: string) => {
   return existsSync(join(built, 'main.cjs')) && existsSync(join(built, 'ui/index.html'));
 };
 
-/** What a built Core exports: the one call the app makes, and the host it is handed. */
-interface CoreModule { activate(host: CoreHost): Promise<Core> }
+interface CoreModule {
+  prepare?(
+    paths: { config: string; storage: string },
+    networkOf: (value: unknown) => Network,
+  ): Promise<{ network: Network; plugins: PluginSpec[]; activate(host: CoreHost): Promise<Core> }>;
+}
 
 export async function loadCore(directory: string) {
   return import(pathToFileURL(join(directory, 'main.cjs')).href) as Promise<CoreModule>;

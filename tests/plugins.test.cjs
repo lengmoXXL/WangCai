@@ -112,7 +112,7 @@ test('plugin loader: prebuilt plugins, IPC isolation and cleanup', { timeout: 18
       assert.equal(readFileSync(join(dataDirectory, 'cleaned'), 'utf8'), 'yes');
       assert.equal(readFileSync(join(dataDirectory, 'name.txt'), 'utf8'), name);
       const settings = JSON.parse(readFileSync(join(dataDirectory, 'settings.json'), 'utf8'));
-      assert.equal(settings.theme.background, '#121314');
+      assert.equal(settings.theme.background, '#191a1b');
       assert.equal(settings.junk, undefined);
       assert.deepEqual(settings.font, name === 'alpha' ? { family: 'alpha Font', size: 30 } : { family: 'beta Font', size: 10 });
     }

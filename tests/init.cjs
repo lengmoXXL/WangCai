@@ -59,6 +59,7 @@ exports.installCore = (home) => {
   mkdirSync(join(core, 'dist'), { recursive: true });
   cpSync(coreBuild, join(core, 'dist'), { recursive: true });
   for (const entry of ['main', 'ui']) cpSync(join(coreSource, entry), join(core, entry), { recursive: true });
+  writeFileSync(join(storage, 'app-version'), require('../desktop/package.json').version);
 };
 
 exports.launchApp = (home, env, { installed = true } = {}) => {

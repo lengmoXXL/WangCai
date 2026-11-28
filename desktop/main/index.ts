@@ -4,10 +4,10 @@ import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Profile } from '@lengmoxxl/sdk';
-import { contractVersion, coreId, coreScheme, fullscreenTopic, installStatusesTopic, link, pluginPageTopic, pluginScheme, previewScheme, type InstallStage, type InstallStatus } from '@lengmoxxl/sdk/bridge';
-import { loadConfig } from './config';
+import { contractVersion, coreId, coreScheme, fullscreenTopic, installStatusesTopic, link, pluginPageTopic, pluginScheme, previewScheme, type InstallStage, type InstallStatus, type Network } from '@lengmoxxl/sdk/bridge';
 import { coreDirectory, coreReady, installCore, loadCore, type CoreHost } from './core';
 import { bootstrap } from './bootstrap';
+import { bootstrapNetwork, networkOf } from './network';
 import { pluginInstaller } from './plugins';
 
 // The app is a shell: it draws the window, installs the plugins init.ts lists, and is the only thing that can
@@ -49,9 +49,7 @@ else {
     // The node a packaged run carries among its resources, and the one a development run builds next to this
     // checkout. The agent a machine runs is Core's to install, not the app's to carry.
     const node = app.isPackaged ? join(process.resourcesPath, 'node/bin/node') : join(app.getAppPath(), 'node/bin/node');
-    // What init.ts holds is the app's to read: the theme data to hand Core, the network a run needs, the plugins to build
-    // before a Core can load them, and the keymap Core runs for the window.
-    const { theme, network, plugins: specs, keymap } = await loadConfig({ config: configDirectory, storage: storageDirectory });
+    let network: Network | undefined;
     // What the window tells the page about its chrome, and what it is asked when a page loads again. Remembered
     // rather than read back from the window: the window a test runs never comes to the front, and the system
     // refuses to put that one in full screen at all.
@@ -72,7 +70,10 @@ else {
       send(installStatusesTopic, statuses());
       bootstrapWindow?.report(stage, message);
     };
-    const install = async (follow: boolean) => installCore({ storage: storageDirectory, node, network, report, follow });
+    const install = async (follow: boolean) => {
+      network ??= await bootstrapNetwork(configDirectory);
+      return installCore({ storage: storageDirectory, node, network, report, follow });
+    };
     const rebuild = async () => {
       if (rebuilding) return;
       rebuilding = true;
@@ -121,7 +122,17 @@ else {
       return undefined;
     });
     if (!core) return;
-    const installer = pluginInstaller(specs, {
+    if (typeof core.prepare !== 'function') {
+      await refuse('Core 版本过旧', '当前 Core 缺少配置加载入口。');
+      return;
+    }
+    const prepared = await core.prepare({ config: configDirectory, storage: storageDirectory }, networkOf).catch(async (error: Error) => {
+      await refuse('Core 配置加载失败', error.message);
+      return undefined;
+    });
+    if (!prepared) return;
+    network = prepared.network;
+    const installer = pluginInstaller(prepared.plugins, {
       storage: storageDirectory, node, network,
       report: (rows) => { pluginRows = rows; send(installStatusesTopic, statuses()); },
     });
@@ -129,7 +140,6 @@ else {
       paths: { storage: storageDirectory },
       version: app.getVersion(),
       sources: app.isPackaged ? join(process.resourcesPath, 'src') : join(app.getAppPath(), '..'),
-      config: { theme, network, keymap },
       plugins: installer.plugins,
       statuses,
       install: async (ids: string[]) => {
@@ -152,7 +162,7 @@ else {
       reload: () => window?.webContents.reload(),
       fullscreen: () => fullscreen,
     };
-    const running = await core.activate(host).catch(async (error: Error) => {
+    const running = await prepared.activate(host).catch(async (error: Error) => {
       await refuse('Core 启动失败', error.message);
       return undefined;
     });
