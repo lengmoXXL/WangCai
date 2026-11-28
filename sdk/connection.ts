@@ -118,17 +118,12 @@ export class MachineConnection {
     },
   };
 
-  /** A local spawn runs on this machine, so a config's $HOME/$PATH expand here; a remote one keeps its own. */
-  private spawnEnvironment(env: Record<string, string> | undefined) {
-    return this.options.type === 'local' && env ? expandedEnvironment(env) : env;
-  }
-
   subprocess = {
     exec: async (program: string, args: string[], options: ExecOptions): Promise<ExecResult> => {
-      const result = await this.request('exec', { program, args, ...options, env: this.spawnEnvironment(options.env) }, 20_000) as { stdout: string; stderr: string; code: number };
+      const result = await this.request('exec', { program, args, ...options }, 20_000) as { stdout: string; stderr: string; code: number };
       return { stdout: Buffer.from(result.stdout, 'base64'), stderr: Buffer.from(result.stderr, 'base64'), code: result.code };
     },
-    spawn: (program: string, args: string[], options: ExecOptions) => this.request('spawn', { program, args, ...options, env: this.spawnEnvironment(options.env) }) as Promise<ProcessInfo>,
+    spawn: (program: string, args: string[], options: ExecOptions) => this.request('spawn', { program, args, ...options }) as Promise<ProcessInfo>,
     attach: (id: string) => this.openStream(this.processes, id, () => new Process(id, this.call), 'process_attach'),
     close: (id: string) => this.closeStream(this.processes, id, 'process_close'),
   };
