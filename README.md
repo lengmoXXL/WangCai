@@ -8,7 +8,7 @@
 业务逻辑在 [WangCai-Core](https://github.com/lengmoXXL/WangCai-Core) 里；壳与 Core 的职责划分、Core 的
 来源见 [App 架构与通信](docs/architecture.md#壳与-core)。
 
-<p align="center"><a href="docs/assets/editor-refine/keyboard-review.mp4"><img src="docs/assets/editor-refine/comparison.png" width="960" alt="旺财的 editor 工作区，左侧是 Codex 的 refine 会话，右侧并排对照 LSP 消息类型的改动。点击播放全键盘实录"></a></p>
+<p align="center"><a href="#用键盘审查-codex-的改动"><img src="docs/assets/editor-refine/comparison.png" width="960" alt="旺财的 editor 工作区，左侧是 Codex 的 refine 会话，右侧并排对照 LSP 消息类型的改动。点击跳到全键盘实录"></a></p>
 
 ## 为什么写旺财
 
@@ -20,9 +20,11 @@
 
 ### 用键盘审查 Codex 的改动
 
+https://github.com/user-attachments/assets/5468408d-af88-4fd7-a990-9cb33ba7e869
+
 在 `editor` 工作区，左侧的 Codex 正在运行 `refine`。按 `Ctrl+Space`、`g`、`g` 在右侧打开 Git，用 `j`、`k` 选文件，按 `Enter` 查看补丁。在新增行再按一次 `Enter`，编辑器就会并排显示修改前后的代码。
 
-录像里，`gf` 打开工作区文件，`gd` 跳到 `LspProcess` 的定义，`gr` 列出项目里的引用。从引用列表按 `Enter`，可以看到编辑器插件启动语言服务时递增 `generation` 的那行代码。[观看全键盘实录（57 秒，含同步按键）](docs/assets/editor-refine/keyboard-review.mp4)
+录像里，`gf` 打开工作区文件，`gd` 跳到 `LspProcess` 的定义，`gr` 列出项目里的引用。从引用列表按 `Enter`，可以看到编辑器插件启动语言服务时递增 `generation` 的那行代码。[MP4 原文件（57 秒，含同步按键）](docs/assets/editor-refine/keyboard-review.mp4)
 
 [快捷键提示](docs/assets/editor-refine/shortcuts.png) · [Git 中的新增依赖](docs/assets/editor-refine/git.png) · [双栏差异](docs/assets/editor-refine/comparison.png) · [LSP 引用](docs/assets/editor-refine/references.png)
 
